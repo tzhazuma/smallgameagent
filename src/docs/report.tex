@@ -45,7 +45,7 @@
 \section*{Abstract}
 % ---------------------------------------------------------------------------
 
-This report presents \textbf{SmallGameAgent}, a two-phase system that replaces heuristic game-playing automation with LLM-driven reasoning and then fine-tunes a compact vision-language model to eliminate external API dependency. Phase~1 is an online agent built around an \texttt{observe-think-act} loop: a JavaScript probe injects into Cocos Creator HTML5 games to extract structured game state, DeepSeek-v4-flash reasons over that state, Mimo-v2.5 analyses screenshots for visual cues, and Playwright CDP touch events execute joystick and tap actions. Phase~2 distils this pipeline into a single VLM via QLoRA fine-tuning of Qwen3.5-4B (or Gemma-4-E4B) on 10,336 human-demonstrated gameplay samples spanning seven task types. Training runs on four RTX~5090 GPUs with 4-bit NF4 quantisation, LoRA rank~16, and DeepSpeed ZeRO-2, producing an adapter that reduces inference latency from seconds to milliseconds while eliminating cloud API costs. A FastAPI inference server exposes the trained model behind a REST endpoint for real-time game control.
+This report presents \textbf{SmallGameAgent}, a two-phase system that replaces heuristic game-playing automation with LLM-driven reasoning and then fine-tunes a compact vision-language model to eliminate external API dependency. Phase~1 is an online agent built around an \texttt{observe-think-act} loop: a JavaScript probe injects into Cocos Creator HTML5 games to extract structured game state, DeepSeek-v4-flash reasons over that state, Mimo-v2.5 analyses screenshots for visual cues, and Playwright CDP touch events execute joystick and tap actions. Phase~2 distils this pipeline into a single VLM via QLoRA fine-tuning of Qwen3.5-4B (or Gemma-4-E4B) on 10,336 human-demonstrated gameplay samples spanning seven task types. Training runs on four RTX~5090 GPUs with 4-bit NF4 quantisation, LoRA rank~8 (reduced from 16 due to VRAM constraints on 32~GB GPUs with the full 7-task dataset), and DeepSpeed ZeRO-2, producing an adapter that reduces inference latency from seconds to milliseconds while eliminating cloud API costs. A FastAPI inference server exposes the trained model behind a REST endpoint for real-time game control.
 
 % ---------------------------------------------------------------------------
 \section{Introduction}
@@ -310,10 +310,9 @@ Table~\ref{tab:train_times} provides estimated training durations.
 \textbf{Model} & \textbf{Samples} & \textbf{Epochs} & \textbf{GPUs} & \textbf{Batch/GPU} & \textbf{Accum} & \textbf{Time} \\
 \midrule
 Qwen3.5-4B (all)\textsuperscript{*}   & 9,378  & 3 & 4 & 1 & 8 & $\sim$8--10~hr \\
-Qwen3.5-9B (all)   & 9,378  & 3 & 4 & 1 & 8 & $\sim$4--6~hr \\
-Qwen3.5-4B (1 task)& 1,647  & 3 & 1 & 2 & 8 & $\sim$30--45~min \\
-Gemma-4-E4B (3 tasks) & $\sim$3,500 & 3 & 4 & 2 & 8 & $\sim$1.5--2~hr \\
-Gemma-4-12B (3 tasks) & $\sim$3,500 & 3 & 4 & 1 & 8 & $\sim$3--5~hr \\
+Qwen3.5-9B (all)\textsuperscript{*}   & 9,378  & 3 & 4 & 1 & 8 & $\sim$18--24~hr \\
+Gemma-4-E4B (all)\textsuperscript{*} & 9,378  & 3 & 4 & 1 & 8 & $\sim$10--14~hr \\
+Gemma-4-12B (all)\textsuperscript{*} & 9,378  & 3 & 4 & 1 & 8 & $\sim$20--28~hr \\
 \bottomrule
 \end{tabular}
 \par\smallskip
@@ -439,7 +438,7 @@ Key quantitative outcomes are pending the completion of full-scale training and 
 
 \begin{itemize}[leftmargin=*,itemsep=2pt]
   \item \textbf{Agent step budget}: 200 maximum steps per game, with each step taking approximately 1--3 seconds depending on API latency.
-  \item \textbf{Training throughput}: approximately 1,500--3,000 samples per hour on the full configuration (4$\times$ RTX~5090, Qwen3.5-4B), yielding a complete 3-epoch run in 2--3 hours.
+  \item \textbf{Training throughput}: approximately 1,000 samples per hour on the full configuration (4$\times$ RTX~5090, Qwen3.5-4B, per-GPU batch~1), yielding a complete 3-epoch run in approximately 9--10 hours.
   \item \textbf{Inference latency}: Target $< 500$ ms per step for the local VLM, compared to 1--3 seconds for cloud API calls.
   \item \textbf{Cost elimination}: The fine-tuned VLM eliminates per-inference API costs entirely, enabling offline and air-gapped deployment.
 \end{itemize}
