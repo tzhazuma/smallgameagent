@@ -1,5 +1,14 @@
 from .api_client import OpenCodeGoClient
 from .harness import GameRunner, find_game_html
+from .llm_agent import LLMAgent
 from .probe_adapter import ProbeAdapter
+from .visual_analyzer import VisualAnalyzer
 
-__all__ = ["GameRunner", "OpenCodeGoClient", "ProbeAdapter", "find_game_html"]
+__all__ = [
+    "GameRunner",
+    "LLMAgent",
+    "OpenCodeGoClient",
+    "ProbeAdapter",
+    "VisualAnalyzer",
+    "find_game_html",
+]
