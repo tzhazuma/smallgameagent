@@ -289,7 +289,7 @@ Fine-tuning uses QLoRA (Quantised Low-Rank Adaptation) to keep training feasible
 
 \begin{itemize}[leftmargin=*,itemsep=2pt]
   \item \textbf{Quantisation}: 4-bit NormalFloat4 (NF4) via BitsAndBytes with double quantisation and bfloat16 compute dtype.
-  \item \textbf{LoRA}: Rank $r = 16$, alpha scaling $\alpha = 32$, dropout $p = 0.05$. Target modules — Qwen3.5: \texttt{q\_proj, k\_proj, v\_proj, o\_proj}; Gemma-4: additionally \texttt{gate\_proj, up\_proj, down\_proj} for increased trainable capacity per rank.
+  \item \textbf{LoRA}: Rank $r = 16$ (design; actual training used $r = 8$ due to VRAM constraints on 32~GB GPUs with full 7-task dataset), alpha scaling $\alpha = 32$, dropout $p = 0.05$. Target modules — Qwen3.5: \texttt{q\_proj, k\_proj, v\_proj, o\_proj}; Gemma-4: additionally \texttt{gate\_proj, up\_proj, down\_proj} for increased trainable capacity per rank.
   \item \textbf{Optimisation}: AdamW with learning rate $2 \times 10^{-4}$, cosine schedule with 3\% warmup, weight decay 0.0, gradient clipping at norm 1.0.
   \item \textbf{Sequence length}: 4,096 tokens. Images resized to $\sim 980 \times 1024$ pixels (1,003,520 px max).
   \item \textbf{Precision}: BF16 mixed precision with Flash Attention~2 (SDPA fallback on unsupported hardware).
@@ -297,7 +297,7 @@ Fine-tuning uses QLoRA (Quantised Low-Rank Adaptation) to keep training feasible
 
 \subsection{Training Infrastructure}
 
-Training targets a 4$\times$ RTX~5090 (32~GB each) node on the internal compute server (\texttt{ssh5090}, \texttt{10.19.138.148}). DeepSpeed ZeRO-2 partitions optimiser states and gradients across GPUs, while keeping parameters replicated. The effective batch size is the product of per-GPU micro-batch (2), gradient accumulation steps (8), and GPU count (4): $2 \times 8 \times 4 = 64$.
+Training targets a 4$\times$ RTX~5090 (32~GB each) node on the internal compute server (\texttt{ssh5090}, \texttt{10.19.138.148}). DeepSpeed ZeRO-2 partitions optimiser states and gradients across GPUs, while keeping parameters replicated. The effective batch size is the product of per-GPU micro-batch (1, reduced from 2 due to VRAM constraints with 4-bit QLoRA on 32~GB GPUs), gradient accumulation steps (8), and GPU count (4): $1 \times 8 \times 4 = 32$.
 
 Table~\ref{tab:train_times} provides estimated training durations.
 
@@ -309,13 +309,15 @@ Table~\ref{tab:train_times} provides estimated training durations.
 \toprule
 \textbf{Model} & \textbf{Samples} & \textbf{Epochs} & \textbf{GPUs} & \textbf{Batch/GPU} & \textbf{Accum} & \textbf{Time} \\
 \midrule
-Qwen3.5-4B (all)   & 9,378  & 3 & 4 & 2 & 8 & $\sim$2--3~hr \\
+Qwen3.5-4B (all)\textsuperscript{*}   & 9,378  & 3 & 4 & 1 & 8 & $\sim$8--10~hr \\
 Qwen3.5-9B (all)   & 9,378  & 3 & 4 & 1 & 8 & $\sim$4--6~hr \\
 Qwen3.5-4B (1 task)& 1,647  & 3 & 1 & 2 & 8 & $\sim$30--45~min \\
 Gemma-4-E4B (3 tasks) & $\sim$3,500 & 3 & 4 & 2 & 8 & $\sim$1.5--2~hr \\
 Gemma-4-12B (3 tasks) & $\sim$3,500 & 3 & 4 & 1 & 8 & $\sim$3--5~hr \\
 \bottomrule
 \end{tabular}
+\par\smallskip
+\noindent\scriptsize $^*$Actual training used batch-size~1 (reduced from 2) due to CUDA OOM on 32~GB GPUs with the full 7-task dataset and 4-bit QLoRA. Effective batch was $1 \times 8 \times 4 = 32$ at approximately 39~s per step.
 \end{table}
 
 Checkpoints are saved every 500 steps (maximum 3 retained per run) to the output directory. The final merged LoRA adapter goes to \texttt{<output-dir>/final/} alongside the processor, tokenizer, and training metadata. WandB integration logs loss, learning rate, and gradient norms to the \texttt{smallgameagent} project.

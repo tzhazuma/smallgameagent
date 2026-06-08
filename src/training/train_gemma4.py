@@ -563,12 +563,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_wandb:
         report_to.append("wandb")
 
-    # Determine gradient accumulation based on GPU count
-    grad_accum = args.grad_accum
-    if use_deepspeed and gpu_count > 1:
-        # With DeepSpeed ZeRO-2, effective batch = micro × accum × GPUs.
-        # Keep effective batch the same regardless of GPU count.
-        grad_accum = max(1, args.grad_accum // gpu_count) if gpu_count > 0 else args.grad_accum
+    # Use the user-specified gradient accumulation steps directly.
+    # DeepSpeed ZeRO-2 already handles per-GPU scaling:
+    # effective_batch = gpu_count × batch_size × grad_accum.
 
     training_args = TrainingArguments(
         output_dir=str(args.output_dir),
