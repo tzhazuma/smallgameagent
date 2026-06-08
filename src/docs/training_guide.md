@@ -139,33 +139,36 @@ python src/training/train_gemma4.py \
 
 ## Model Comparison
 
-| Aspect | Qwen3.5-4B | Gemma-4-E4B |
-|--------|------------|-------------|
-| Parameters | 4B | ~4B (E4B) |
-| Vision encoder | Native Qwen3VLProcessor | AutoModelForVision2Seq |
-| LoRA targets | q_proj,v_proj,k_proj,o_proj | q_proj,v_proj,k_proj,o_proj,gate_proj,up_proj,down_proj |
-| Chat template | Qwen3.5-VL (image key: `"image"`) | Gemma-4 (image key: `"url"`) |
-| Training framework | TRL SFTTrainer | HuggingFace Trainer |
-| Data collator | Custom MultimodalDataCollator | Custom VLMDataCollator |
-| Quantization | 4-bit NF4 (default) | 4-bit NF4 (default) |
-| Flash Attention | Flash Attention 2 | Flash Attention 2 (optional) |
-| Recommended tasks | All 7 tasks | Subset (3 tasks tested) |
+All models below are **confirmed natively multimodal** — Qwen3.5 does NOT need a separate -VL variant (the initial plan agent was incorrect on this point). Qwen3.5-4B/9B and Gemma-4-E4B/12B all accept image + text input directly.
 
-Both models use:
+| Aspect | Qwen3.5-4B | Qwen3.5-9B | Gemma-4-E4B | Gemma-4-12B |
+|--------|------------|------------|-------------|-------------|
+| Parameters | 4B | 9B | ~4B (E4B) | ~12B |
+| Vision encoder | Native Qwen3VLProcessor | Same | AutoModelForVision2Seq | Same |
+| LoRA targets | q/k/v/o_proj | q/k/v/o_proj | q/k/v/o/gate/up/down_proj | Same |
+| Chat template | `"image"` key | `"image"` key | `"url"` key (or PIL) | Same |
+| Training framewk | TRL SFTTrainer | Same | HuggingFace Trainer | Same |
+| Quantization | 4-bit NF4 | 4-bit NF4 | 4-bit NF4 | 4-bit NF4 |
+| VRAM (4-bit+LoRA) | ~6 GB | ~12 GB | ~6 GB | ~14 GB |
+| Use via --model | `Qwen/Qwen3.5-4B` | `Qwen/Qwen3.5-9B` | `google/gemma-4-e4b-it` | `google/gemma-4-12b-it` |
+
+All models share:
 - DeepSpeed ZeRO-2 for multi-GPU
 - Gradient checkpointing
 - BF16 mixed precision
 - Cosine LR schedule with 3% warmup
 
-The Gemma-4 script targets additional linear modules (gate_proj, up_proj, down_proj) beyond the attention projection layers, giving it more trainable parameters per LoRA rank.
+The Gemma-4 scripts target additional linear modules (gate_proj, up_proj, down_proj) beyond attention projection layers, providing more trainable parameters per LoRA rank. The `--model` flag on both training scripts accepts any HuggingFace model ID, making all 4 variants directly usable.
 
 ## Estimated Training Time
 
 | Model | Samples | Epochs | GPUs | Batch/GPU | Accum | Time |
 |-------|---------|--------|------|-----------|-------|------|
 | Qwen3.5-4B | 9,378 | 3 | 4 | 2 | 8 | ~2-3 hours |
+| Qwen3.5-9B | 9,378 | 3 | 4 | 1 | 8 | ~4-6 hours |
 | Qwen3.5-4B | 1,647 (1 task) | 3 | 1 | 2 | 8 | ~30-45 min |
 | Gemma-4-E4B | ~3,500 (3 tasks) | 3 | 4 | 2 | 8 | ~1.5-2 hours |
+| Gemma-4-12B | ~3,500 (3 tasks) | 3 | 4 | 1 | 8 | ~3-5 hours |
 
 Actual times depend on GPU model, disk I/O, and whether the dataset is fully cached in RAM. The ~2-3 hour estimate assumes all 9,378 training samples across 7 tasks on 4x RTX 5090 with the default batch size and accumulation.
 

@@ -138,7 +138,11 @@ The converter transforms raw JSONL state snapshots into model-specific chat temp
 
 ### src/inference/ - Inference Server
 
-Not yet implemented. The inference server will load a trained LoRA adapter and base model, expose a REST or gRPC endpoint that accepts game state + screenshot, and returns actions. The agent loop would replace the `OpenCodeGoClient.chat()` call with a local inference call.
+**Implemented.** `server.py` (741 lines) provides a FastAPI inference server with:
+- `POST /predict` — multipart form accepting screenshot PNG + game state JSON, returns `{"action": "move"|"tap"|"wait", "params": {...}, "reason": "...", "latency_ms": ...}` via multimodal VLM generation
+- `GET /health` — returns model info, GPU count, and readiness status
+- Auto-detects GPU VRAM and enables 4-bit quantization when < 12 GB (for RTX 4060 laptop 8 GB)
+- Supports both Qwen3.5-4B and Gemma-4-E4B with LoRA adapter loading via `GameAgentInference`
 
 ### configs/ - Configuration
 

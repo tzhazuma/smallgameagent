@@ -4,9 +4,8 @@ Run with:  python -m pytest tests/test_dataset_converter.py -v
 """
 
 import json
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pytest
 from PIL import Image
@@ -467,7 +466,6 @@ class TestBuildStateSummary:
     @requires_dataset
     def test_all_seven_task_types_produce_summary(self) -> None:
         from src.training.data_loader import VLMColdStartDataset
-        c = converter()
         for task_name in sorted(VALID_TASK_NAMES):
             ds = VLMColdStartDataset(DATASET_ROOT, task_name, split="smoke")
             if len(ds) == 0:
@@ -503,9 +501,6 @@ class TestCrossFormatConsistency:
     @requires_dataset
     def test_sharegpt_images_match_source(self, tmp_path: Path) -> None:
         c = converter()
-        from src.training.data_loader import VLMColdStartDataset
-        ds = VLMColdStartDataset(DATASET_ROOT, "probe_action_effect", split="smoke")
-
         out = c.to_sharegpt_format("probe_action_effect", split="smoke", output_dir=tmp_path)
         with open(out, "r", encoding="utf-8") as fh:
             data = json.load(fh)

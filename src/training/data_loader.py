@@ -7,7 +7,6 @@ task directory and resolved lazily at access time.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 

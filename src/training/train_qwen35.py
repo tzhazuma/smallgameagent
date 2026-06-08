@@ -490,7 +490,6 @@ class MultimodalDataCollator:
         self.max_length = max_length
 
     def __call__(self, examples: List[Dict[str, Any]]) -> Dict[str, Any]:
-        import torch
 
         texts: List[str] = []
         all_images: List[Any] = []

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from unittest import mock
 
 import pytest
 
@@ -172,7 +171,6 @@ class TestProbeAdapterConstructor:
         assert "})();" in source or ")()" in source[-10:]
 
     def test_default_path_exists(self) -> None:
-        from pathlib import Path
 
         from src.agent.probe_adapter import DEFAULT_PROBE_PATH
 

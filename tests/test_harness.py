@@ -5,7 +5,6 @@ No real browsers are launched — all browser interactions are mocked.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest import mock
 

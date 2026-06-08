@@ -10,7 +10,6 @@ Gemma-4 chat templates, plus ShareGPT JSON export for LLaMA-Factory.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -395,11 +394,10 @@ class VLMDatasetConverter:
             raw_msgs: List[Dict[str, str]] = sample["messages"]
 
             # Extract text content from original messages
-            user_text = ""
             assistant_text = ""
             for m in raw_msgs:
                 if m["role"] == "user":
-                    user_text = m["content"]
+                    pass  # user content replaced by structured summary
                 elif m["role"] == "assistant":
                     assistant_text = m["content"]
 
