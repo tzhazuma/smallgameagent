@@ -10,11 +10,15 @@ Gemma-4 chat templates, plus ShareGPT JSON export for LLaMA-Factory.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from src.training.data_loader import VLMColdStartDataset, VALID_TASK_NAMES, VALID_SPLITS
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,9 +209,9 @@ class VLMDatasetConverter:
         messages: List[Dict[str, Any]] = []
 
         if system_text:
-            messages.append(
-                {"role": "system", "content": [{"type": "text", "text": system_text}]}
-            )
+            # Qwen3.5 template rejects list-format content for system role;
+            # use plain string instead of [{"type": "text", "text": ...}].
+            messages.append({"role": "system", "content": system_text})
 
         messages.append({"role": "user", "content": user_content})
         messages.append(
@@ -306,20 +310,43 @@ class VLMDatasetConverter:
                     f"Use 'qwen35' or 'gemma4'."
                 )
 
+            # Store image paths (strings) instead of PIL Images so PyArrow
+            # can serialise the records into a Dataset.
+            image_paths = self._get_image_paths(sample)
             records.append(
                 {
                     "messages": messages,
-                    "images": sample["images"],  # list[PIL.Image]
+                    "image_paths": image_paths,
                     "sample_id": sample["sample_id"],
                     "task_type": sample["task_type"],
                 }
             )
 
-        # Try to return a proper HuggingFace Dataset; degrade gracefully
+        # Build a Dataset with Arrow-safe columns only.  The "messages"
+        # column is stored as JSON strings so PyArrow can handle it.
+        # The collator parses messages back and loads images from paths.
         try:
-            from datasets import Dataset  # type: ignore[import-untyped]
+            from datasets import Dataset, Features, Value  # type: ignore[import-untyped]
 
-            return Dataset.from_list(records)
+            simple_records = [
+                {
+                    "messages_json": json.dumps(r["messages"], ensure_ascii=False),
+                    "image_paths": r["image_paths"],
+                    "sample_id": r["sample_id"],
+                    "task_type": r["task_type"],
+                }
+                for r in records
+            ]
+
+            # Features: messages_json=string, image_paths=sequence of strings,
+            # sample_id/task_type=string
+            features = Features({
+                "messages_json": Value("string"),
+                "image_paths": [Value("string")],
+                "sample_id": Value("string"),
+                "task_type": Value("string"),
+            })
+            return Dataset.from_list(simple_records, features=features)
         except ImportError:
             return records
 

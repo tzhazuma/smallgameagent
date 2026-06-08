@@ -104,14 +104,24 @@ class VLMDataCollator:
         self.max_length = max_length
 
     def __call__(self, examples: list[dict[str, Any]]) -> dict[str, Any]:
+        import json as _json
+        from PIL import Image
+
         batch_ids: list[torch.Tensor] = []
         batch_masks: list[torch.Tensor] = []
         batch_labels: list[torch.Tensor] = []
         all_pixel_values: list[torch.Tensor] = []
 
         for ex in examples:
-            messages: list[dict[str, Any]] = ex["messages"]
-            images: list[Any] = ex.get("images", []) or []
+            # Parse messages from JSON string (PyArrow-safe storage)
+            messages: list[dict[str, Any]] = (
+                _json.loads(ex["messages_json"])
+                if isinstance(ex.get("messages_json"), str)
+                else ex.get("messages", [])
+            )
+            # Load images from paths (stored as strings for Arrow compat)
+            img_paths: list[str] = ex.get("image_paths", []) or []
+            images: list[Any] = [Image.open(p).convert("RGB") for p in img_paths]
 
             # Build raw prompt string via Gemma-4 chat template
             prompt: str = self.processor.apply_chat_template(

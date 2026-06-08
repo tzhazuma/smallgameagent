@@ -370,8 +370,13 @@ def setup_model_and_processor(
     quant_bits: int,
     double_quant: bool,
     image_max_pixels: int,
+    use_deepspeed: bool = False,
 ) -> Tuple[Any, Any]:
     """Load Qwen3.5-4B with QLoRA 4-bit quantisation and LoRA adapters.
+
+    When *use_deepspeed* is True, use per-rank ``device_map``
+    (``{"": f"cuda:{current_device}"}``) instead of ``"auto"`` to avoid
+    conflicts with DeepSpeed's device management.
 
     Returns ``(model, processor)`` – the model is already wrapped with
     PEFT LoRA and the processor is configured with the correct image
@@ -399,31 +404,40 @@ def setup_model_and_processor(
             llm_int8_threshold=6.0,
         )
 
+    # ── Device map ─────────────────────────────────────────────────────
+    # DeepSpeed manages device placement, so avoid device_map="auto".
+    num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if use_deepspeed and num_gpus > 1:
+        device_map: dict[str, str] = {"": f"cuda:{torch.cuda.current_device()}"}
+    else:
+        device_map = "auto"
+
     # ── Load base model ────────────────────────────────────────────────
-    logger.info("Loading model %s (quant: %d-bit) …", model_name, quant_bits)
+    logger.info(
+        "Loading model %s (quant: %d-bit, device_map=%s) …",
+        model_name, quant_bits, device_map,
+    )
+    # SDPA used over flash_attn_2 since RTX 5090 (sm_120) lacks flash-attn wheel
     try:
         model = Qwen3_5ForConditionalGeneration.from_pretrained(
             model_name,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map=device_map,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
+            attn_implementation="sdpa",
         )
     except (ValueError, ImportError, OSError):
         logger.warning(
-            "Qwen3_5ForConditionalGeneration not available; falling back "
-            "to AutoModelForVision2Seq."
+            "Qwen3_5ForConditionalGeneration with SDPA failed; "
+            "falling back with default attention."
         )
-        from transformers import AutoModelForVision2Seq
-
-        model = AutoModelForVision2Seq.from_pretrained(
+        model = Qwen3_5ForConditionalGeneration.from_pretrained(
             model_name,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map=device_map,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
         )
 
     # ── Prepare for k-bit (QLoRA) training ─────────────────────────────
@@ -458,9 +472,9 @@ def setup_model_and_processor(
         processor.image_processor.min_pixels = max(256 * 256, image_max_pixels // 4)
 
     logger.info(
-        "Processor image max_pixels=%d, min_pixels=%d",
-        getattr(processor.image_processor, "max_pixels", None),
-        getattr(processor.image_processor, "min_pixels", None),
+        "Processor image max_pixels=%s, min_pixels=%s",
+        getattr(processor.image_processor, "max_pixels", "?"),
+        getattr(processor.image_processor, "min_pixels", "?"),
     )
 
     return model, processor
@@ -476,8 +490,8 @@ class MultimodalDataCollator:
 
     Each sample in the batch should be a dict with:
 
-    - ``messages``: list[dict] — Qwen3.5 chat-format messages
-    - ``images``:   list[PIL.Image] — images referenced in messages
+    - ``messages``:    list[dict] — Qwen3.5 chat-format messages
+    - ``image_paths``: list[str]  — absolute paths to images
 
     The collator applies ``apply_chat_template`` to each sample's messages,
     then tokenises the whole batch via the processor, producing
@@ -491,12 +505,25 @@ class MultimodalDataCollator:
 
     def __call__(self, examples: List[Dict[str, Any]]) -> Dict[str, Any]:
 
+        import json as _json
+        from PIL import Image
+
         texts: List[str] = []
-        all_images: List[Any] = []
+        image_lists: List[List[Any]] = []
 
         for ex in examples:
-            messages = ex["messages"]
-            images = ex.get("images", [])
+            # Parse messages from JSON string (PyArrow-safe storage)
+            messages: List[Dict[str, Any]] = (
+                _json.loads(ex["messages_json"])
+                if isinstance(ex.get("messages_json"), str)
+                else ex.get("messages", [])
+            )
+            # Load images from paths on-the-fly
+            paths: List[str] = ex.get("image_paths", [])
+            sample_images: List[Any] = []
+            for p in paths:
+                sample_images.append(Image.open(p).convert("RGB"))
+            image_lists.append(sample_images)
 
             # Build text via chat template (tokenize=False → string)
             text = self.processor.apply_chat_template(
@@ -505,11 +532,10 @@ class MultimodalDataCollator:
                 add_generation_prompt=False,
             )
             texts.append(text)
-            all_images.append(images)
 
-        # Flatten images for batch processing; track which belong to each sample
+        # Flatten images for batch processing
         flat_images: List[Any] = []
-        for img_list in all_images:
+        for img_list in image_lists:
             flat_images.extend(img_list)
 
         if flat_images:
@@ -578,6 +604,16 @@ def main(argv: Optional[List[str]] = None) -> None:
     # ── Load datasets ──────────────────────────────────────────────────
     train_dataset, val_dataset = load_datasets(args, task_names)
 
+    # ── DeepSpeed config (determined before model loading) ────────────
+    import torch
+    use_deepspeed = not args.no_deepspeed
+    deepspeed_config: Optional[str] = None
+    if use_deepspeed:
+        if args.deepspeed:
+            deepspeed_config = args.deepspeed
+        else:
+            deepspeed_config = str(_build_deepspeed_config(args.output_dir))
+
     # ── Model & processor ──────────────────────────────────────────────
     model, processor = setup_model_and_processor(
         model_name=args.model,
@@ -588,15 +624,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         quant_bits=args.quant_bits,
         double_quant=not args.no_double_quant,
         image_max_pixels=args.image_max_pixels,
+        use_deepspeed=use_deepspeed,
     )
-
-    # ── DeepSpeed config ──────────────────────────────────────────────
-    deepspeed_config: Optional[str] = None
-    if not args.no_deepspeed:
-        if args.deepspeed:
-            deepspeed_config = args.deepspeed
-        else:
-            deepspeed_config = str(_build_deepspeed_config(args.output_dir))
 
     # ── Training args ──────────────────────────────────────────────────
     output_dir = Path(args.output_dir)
@@ -611,7 +640,6 @@ def main(argv: Optional[List[str]] = None) -> None:
     training_args = TrainingArguments(
         # Output
         output_dir=str(output_dir),
-        overwrite_output_dir=False,
         # Batch & steps
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -656,18 +684,20 @@ def main(argv: Optional[List[str]] = None) -> None:
         os.environ.setdefault("WANDB_NAME", run_name)
         logger.info("W&B project: %s  run: %s", args.wandb_project, run_name)
 
-    # ── SFTTrainer ─────────────────────────────────────────────────────
-    from trl import SFTTrainer
+    # ── Trainer ─────────────────────────────────────────────────────────
+    # Use HuggingFace Trainer (not SFTTrainer) because SFTTrainer auto-
+    # tokenises even with processing_class=None, which conflicts with our
+    # custom data collator that handles multimodal tokenisation.
+    from transformers import Trainer as HFTrainer
 
     data_collator = MultimodalDataCollator(processor, max_length=args.max_length)
 
-    trainer = SFTTrainer(
+    trainer = HFTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         data_collator=data_collator,
-        processing_class=None,  # we collate ourselves
     )
 
     # ── Resume from checkpoint ─────────────────────────────────────────
