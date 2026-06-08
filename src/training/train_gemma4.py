@@ -572,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
-        gradient_accumulation_steps=grad_accum,
+        gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
         warmup_ratio=args.warmup_ratio,
         lr_scheduler_type="cosine",
@@ -617,8 +617,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     logger.info("Effective batch size: %d × %d × %d = %d",
-                gpu_count or 1, args.batch_size, grad_accum,
-                (gpu_count or 1) * args.batch_size * grad_accum)
+                gpu_count or 1, args.batch_size, args.grad_accum,
+                (gpu_count or 1) * args.batch_size * args.grad_accum)
 
     # ---- Trainer ----
     trainer = Trainer(
