@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Game files (large binaries, not in git)
+playable-agent-12-games-20260608/
+vlm-training-data-cold-start-portable-20260608/
+*.html
+
+# Assets (large binary files)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.webm
+*.bin
+
+# Model files (very large)
+*.pt
+*.bin
+*.safetensors
+*.onnx
+*.ckpt
+*.pkl
+*.h5
+checkpoints/
+outputs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.env
+
+# Logs
+logs/
+*.log
+
+# OMC
+.omo/
