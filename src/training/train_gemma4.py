@@ -47,19 +47,18 @@ logger = logging.getLogger("train_gemma4")
 # DeepSpeed ZeRO-2 configuration
 # ---------------------------------------------------------------------------
 
-DEEPSPEED_ZERO3: dict[str, Any] = {
+DEEPSPEED_ZERO2: dict[str, Any] = {
     "train_batch_size": "auto",
     "train_micro_batch_size_per_gpu": "auto",
     "gradient_accumulation_steps": "auto",
     "zero_optimization": {
-        "stage": 3,
+        "stage": 2,
         "offload_optimizer": {"device": "cpu"},
-        "offload_param": {"device": "cpu"},
         "overlap_comm": True,
         "contiguous_gradients": True,
         "reduce_bucket_size": 2e8,
-        "stage3_prefetch_bucket_size": 5e7,
-        "stage3_param_persistence_threshold": 1e5,
+        "allgather_bucket_size": 2e8,
+        "reduce_scatter": True,
     },
     "bf16": {"enabled": True},
     "gradient_clipping": "auto",
@@ -451,7 +450,7 @@ def build_model_and_processor(
     _orig_vision_model_forward = _gemma_model.Gemma4VisionModel.forward
 
     def _patched_vision_model_forward(self, pixel_values, pixel_position_ids=None, **kwargs):
-        if isinstance(pixel_position_ids, bool) or pixel_position_ids is None:
+        if isinstance(pixel_position_ids, bool) or pixel_position_ids is None or (isinstance(pixel_position_ids, torch.Tensor) and pixel_position_ids.dtype == torch.bool):
             if pixel_values is not None and isinstance(pixel_values, torch.Tensor):
                 bsz = pixel_values.shape[0]
                 ph = pixel_values.shape[-2] // self.config.pooling_kernel_size
@@ -593,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     if use_deepspeed:
         ds_path = args.output_dir / "ds_zero2.json"
         with open(ds_path, "w", encoding="utf-8") as fh:
-            json.dump(DEEPSPEED_ZERO3, fh, indent=2)
+            json.dump(DEEPSPEED_ZERO2, fh, indent=2)
         deepspeed_config_path = str(ds_path)
         logger.info("DeepSpeed ZeRO-2 config written → %s", ds_path)
     else:
