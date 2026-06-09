@@ -31,9 +31,9 @@ import torch
 from datasets import Dataset, concatenate_datasets
 from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
-    AutoModelForVision2Seq,
     AutoProcessor,
     BitsAndBytesConfig,
+    Gemma4ForConditionalGeneration,
     Trainer,
     TrainingArguments,
 )
@@ -446,7 +446,7 @@ def build_model_and_processor(
         device_map = "auto"
 
     try:
-        model = AutoModelForVision2Seq.from_pretrained(
+        model = Gemma4ForConditionalGeneration.from_pretrained(
             args.model,
             quantization_config=bnb_config,
             device_map=device_map,
@@ -458,7 +458,7 @@ def build_model_and_processor(
         logger.warning(
             "Loading with %s failed; retrying with default attention", attn_impl
         )
-        model = AutoModelForVision2Seq.from_pretrained(
+        model = Gemma4ForConditionalGeneration.from_pretrained(
             args.model,
             quantization_config=bnb_config,
             device_map=device_map,
