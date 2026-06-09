@@ -47,19 +47,19 @@ logger = logging.getLogger("train_gemma4")
 # DeepSpeed ZeRO-2 configuration
 # ---------------------------------------------------------------------------
 
-DEEPSPEED_ZERO2: dict[str, Any] = {
+DEEPSPEED_ZERO3: dict[str, Any] = {
     "train_batch_size": "auto",
     "train_micro_batch_size_per_gpu": "auto",
     "gradient_accumulation_steps": "auto",
     "zero_optimization": {
-        "stage": 2,
+        "stage": 3,
         "offload_optimizer": {"device": "cpu"},
-        "allgather_partitions": True,
-        "allgather_bucket_size": 2e8,
+        "offload_param": {"device": "cpu"},
         "overlap_comm": True,
-        "reduce_scatter": True,
-        "reduce_bucket_size": 2e8,
         "contiguous_gradients": True,
+        "reduce_bucket_size": 2e8,
+        "stage3_prefetch_bucket_size": 5e7,
+        "stage3_param_persistence_threshold": 1e5,
     },
     "bf16": {"enabled": True},
     "gradient_clipping": "auto",
@@ -160,15 +160,13 @@ class VLMDataCollator:
             if "pixel_values" in inputs:
                 all_pixel_values.append(inputs["pixel_values"])
 
-        # ---- Pad token tensors ----
-        padded = self.processor.pad(
-            {"input_ids": batch_ids, "attention_mask": batch_masks},
-            return_tensors="pt",
-            padding=True,
-        )
+        # ---- Pad token tensors (manual, Gemma4Processor has no .pad()) ----
+        from torch.nn.utils.rnn import pad_sequence
 
-        # Pad labels with -100 (ignored index for cross-entropy)
-        max_len = padded["input_ids"].shape[1]
+        padded_ids = pad_sequence(batch_ids, batch_first=True, padding_value=0)
+        padded_masks = pad_sequence(batch_masks, batch_first=True, padding_value=0)
+        max_len = padded_ids.shape[1]
+
         padded_labels: list[torch.Tensor] = []
         for lab in batch_labels:
             pad_len = max_len - lab.shape[0]
@@ -177,7 +175,12 @@ class VLMDataCollator:
                     [lab, torch.full((pad_len,), -100, dtype=lab.dtype)]
                 )
             padded_labels.append(lab)
-        padded["labels"] = torch.stack(padded_labels)
+
+        padded = {
+            "input_ids": padded_ids,
+            "attention_mask": padded_masks,
+            "labels": torch.stack(padded_labels),
+        }
 
         # Concatenate all pixel values into a single flat tensor.
         # The Gemma-4 model splits this internally by counting
@@ -440,6 +443,53 @@ def build_model_and_processor(
     # When DeepSpeed is active, avoid device_map="auto" because DeepSpeed
     # manages its own device placement.  Load on cuda:0 and let DeepSpeed
     # replicate across GPUs (ZeRO-2 replicates parameters).
+    # ---- Monkey-patch Gemma4VisionModel to handle bool pixel_position_ids ----
+    # Bug in transformers 5.9.0: pixel_position_ids can be False/True (bool)
+    # instead of a LongTensor. Convert it to a proper padding tensor.
+    import transformers.models.gemma4.modeling_gemma4 as _gemma_model
+
+    _orig_vision_model_forward = _gemma_model.Gemma4VisionModel.forward
+
+    def _patched_vision_model_forward(self, pixel_values, pixel_position_ids=None, **kwargs):
+        if isinstance(pixel_position_ids, bool) or pixel_position_ids is None:
+            if pixel_values is not None and isinstance(pixel_values, torch.Tensor):
+                bsz = pixel_values.shape[0]
+                ph = pixel_values.shape[-2] // self.config.pooling_kernel_size
+                # Use valid (0,0) positions — NOT (-1,-1) which causes
+                # F.one_hot to allocate a massive out-of-range tensor.
+                pixel_position_ids = torch.zeros(
+                    (bsz, ph * ph, 2), dtype=torch.long, device=pixel_values.device
+                )
+            else:
+                pixel_position_ids = None
+        return _orig_vision_model_forward(self, pixel_values, pixel_position_ids=pixel_position_ids, **kwargs)
+
+    _gemma_model.Gemma4VisionModel.forward = _patched_vision_model_forward
+
+    # ---- Monkey-patch PEFT to support Gemma4ClippableLinear ----
+    import peft.tuners.lora.model as _peft_model
+    import peft.tuners.lora.bnb as _peft_bnb
+    import bitsandbytes as _bnb
+
+    _orig_create_new_module = _peft_model.LoraModel._create_new_module
+
+    @staticmethod
+    def _patched_create_new_module(lora_config, adapter_name, target, **kwargs):
+        target_cls = type(target).__name__
+        if target_cls == "Gemma4ClippableLinear" and hasattr(target, "linear"):
+            inner = target.linear
+            if isinstance(inner, _bnb.nn.Linear4bit):
+                kwargs.pop("device_map", None)
+                result = _peft_bnb.dispatch_bnb_4bit(inner, adapter_name, config=lora_config, **kwargs)
+                if result is not None:
+                    result.linear = inner
+                    return result
+        return _orig_create_new_module(lora_config, adapter_name, target, **kwargs)
+
+    _peft_model.LoraModel._create_new_module = _patched_create_new_module
+
+    # When DeepSpeed is active, avoid device_map="auto" because DeepSpeed
+    # manages its own device placement.  Load on cuda:0.
     if use_deepspeed:
         device_map = {"": f"cuda:{torch.cuda.current_device()}"}
     else:
@@ -543,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
     if use_deepspeed:
         ds_path = args.output_dir / "ds_zero2.json"
         with open(ds_path, "w", encoding="utf-8") as fh:
-            json.dump(DEEPSPEED_ZERO2, fh, indent=2)
+            json.dump(DEEPSPEED_ZERO3, fh, indent=2)
         deepspeed_config_path = str(ds_path)
         logger.info("DeepSpeed ZeRO-2 config written → %s", ds_path)
     else:
@@ -583,7 +633,7 @@ def main(argv: list[str] | None = None) -> int:
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
         save_strategy="steps",
-        save_safetensors=True,
+
         # Evaluation
         eval_strategy="steps" if eval_ds is not None else "no",
         eval_steps=args.eval_steps if eval_ds is not None else None,
@@ -606,14 +656,14 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         data_seed=args.seed + 1,
         # Reporting
-        report_to=report_to if report_to else None,
+        report_to=report_to if report_to else [],
         run_name=run_name,
         # Multi-GPU fallback
         ddp_find_unused_parameters=False,
         ddp_backend="nccl" if gpu_count > 1 else None,
         # Misc
         label_names=["labels"],
-        include_inputs_for_metrics=False,
+        include_for_metrics=False,
     )
 
     logger.info("Effective batch size: %d × %d × %d = %d",
@@ -627,7 +677,6 @@ def main(argv: list[str] | None = None) -> int:
         train_dataset=train_ds,
         eval_dataset=eval_ds,
         data_collator=collator,
-        tokenizer=processor.tokenizer,
     )
 
     # ---- Train ----
