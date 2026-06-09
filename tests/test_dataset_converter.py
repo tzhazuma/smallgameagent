@@ -4,6 +4,7 @@ Run with:  python -m pytest tests/test_dataset_converter.py -v
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -104,11 +105,15 @@ class TestQwen35Messages:
 
         for msg in msgs:
             content = msg["content"]
-            assert isinstance(content, list), f"Expected list, got {type(content)}"
-            assert len(content) >= 1
-            for block in content:
-                assert "type" in block, f"Missing 'type' in block: {block}"
-                assert block["type"] in ("text", "image"), f"Bad type: {block['type']}"
+            # System messages are plain strings (Qwen3.5 template requires this)
+            if msg.get("role") == "system":
+                assert isinstance(content, str), f"System content should be str, got {type(content)}"
+            else:
+                assert isinstance(content, list), f"Expected list, got {type(content)}"
+                assert len(content) >= 1
+                for block in content:
+                    assert "type" in block, f"Missing 'type' in block: {block}"
+                    assert block["type"] in ("text", "image"), f"Bad type: {block['type']}"
 
     @requires_dataset
     def test_first_user_block_is_image(self) -> None:
@@ -160,9 +165,9 @@ class TestQwen35Messages:
         msgs = c.to_qwen35_messages(sample)
 
         sys_content = msgs[0]["content"]
-        assert len(sys_content) == 1
-        assert sys_content[0]["type"] == "text"
-        assert len(sys_content[0]["text"]) > 0
+        # System messages are plain strings (Qwen3.5 template requires this)
+        assert isinstance(sys_content, str), f"Expected str, got {type(sys_content)}"
+        assert len(sys_content) > 0
 
     @requires_dataset
     def test_all_smoke_samples_convert(self) -> None:
@@ -242,8 +247,10 @@ class TestToHFDataset:
         result = c.to_hf_dataset("next_probe_action", split="smoke")
 
         for record in result:
-            for key in ("messages", "images", "sample_id", "task_type"):
+            for key in ("messages", "sample_id", "task_type"):
                 assert key in record, f"Missing key {key}"
+            # Image data stored as "image_paths" (strings) instead of "images" (PIL) for Arrow compat
+            assert "image_paths" in record, f"Missing key image_paths in record"
 
     @requires_dataset
     def test_images_are_pil_images(self) -> None:
@@ -251,10 +258,12 @@ class TestToHFDataset:
         result = c.to_hf_dataset("next_probe_action", split="smoke")
 
         for record in result:
-            imgs = record["images"]
-            assert isinstance(imgs, list)
-            for img in imgs:
-                assert isinstance(img, Image.Image), f"Expected PIL Image, got {type(img)}"
+            # Image data stored as "image_paths" (string paths) for Arrow compat
+            paths = record["image_paths"]
+            assert isinstance(paths, list)
+            for p in paths:
+                assert isinstance(p, str), f"Expected str path, got {type(p)}"
+                assert os.path.isfile(p), f"Image path does not exist: {p}"
 
     @requires_dataset
     def test_sample_count_matches_source(self) -> None:

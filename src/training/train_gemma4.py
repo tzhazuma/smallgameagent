@@ -454,9 +454,15 @@ def build_model_and_processor(
             if pixel_values is not None and isinstance(pixel_values, torch.Tensor):
                 bsz = pixel_values.shape[0]
                 num_patches = pixel_values.shape[1]
+                # Find closest factor pair for num_patches (grid may be rectangular)
                 side = int(num_patches ** 0.5)
-                y_coords = torch.arange(side, device=pixel_values.device).repeat_interleave(side)
-                x_coords = torch.arange(side, device=pixel_values.device).repeat(side)
+                while side > 0:
+                    if num_patches % side == 0:
+                        break
+                    side -= 1
+                h, w = side, num_patches // side
+                y_coords = torch.arange(h, device=pixel_values.device).repeat_interleave(w)
+                x_coords = torch.arange(w, device=pixel_values.device).repeat(h)
                 grid = torch.stack([x_coords, y_coords], dim=-1)
                 pixel_position_ids = grid.unsqueeze(0).expand(bsz, -1, -1).contiguous()
             else:

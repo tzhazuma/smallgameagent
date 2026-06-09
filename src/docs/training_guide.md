@@ -119,6 +119,8 @@ python src/training/train_qwen35.py \
 
 #### Gemma-4-E4B
 
+> **⚠️ Blocked**: Gemma-4-E4B training is currently blocked by a transformers 5.9.0 multimodal projection bug (`Image features and image tokens do not match`). This requires either upgrading transformers past 5.9.0 or direct patching of `Gemma4MultiModalProjector`. The Qwen3.5-4B pipeline is fully operational.
+
 ```bash
 python src/training/train_gemma4.py \
     --dataset-root ../data/vlm-training-data-cold-start-portable-20260608/ \

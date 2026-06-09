@@ -6,6 +6,8 @@ Two phases:
 - **Phase 1 (Agent)**: DeepSeek-v4-flash reasons over game state via a JavaScript probe. Mimo-v2.5 analyzes screenshots for visual cues. The agent dispatches CDP touch events (joystick, tap) to control the game through Playwright.
 - **Phase 2 (Training)**: QLoRA fine-tune a VLM (Qwen3.5-4B or Gemma-4-E4B) on ~9K human-demonstrated gameplay samples. The trained adapter replaces the text LLM for lower latency, offline inference, and better game-specific performance.
 
+> **⚠️ Gemma-4-E4B status**: Training is currently blocked by a transformers 5.9.0 multimodal projection bug (`Image features and image tokens do not match`). This requires either upgrading transformers past 5.9.0 or direct patching of `Gemma4MultiModalProjector`. The Qwen3.5-4B pipeline is fully operational — see [training results](src/docs/report.pdf).
+
 ## Quickstart
 
 ```bash
