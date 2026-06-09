@@ -453,12 +453,12 @@ def build_model_and_processor(
         if isinstance(pixel_position_ids, bool) or pixel_position_ids is None or (isinstance(pixel_position_ids, torch.Tensor) and pixel_position_ids.dtype == torch.bool):
             if pixel_values is not None and isinstance(pixel_values, torch.Tensor):
                 bsz = pixel_values.shape[0]
-                ph = pixel_values.shape[-2] // self.config.pooling_kernel_size
-                # Use valid (0,0) positions — NOT (-1,-1) which causes
-                # F.one_hot to allocate a massive out-of-range tensor.
-                pixel_position_ids = torch.zeros(
-                    (bsz, ph * ph, 2), dtype=torch.long, device=pixel_values.device
-                )
+                num_patches = pixel_values.shape[1]
+                side = int(num_patches ** 0.5)
+                y_coords = torch.arange(side, device=pixel_values.device).repeat_interleave(side)
+                x_coords = torch.arange(side, device=pixel_values.device).repeat(side)
+                grid = torch.stack([x_coords, y_coords], dim=-1)
+                pixel_position_ids = grid.unsqueeze(0).expand(bsz, -1, -1).contiguous()
             else:
                 pixel_position_ids = None
         return _orig_vision_model_forward(self, pixel_values, pixel_position_ids=pixel_position_ids, **kwargs)
