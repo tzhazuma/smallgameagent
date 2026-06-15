@@ -119,7 +119,7 @@ python src/training/train_qwen35.py \
 
 #### Gemma-4-E4B
 
-> **⚠️ Blocked**: Gemma-4-E4B training is currently blocked by a transformers 5.9.0 multimodal projection bug (`Image features and image tokens do not match`). This requires either upgrading transformers past 5.9.0 or direct patching of `Gemma4MultiModalProjector`. The Qwen3.5-4B pipeline is fully operational.
+> **⚠️ Status**: Gemma-4-E4B QLoRA training is running on a single RTX 5090 (32 GB, --no-deepspeed) with all 7 tasks (9,378 samples). Requires 4 library patches for transformers 5.9.0 compatibility (see `train_gemma4.py`). ~16h ETA. Update this note when training completes.
 
 ```bash
 python src/training/train_gemma4.py \

@@ -668,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
         ddp_backend="nccl" if gpu_count > 1 else None,
         # Misc
         label_names=["labels"],
-        include_for_metrics=False,
+        include_for_metrics=["inputs", "loss"],
     )
 
     logger.info("Effective batch size: %d × %d × %d = %d",
