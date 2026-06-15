@@ -20,10 +20,11 @@ LLM-driven game-playing agent for Cocos Creator HTML5 playable ads (Phase 1) and
 | Directory | Purpose |
 |-----------|---------|
 | `src/` | All source code (see `src/AGENTS.md`) |
-| `src/agent/` | Phase 1: agent loop, API client, harness, probe, visual analyzer |
+| `src/agent/` | Phase 1: agent loop, API client, harness, probe, visual analyzer, hybrid multi-mode agent |
+| `src/engine/` | Rule engine: vector math, pulse timing, game strategies, cyan guide detection |
 | `src/training/` | Phase 2: data loading, dataset conversion, QLoRA training scripts |
-| `src/inference/` | Inference server (coming in parallel task) |
-| `src/docs/` | Architecture and training documentation |
+| `src/inference/` | VLM inference server (FastAPI), structured visual extraction, rule extraction |
+| `src/docs/` | Architecture, training, inference modes, and strategy audit documentation |
 | `configs/` | Game profiles and configuration |
 | `tests/` | 245 tests across 8 test files |
 | `scripts/` | SCP/rsync transfer scripts for GPU servers |
@@ -44,7 +45,11 @@ LLM-driven game-playing agent for Cocos Creator HTML5 playable ads (Phase 1) and
 
 ### Common Tasks
 
-- **Run agent on a game**: `python -c "import asyncio; from src.agent import LLMAgent, OpenCodeGoClient; agent = LLMAgent(OpenCodeGoClient()); print(asyncio.run(agent.run_game('path/to/game.html')))"`
+- **Run agent on a game (API mode)**: `python -c "import asyncio; from src.agent import LLMAgent, OpenCodeGoClient; agent = LLMAgent(OpenCodeGoClient()); print(asyncio.run(agent.run_game('path/to/game.html')))"`
+- **Run agent with multi-mode HybridAgent**: `python -c "import asyncio; from src.agent.hybrid_agent import HybridAgent; from src.agent.api_client import OpenCodeGoClient; a = HybridAgent(mode='api', game_id='SSD_00848P01', api_client=OpenCodeGoClient()); print(asyncio.run(a.run_game('path/to/game.html', max_steps=50)))"`
+- **Run pure rule engine (no API/GPU needed)**: `python -c "import asyncio; from src.agent.hybrid_agent import HybridAgent; a = HybridAgent(mode='rule', game_id='SSD_00848P01'); print(asyncio.run(a.run_game('path/to/game.html', max_steps=50)))"`
+- **Start VLM inference server**: `python src/inference/server.py --model google/gemma-4-e4b-it --adapter checkpoints/gemma4-e4b-all7/checkpoint-1000 --no-flash-attn --port 8000`
+- **Test VLM inference**: `curl -X POST -F "screenshot=@test.png" -F 'state={"ready":true}' http://localhost:8000/predict`
 - **Run tests**: `pytest` (all 245), `pytest tests/test_agent_core.py` (specific)
 - **Lint**: `ruff check .`
 - **Format**: `ruff format .`
@@ -76,9 +81,12 @@ LLM-driven game-playing agent for Cocos Creator HTML5 playable ads (Phase 1) and
 
 ### Internal
 
-- `src/agent/` exports via `__init__.py`: `GameRunner`, `LLMAgent`, `OpenCodeGoClient`, `ProbeAdapter`, `VisualAnalyzer`, `find_game_html`
+- `src/agent/` exports via `__init__.py`: `GameRunner`, `LLMAgent`, `OpenCodeGoClient`, `ProbeAdapter`, `VisualAnalyzer`, `HybridAgent`, `find_game_html`
+- `src/engine/` exports: `RuleEngine`, `RuleSet`, `GameRule`, vector math, pulse timing curves
+- `src/inference/` exports: `GameAgentInference`, `extract_visual_structure`, `extract_rules_from_vlm`
 - `src/training/` depends on `src/agent/` only through dataset_converter importing from data_loader
 - `configs/game_profiles.py` is a standalone data module consumed by the agent at runtime
+- `src/engine/rules.py` consumes `configs/game_profiles.py` for profile-based strategy selection
 
 ### External
 

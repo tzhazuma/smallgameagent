@@ -6,7 +6,7 @@ Two phases:
 - **Phase 1 (Agent)**: DeepSeek-v4-flash reasons over game state via a JavaScript probe. Mimo-v2.5 analyzes screenshots for visual cues. The agent dispatches CDP touch events (joystick, tap) to control the game through Playwright.
 - **Phase 2 (Training)**: QLoRA fine-tune a VLM (Qwen3.5-4B or Gemma-4-E4B) on ~9K human-demonstrated gameplay samples. The trained adapter replaces the text LLM for lower latency, offline inference, and better game-specific performance.
 
-> **⚠️ Gemma-4-E4B status**: QLoRA training is running on a single RTX 5090 (2× the parameters of Qwen3.5-4B). Full 7-task training with 9,378 samples, ~16h ETA. Training previously required 4 library patches (transformers 5.9.0 `masked_scatter`, PEFT `Gemma4ClippableLinear`, vision model `pixel_position_ids`, trainer `include_for_metrics`). The Qwen3.5-4B pipeline is fully operational — see [training results](src/docs/report.pdf).
+> **⚠️ Gemma-4-E4B status**: QLoRA training completed successfully on 4× RTX 5090 (accelerate DDP). Full 7-task training (9,378 samples, 1 epoch, ~40 min). Inference server supports Gemma-4-E4B + LoRA adapter for VLM-based game playing. Training required 4 library patches (transformers 5.9.0 `masked_scatter`, PEFT `Gemma4ClippableLinear`, vision model `pixel_position_ids`, trainer `include_for_metrics`). The Qwen3.5-4B pipeline is fully operational — see [training results](src/docs/report.pdf).
 
 ## Quickstart
 
@@ -104,18 +104,30 @@ delivery/
 │   ├── agent/
 │   │   ├── api_client.py           # OpenAI-compatible client for OpenCodeGo
 │   │   ├── harness.py              # Playwright browser harness (CDP touch)
+│   │   ├── hybrid_agent.py         # Multi-mode agent (7 game-playing modes)
 │   │   ├── llm_agent.py            # Core observe-think-act loop
 │   │   ├── probe_adapter.py        # Cocos Creator JS probe bridge
 │   │   └── visual_analyzer.py      # Mimo-v2.5 + PIL fallback analysis
+│   ├── engine/
+│   │   ├── vector.py               # World↔joystick vector math
+│   │   ├── pulse.py                # Pulse timing curves (7 game families)
+│   │   ├── rules.py                # Rule engine + strategy implementations
+│   │   ├── visual.py               # Cyan guide / end-card visual detection
+│   │   └── strategies/             # Per-game strategy modules
 │   ├── training/
 │   │   ├── data_loader.py          # VLMColdStartDataset (lazy JSONL loader)
 │   │   ├── dataset_converter.py    # JSONL → HF Dataset / ShareGPT
 │   │   ├── train_qwen35.py         # Qwen3.5-4B QLoRA training script
 │   │   └── train_gemma4.py         # Gemma-4-E4B QLoRA training script
-│   ├── inference/                  # Inference server (coming soon)
+│   ├── inference/
+│   │   ├── server.py               # FastAPI VLM inference server
+│   │   ├── struct_extractor.py     # VLM→structured visual state
+│   │   └── rule_extractor.py       # VLM/API→gameplay rules
 │   └── docs/
 │       ├── architecture.md         # System architecture documentation
-│       └── training_guide.md       # GPU training instructions
+│       ├── training_guide.md       # GPU training instructions
+│       ├── inference_modes.md      # 7 game-playing modes reference
+│       └── strategy_audit.md       # Game driver strategy analysis
 ├── tests/
 │   ├── test_agent_core.py          # 56 tests - LLMAgent logic
 │   ├── test_api_client.py          # 15 tests - API client

@@ -123,6 +123,7 @@ The converter transforms raw JSONL state snapshots into model-specific chat temp
 |-----------|------|------|
 | OpenCodeGoClient | `api_client.py` | OpenAI-compatible HTTP client. Wraps the `openai` SDK with retry (429/503), exponential backoff, and image-to-base64 encoding. Two call surfaces: `chat()` for text models, `chat_with_vision()` for multimodal models. |
 | LLMAgent | `llm_agent.py` | Central observe-think-act loop. Manages state history, prompt building, JSON parsing (with markdown-fence stripping), text/vision fusion, action dispatch, and optional dataset collection. Configurable via dict overrides. |
+| HybridAgent | `hybrid_agent.py` | Multi-mode agent supporting 7 game-playing modes: `api` (Direct API), `vlm` (Direct VLM), `vlm-struct` (VLM→Struct→API), `vlm-rule` (VLM→Rules→Engine), `api-rule` (API→Rules→Engine), `rule` (Pure Rule Engine), `vlm-struct-api-rule` (VLM→Struct→API→Rules→Engine). Pluggable decision layer with shared observation/action pipeline. |
 | GameRunner | `harness.py` | Playwright async context manager. Launches Chromium with iPhone viewport, opens game HTML via file URI, manages CDP session for low-level touch dispatch. Methods: `joystick_pulse`, `tap`, `screenshot`, `wait`. |
 | ProbeAdapter | `probe_adapter.py` | Python bridge to the Cocos Creator probe JavaScript. Extracts the IIFE from the ESM source file, injects it via `add_init_script` + `evaluate`, wraps probe methods: `observe`, `observeFast`, `moveByCocosInput`, `getGuideSummary`, `snapshotComponents`. |
 | VisualAnalyzer | `visual_analyzer.py` | Dual-path screenshot analysis. Primary path calls Mimo-v2.5 with a structured JSON prompt. Fallback path runs PIL colour-thresholding: cyan guide detection (b>=135, g>=105, r<=130), green/red/blue end-card detection, dark-obstacle connected components, bright UI button regions, and gold coin detection. |
@@ -136,13 +137,25 @@ The converter transforms raw JSONL state snapshots into model-specific chat temp
 | train_qwen35.py | `train_qwen35.py` | QLoRA fine-tuning script for Qwen3.5-4B. Uses 4-bit NF4 quantization, LoRA (default r=16, alpha=32), DeepSpeed ZeRO-2, Flash Attention 2, and TRL SFTTrainer. Custom MultimodalDataCollator applies `apply_chat_template` and tokenises with image support. |
 | train_gemma4.py | `train_gemma4.py` | QLoRA fine-tuning script for Gemma-4-E4B. Similar pipeline with model-specific differences: Gemma-4 LoRA targets include gate_proj/up_proj/down_proj, uses `AutoModelForVision2Seq`, and extends TRL's base `Trainer` (not SFTTrainer). |
 
-### src/inference/ - Inference Server
+### src/engine/ - Rule Engine
 
-**Implemented.** `server.py` (741 lines) provides a FastAPI inference server with:
+| Component | File | Role |
+|-----------|------|------|
+| Vector Math | `vector.py` | World↔joystick coordinate transforms: `worldVectorFromStick`, `screenVectorForWorld`, `solveStickForWorld`, vector normalisation and distance functions. |
+| Pulse Timing | `pulse.py` | 7 game-specific pulse timing curves ported from Node.js drivers: `get_pulse_duration(driver_type, distance)` returns duration in ms. Covers follow-guide (touch/mouse), 2D, learned, taskguide, target-arrow, and guide-follow timing schemes. |
+| Rule Engine | `rules.py` | Core `RuleEngine` class with pluggable strategies. Implements `_strategy_follow_guide` (7 games), `_strategy_2d`, `_strategy_learned`, target selection via `_select_target`, completion detection via `_is_completion_state`, and stuck detection. |
+| Visual Detection | `visual.py` | Python port of `detect-cyan-guide.py`: cyan arrow detection (b>=135,g>=105,r<=130), flood-fill connected components, end-card button detection, gold coin detection, red cargo detection. Uses numpy/scipy for vectorised image processing. |
+
+### src/inference/ - Inference Server & VLM Integration
+
+**Implemented.** `server.py` (796 lines) provides a FastAPI inference server with:
 - `POST /predict` — multipart form accepting screenshot PNG + game state JSON, returns `{"action": "move"|"tap"|"wait", "params": {...}, "reason": "...", "latency_ms": ...}` via multimodal VLM generation
 - `GET /health` — returns model info, GPU count, and readiness status
 - Auto-detects GPU VRAM and enables 4-bit quantization when < 12 GB (for RTX 4060 laptop 8 GB)
 - Supports both Qwen3.5-4B and Gemma-4-E4B with LoRA adapter loading via `GameAgentInference`
+- Includes monkey patches for Gemma-4 (vision pixel_position_ids, PEFT ClippableLinear) and Flash Attention fallback
+- `struct_extractor.py` — VLM-based structured visual extraction for hybrid modes (arrows, targets, obstacles, end screens)
+- `rule_extractor.py` — VLM/API rule generation for rule-engine-based modes
 
 ### configs/ - Configuration
 
