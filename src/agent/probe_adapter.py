@@ -55,11 +55,15 @@ def _extract_probe_source(raw: str) -> str:
         raise ValueError("Probe source file does not match expected ESM format")
     # Strip leading/trailing wrapper lines.
     first = lines[0].strip()
-    last = lines[-1].strip()
     if first.startswith("export const") and "String.raw" in first:
         lines = lines[1:]
-    if last in ("`;", "`)`;"):
-        lines = lines[:-1]
+
+    # Strip the closing template-literal suffix (``\`;\``) from the last line.
+    last_idx = len(lines) - 1
+    while last_idx >= 0 and not lines[last_idx].strip():
+        last_idx -= 1
+    if last_idx >= 0 and lines[last_idx].strip().endswith("`;"):
+        lines[last_idx] = lines[last_idx].rstrip().removesuffix("`;").rstrip()
     return "\n".join(lines)
 
 

@@ -495,8 +495,12 @@ def build_model_and_processor(
 
     # When DeepSpeed is active, avoid device_map="auto" because DeepSpeed
     # manages its own device placement.  Load on cuda:0.
+    # For DDP (accelerate/torchrun), each rank loads the model on its own GPU.
     if use_deepspeed:
         device_map = {"": f"cuda:{torch.cuda.current_device()}"}
+    elif "LOCAL_RANK" in os.environ:
+        local_rank = int(os.environ["LOCAL_RANK"])
+        device_map = {"": f"cuda:{local_rank}"}
     else:
         device_map = "auto"
 
@@ -664,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
         report_to=report_to if report_to else [],
         run_name=run_name,
         # Multi-GPU fallback
-        ddp_find_unused_parameters=False,
+        ddp_find_unused_parameters=True,
         ddp_backend="nccl" if gpu_count > 1 else None,
         # Misc
         label_names=["labels"],

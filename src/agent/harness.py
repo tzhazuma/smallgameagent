@@ -140,10 +140,23 @@ class GameRunner:
         pw = await async_playwright().__aenter__()
         self._pw = pw  # keep a-ref for cleanup
 
-        self._browser = await pw.chromium.launch(
-            headless=not self.headed,
-            slow_mo=self.slow_mo,
+        # Use system Chromium if available (bypass Playwright's bundled browser
+        # which may not support the host OS, e.g. Ubuntu 26.04).
+        import shutil
+        chromium_path = os.environ.get(
+            "PLAYWRIGHT_CHROMIUM_PATH",
+            shutil.which("chromium-browser") or shutil.which("chromium") or None,
         )
+
+        launch_kwargs: dict[str, Any] = {
+            "headless": not self.headed,
+            "slow_mo": self.slow_mo,
+        }
+        if chromium_path:
+            launch_kwargs["executable_path"] = chromium_path
+            launch_kwargs.setdefault("args", []).append("--no-sandbox")
+
+        self._browser = await pw.chromium.launch(**launch_kwargs)
 
         self._context = await self._browser.new_context(
             viewport={

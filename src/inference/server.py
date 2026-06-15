@@ -245,7 +245,7 @@ class GameAgentInference:
         # ── Auto-detect 4-bit based on VRAM ─────────────────────────────
         use_quant = self._use_4bit
         if not use_quant and torch.cuda.is_available():
-            vram_gb = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             if vram_gb < 12.0:  # RTX 4060 8 GB → enable quant
                 use_quant = True
                 logger.info("VRAM %.1f GB < 12 GB → enabling 4-bit quantisation", vram_gb)
@@ -281,19 +281,17 @@ class GameAgentInference:
         # ── Load LoRA adapter ───────────────────────────────────────────
         adapter_dir = self._adapter_path or self._model_path
         adapter_path_obj = Path(adapter_dir)
-        if (adapter_path_obj / "adapter_config.json").is_file():
-            from peft import PeftModel
 
-            logger.info("Loading LoRA adapter from %s", adapter_dir)
+        if self._model_family == "gemma4" and getattr(base_model, "peft_config", None):
+            model = base_model
+            logger.info("Gemma4 LoRA already loaded from train_gemma4")
+        elif (adapter_path_obj / "adapter_config.json").is_file():
+            from peft import PeftModel
+            logger.info("Loading LoRA from %s", adapter_dir)
             model = PeftModel.from_pretrained(base_model, str(adapter_dir))
-            model = model.merge_and_unload()
-            logger.info("LoRA adapter merged and unloaded")
         else:
             model = base_model
-            logger.info("No adapter_config.json found; using base model as-is")
-
-        model.eval()
-
+            logger.info("No adapter found, using base model")
         # ── Load processor ──────────────────────────────────────────────
         from transformers import AutoProcessor
 
@@ -328,17 +326,17 @@ class GameAgentInference:
         }
         if quant_config is not None:
             kwargs["quantization_config"] = quant_config
-        if attn_impl != "sdpa":
+        if True:  # always pass attn_implementation explicitly
             kwargs["attn_implementation"] = attn_impl
 
         if self._model_family == "qwen35":
             return self._load_qwen35(model_id, kwargs)
         return self._load_gemma4(model_id, kwargs)
 
-    @staticmethod
+    
     def _load_qwen35(model_id: str, kwargs: dict[str, Any]) -> Any:
         """Load Qwen3.5-4B with Qwen3_5ForConditionalGeneration, fallback to
-        AutoModelForVision2Seq."""
+        AutoModelForMultimodalLM."""
         try:
             from transformers import Qwen3_5ForConditionalGeneration
 
@@ -347,19 +345,58 @@ class GameAgentInference:
         except (ValueError, ImportError, OSError):
             logger.warning(
                 "Qwen3_5ForConditionalGeneration unavailable; falling back to "
-                "AutoModelForVision2Seq",
+                "AutoModelForMultimodalLM",
             )
-            from transformers import AutoModelForVision2Seq
+            from transformers import AutoModelForMultimodalLM
 
-            return AutoModelForVision2Seq.from_pretrained(model_id, **kwargs)
+            return AutoModelForMultimodalLM.from_pretrained(model_id, **kwargs)
 
+    
     @staticmethod
     def _load_gemma4(model_id: str, kwargs: dict[str, Any]) -> Any:
-        """Load Gemma-4-E4B via AutoModelForVision2Seq."""
-        from transformers import AutoModelForVision2Seq
+        """Load Gemma-4-E4B with ClippableLinear replacement for PEFT."""
+        import torch
+        import torch.nn as nn
+        import transformers.models.gemma4.modeling_gemma4 as _gemma_model
 
-        logger.info("Loading Gemma-4-E4B via AutoModelForVision2Seq")
-        return AutoModelForVision2Seq.from_pretrained(model_id, **kwargs)
+        # Monkey-patch Gemma4VisionModel for bool pixel_position_ids
+        _orig_vision_forward = _gemma_model.Gemma4VisionModel.forward
+        def _patched_vision_forward(self, pixel_values, pixel_position_ids=None, **kw):
+            if isinstance(pixel_position_ids, bool) or pixel_position_ids is None:
+                if pixel_values is not None and isinstance(pixel_values, torch.Tensor):
+                    bsz = pixel_values.shape[0]
+                    num_patches = pixel_values.shape[1]
+                    side = int(num_patches ** 0.5)
+                    while side > 0:
+                        if num_patches % side == 0:
+                            break
+                        side -= 1
+                    h, w = side, num_patches // side
+                    y_coords = torch.arange(h, device=pixel_values.device).repeat_interleave(w)
+                    x_coords = torch.arange(w, device=pixel_values.device).repeat(h)
+                    grid = torch.stack([x_coords, y_coords], dim=-1)
+                    pixel_position_ids = grid.unsqueeze(0).expand(bsz, -1, -1).contiguous()
+                else:
+                    pixel_position_ids = None
+            return _orig_vision_forward(self, pixel_values, pixel_position_ids=pixel_position_ids, **kw)
+        _gemma_model.Gemma4VisionModel.forward = _patched_vision_forward
+
+        from transformers import AutoModelForMultimodalLM
+        logger.info("Loading Gemma-4-E4B base model")
+        model = AutoModelForMultimodalLM.from_pretrained(model_id, **kwargs)
+
+        # Replace Gemma4ClippableLinear with standard Linear for PEFT
+        def replace_clippable(module, parent_name=""):
+            for name, child in list(module.named_children()):
+                child_name = parent_name + "." + name if parent_name else name
+                if type(child).__name__ == "Gemma4ClippableLinear":
+                    setattr(module, name, child.linear)
+                else:
+                    replace_clippable(child, child_name)
+
+        replace_clippable(model)
+        logger.info("Replaced Gemma4ClippableLinear -> Linear (PEFT compat)")
+        return model
 
     # ------------------------------------------------------------------
     # Prediction
@@ -736,6 +773,24 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Starting server on %s:%d", args.host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
+# PEFT Gemma-4 patch - applied at module level
+import peft.tuners.lora.model as _peft_lora_model
+import peft.tuners.lora.bnb as _peft_lora_bnb
+import bitsandbytes as _bnb
 
-if __name__ == "__main__":
-    main()
+_orig_create_new_module = _peft_lora_model.LoraModel._create_new_module
+
+def _new_module_patch(lora_config, adapter_name, target, **kwargs):
+    cls_name = type(target).__name__
+    if cls_name == "Gemma4ClippableLinear" and hasattr(target, "linear"):
+        inner = target.linear
+        if isinstance(inner, _bnb.nn.Linear4bit):
+            kwargs.pop(device_map, None)
+            result = _peft_lora_bnb.dispatch_bnb_4bit(inner, adapter_name, config=lora_config, **kwargs)
+            if result is not None:
+                result.linear = inner
+                return result
+    return _orig_create_new_module(lora_config, adapter_name, target, **kwargs)
+
+_peft_lora_model.LoraModel._create_new_module = staticmethod(_new_module_patch)
+
