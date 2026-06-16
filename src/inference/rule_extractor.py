@@ -15,26 +15,17 @@ from src.engine.rules import GameRule, RuleSet
 
 logger = logging.getLogger(__name__)
 
-_RULE_EXTRACT_PROMPT = """You are a game strategy analyst. Based on the game screenshot and state below, identify the core gameplay rules. Return ONLY valid JSON:
-
+_RULE_EXTRACT_PROMPT = """Analyze this game screenshot and state. Output a JSON action for your next move. Use this format:
 {
-  "game_mechanics": "follow_guide" / "collect_targets" / "avoid_obstacles" / "complete_level" / "unknown",
-  "target_type": "arrow" / "backend" / "visual" / "none",
-  "obstacle_handling": "rotate_around" / "reroute" / "none",
-  "completion_condition": "reach_target" / "button_click" / "none",
-  "movement_pattern": "direct" / "waypoint" / "grid",
-  "visual_cues": ["cyan_arrow", "ui_button", "end_screen", ...],
-  "rules": [
-    {
-      "name": "rule_name",
-      "priority": 0-10,
-      "condition": "when to apply this rule",
-      "action_type": "move" / "tap" / "wait",
-      "action_params": {"dx": 0, "dy": 0, "duration_ms": 320}
-    }
-  ],
-  "extra_notes": ""
-}"""
+  "action": "move" / "tap" / "wait",
+  "params": {
+    "dx": float (for move, -1 to 1),
+    "dy": float (for move, -1 to 1),
+    "duration_ms": int
+  },
+  "reason": "brief explanation"
+}
+Output ONLY valid JSON, no other text."""
 
 
 def extract_rules_from_vlm(
@@ -65,6 +56,27 @@ def extract_rules_from_vlm(
 
     try:
         result = vlm_predict_fn(screenshot, state_payload)
+        # VLM predict() returns {"action": ..., "params": ..., "reason": ...}
+        # Convert directly to a Rule without parsing nested JSON
+        vlm_action = result.get("action")
+        if vlm_action:
+            rule = GameRule(
+                name="vlm_action",
+                priority=5,
+                condition="default",
+                action_template={
+                    "action": vlm_action,
+                    "params": result.get("params", {"duration_ms": 500}),
+                },
+            )
+            return RuleSet(
+                game_id="extracted",
+                driver_type="follow-guide-audited",
+                rules=[rule],
+                source="vlm",
+                metadata={"reason": result.get("reason", "")},
+            )
+        # Fallback: try parsing JSON from reason field
         raw = result.get("reason", "")
         parsed = _parse_rule_json(raw)
         if parsed:
@@ -159,6 +171,26 @@ def _parse_rule_json(text: str) -> dict[str, Any] | None:
 
 
 def _to_ruleset(parsed: dict[str, Any], source: str) -> RuleSet:
+    # Handle action-based format (new): {"action": "move", "params": {...}}
+    action = parsed.get("action")
+    if action:
+        atype = action
+        aparams = parsed.get("params", {"duration_ms": 500})
+        rules = [GameRule(
+            name="vlm_suggested_action",
+            priority=5,
+            condition="default",
+            action_template={"action": atype, "params": aparams},
+        )]
+        return RuleSet(
+            game_id="extracted",
+            driver_type="follow-guide-audited",
+            rules=rules,
+            source=source,
+            metadata={"reason": parsed.get("reason", "")},
+        )
+
+    # Legacy format: {"rules": [...], "game_mechanics": ...}
     rules_raw = parsed.get("rules", [])
     rules = []
     for r in rules_raw:
