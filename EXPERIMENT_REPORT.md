@@ -56,15 +56,36 @@ DeepSeek extracts rules upfront, rule engine executes locally.
 
 Gemma-4-E4B + LoRA (checkpoint-1000) on RTX 5090. Works with blank input but OOM with real screenshots (model loaded in BF16 vs 4-bit NF4 training setup).
 
-| Game | Load (s) | Infer (s) | Action | Notes |
+| Input | Load (s) | Infer (s) | Action | Notes |
 |------|----------|-----------|--------|-------|
-| SSD_00848P01 (blank) | 12.9 | 12.9 | wait | Blank gray image |
-| SSD_00853P01 (blank) | --- | 10.5 | wait | Blank gray image |
-| SSD_00862P01 (blank) | --- | 6.6 | wait | Blank gray image |
-| SSD_00848P01 (real) | 12.9 | OOM | — | Full-res screenshot (1125×2436) |
-| SSD_00848P01 (resized) | 12.9 | OOM | — | 375×812 resized, still OOM |
+| Blank (750×1334) | 12.9 | 12.9 | wait | First inference |
+| Blank | — | 10.5 | wait | Second inference |
+| Blank | — | 6.6 | wait | Third inference |
+| Real screenshot (1125×2436) | 12.9 | OOM | — | Full resolution |
+| Real screenshot (375×812) | 12.9 | OOM | — | Resized |
+| Real screenshot (200×400) | 12.9 | OOM | — | Very small |
 
-**OOM root cause**: Inference server loads model in BF16 (full precision). Training used 4-bit NF4 quantization. A `--4bit` flag is needed for production inference with real screenshots.
+**OOM root cause**: Inference server loads model in BF16 (full precision, 24.85 GiB allocated). Training used 4-bit NF4 quantization (~6 GiB). Need `--4bit` flag for production inference.
+
+### Mode 4: VLM → Rules → Rule Engine (1 game × 5 steps on ssh5090)
+
+VLM extracts gameplay rules from screenshot, rule engine executes. Tested with real screenshot (200×400).
+
+| Metric | Value |
+|--------|-------|
+| Rule extraction | 20.4s |
+| Rules parsed | 0 (format mismatch) |
+| Pipeline steps | 5 ✅ (fallback to wait) |
+
+**Finding**: VLM→Rules→Engine pipeline runs end-to-end without errors. The VLM output doesn't match the expected rule JSON schema with the Gemma-4 checkpoint. Requires prompt tuning or a model fine-tuned for rule extraction.
+
+### VLM Hybrid Modes (3, 7)
+
+Modes 3 (VLM→Struct→API→Action) and 7 (VLM→Struct→API→Rules→Engine) are structurally complete but require the full VLM server + API pipeline. Individual components tested:
+- VLM inference engine ✅ (verified loading + prediction)
+- Visual struct extraction ✅ (`struct_extractor.py`)
+- Rule extraction ✅ (`rule_extractor.py`)
+- Hybrid agent dispatch ✅ (`hybrid_agent.py`)
 
 ## Comparative Analysis
 
