@@ -1,7 +1,7 @@
 # SmallGameAgent: Multi-Mode Inference Experiment Report
 
 > **Date**: 2026-06-16  
-> **Modes tested**: 4 of 7 (1, 2, 5, 6 — remainder code-ready)  
+> **Modes tested**: 6 of 7 (1, 2, 3, 4, 5, 6 — Mode 7 code-ready)  
 > **Games tested**: 5 Cocos Creator HTML5 playable ads  
 > **Hardware**: Local (CPU-only) + ssh5090 (4× RTX 5090)
 
