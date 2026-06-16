@@ -56,7 +56,7 @@ def format_result(r):
 
 
 async def run_all():
-    os.environ.setdefault("OPENCODE_API_KEY", "sk-kYOPPubbbh519b6HuZSabdcuDVBh8iENR8TPElifWzjys98vYNiFr0Z4Dz6c2wXz")
+    os.environ.setdefault("OPENCODE_API_KEY", "sk-placeholder")
 
     api_client = OpenCodeGoClient()
 
