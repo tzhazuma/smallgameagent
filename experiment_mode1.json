@@ -1,0 +1,29 @@
+[
+  {
+    "completed": false,
+    "win": false,
+    "steps": 10,
+    "reason": "",
+    "mode": "api",
+    "game_id": "SSD_00848P01",
+    "elapsed_s": 291.4
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 10,
+    "reason": "",
+    "mode": "api",
+    "game_id": "SSD_00853P01",
+    "elapsed_s": 246.4
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 10,
+    "reason": "",
+    "mode": "api",
+    "game_id": "SSD_00862P01",
+    "elapsed_s": 332.6
+  }
+]

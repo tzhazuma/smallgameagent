@@ -1,0 +1,20 @@
+[
+  {
+    "completed": false,
+    "win": false,
+    "steps": 8,
+    "reason": "",
+    "mode": "api-rule",
+    "game_id": "SSD_00848P01",
+    "elapsed_s": 39.1
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 8,
+    "reason": "",
+    "mode": "api-rule",
+    "game_id": "SSD_00853P01",
+    "elapsed_s": 18.1
+  }
+]

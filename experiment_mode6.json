@@ -1,0 +1,47 @@
+[
+  {
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "mode": "rule",
+    "game_id": "SSD_00848P01",
+    "elapsed_s": 133.8
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "mode": "rule",
+    "game_id": "SSD_00853P01",
+    "elapsed_s": 48.7
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "mode": "rule",
+    "game_id": "SSD_00862P01",
+    "elapsed_s": 99.1
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "mode": "rule",
+    "game_id": "SSD_00864P01",
+    "elapsed_s": 57.8
+  },
+  {
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "mode": "rule",
+    "game_id": "SSD_00867P01",
+    "elapsed_s": 96.9
+  }
+]

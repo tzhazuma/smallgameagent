@@ -198,7 +198,7 @@ class HybridAgent:
             return await self._decide_vlm_struct_api_rule(state, screenshot_bytes)
         return {"action": "wait", "params": {"duration_ms": 500}, "reason": "unknown_mode"}
 
-    # --- Mode 1: Direct API ---
+    # --- Mode 1a: Direct API (text-only, no vision) ---
     async def _decide_api(
         self, state: dict[str, Any], screenshot_bytes: bytes | None,
     ) -> dict[str, Any]:

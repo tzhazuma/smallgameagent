@@ -104,11 +104,9 @@ class RuleEngine:
                     "reason": "game_over"}
 
         # 2. Stuck detection
-        player = state.get("player", {})
-        current_pos = (
-            player.get("worldPosition", {}).get("x", 0),
-            player.get("worldPosition", {}).get("z", 0),
-        )
+        player = state.get("player") or {}
+        wp = player.get("worldPosition") or {}
+        current_pos = (wp.get("x", 0), wp.get("z", 0))
         if self.last_player_pos:
             moved = self._world_dist(current_pos, self.last_player_pos)
             if moved < 0.05:
@@ -153,8 +151,8 @@ class RuleEngine:
         input_mode = profile.get("joystick", {}).get("input_mode", "touch")
 
         # Get player position
-        player = state.get("player", {})
-        player_world = player.get("worldPosition", {})
+        player = state.get("player") or {}
+        player_world = player.get("worldPosition") or {}
         px, pz = player_world.get("x", 0), player_world.get("z", 0)
 
         # Get guide candidates from state
@@ -223,7 +221,7 @@ class RuleEngine:
         """2D pixel-coordinate driver."""
         from src.engine.pulse import get_pulse_duration
 
-        player = state.get("player", {})
+        player = state.get("player") or {}
         screen_pos = player.get("screenPosition", {})
         px, py = screen_pos.get("x", 0), screen_pos.get("y", 0)
 
@@ -305,8 +303,8 @@ class RuleEngine:
         basis = profile.get("calibration", {}).get("basis", {})
         input_mode = profile.get("joystick", {}).get("input_mode", "touch")
 
-        player = state.get("player", {})
-        player_world = player.get("worldPosition", {})
+        player = state.get("player") or {}
+        player_world = player.get("worldPosition") or {}
         px, pz = player_world.get("x", 0), player_world.get("z", 0)
 
         guide_summary = state.get("guideSummary", {})
