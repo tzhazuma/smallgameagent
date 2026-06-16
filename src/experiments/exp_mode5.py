@@ -3,7 +3,7 @@
 import asyncio, json, time, os, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-os.environ["OPENCODE_API_KEY"] = "sk-kYOPPubbbh519b6HuZSabdcuDVBh8iENR8TPElifWzjys98vYNiFr0Z4Dz6c2wXz"
+os.environ.setdefault("OPENCODE_API_KEY", "sk-placeholder")
 from src.agent.hybrid_agent import HybridAgent
 from src.agent.api_client import OpenCodeGoClient
 

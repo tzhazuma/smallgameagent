@@ -1,0 +1,7 @@
+{
+  "action": "wait",
+  "params": {},
+  "reason": "",
+  "model_name": "gemma-4-e4b-it",
+  "latency_ms": 17633.5
+}
