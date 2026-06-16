@@ -134,22 +134,25 @@ SSD\_00853P01 & 8 & 18.1 & STOP \\
 only 1--2 API calls are made upfront, then the rule engine runs locally.}
 \end{table}
 
-\subsection{Mode 2: Direct VLM (3 games, synthetic input)}
-Fine-tuned Gemma-4-E4B with LoRA adapter (checkpoint-1000) loaded on a single RTX 5090.
+\subsection{Mode 2: Direct VLM (3 games, synthetic input; 1 game, real screenshot)}
+Fine-tuned Gemma-4-E4B with LoRA adapter (checkpoint-1000) loaded on shh5090.
 
 \begin{table}[H]
 \centering
 \begin{tabular}{lrrrl}
 \toprule
-Game & Load (s) & Infer (s) & Action & Reason \\
+Game & Load (s) & Infer (s) & Action & Notes \\
 \midrule
-SSD\_00848P01 & 12.9 & 12.9 & wait & Game settle \\
-SSD\_00853P01 & --- & 10.5 & wait & Game settle \\
-SSD\_00862P01 & --- & 6.6 & wait & Game settle \\
+SSD\_00848P01 (blank) & 12.9 & 12.9 & wait & No image content \\
+SSD\_00853P01 (blank) & --- & 10.5 & wait & No image content \\
+SSD\_00862P01 (blank) & --- & 6.6 & wait & No image content \\
+SSD\_00848P01 (real) & 12.9 & --- & OOM & 1125$\times$2436 full-res \\
+SSD\_00848P01 (resized) & 12.9 & --- & OOM & 375$\times$812, still OOM \\
 \bottomrule
 \end{tabular}
-\caption{Mode 2 results. Model loads in $\sim$13s, inference takes 7--13s per query 
-with blank input. Real screenshots would yield more varied actions.}
+\caption{Mode 2 results. Model loads in $\sim$13s, blank inference in 7--13s. 
+Real-game inference failed with CUDA OOM (model loaded in BF16 full precision; 
+training uses 4-bit NF4 which would halve memory usage).}
 \end{table}
 
 \subsection{Modes 3, 4, 7 (VLM hybrid modes)}

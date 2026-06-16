@@ -52,17 +52,19 @@ DeepSeek extracts rules upfront, rule engine executes locally.
 | SSD_00848P01 | 8 | 39.1 | 4.9s |
 | SSD_00853P01 | 8 | 18.1 | 2.3s |
 
-### Mode 2: Direct VLM (3 games)
+### Mode 2: Direct VLM (3 games blank + 1 real screenshot)
 
-Gemma-4-E4B + LoRA (checkpoint-1000) on RTX 5090.
+Gemma-4-E4B + LoRA (checkpoint-1000) on RTX 5090. Works with blank input but OOM with real screenshots (model loaded in BF16 vs 4-bit NF4 training setup).
 
-| Game | Load (s) | Infer (s) | Action | Reason |
-|------|----------|-----------|--------|--------|
-| SSD_00848P01 | 12.9 | 12.9 | wait | Game settle |
-| SSD_00853P01 | — | 10.5 | wait | Game settle |
-| SSD_00862P01 | — | 6.6 | wait | Game settle |
+| Game | Load (s) | Infer (s) | Action | Notes |
+|------|----------|-----------|--------|-------|
+| SSD_00848P01 (blank) | 12.9 | 12.9 | wait | Blank gray image |
+| SSD_00853P01 (blank) | --- | 10.5 | wait | Blank gray image |
+| SSD_00862P01 (blank) | --- | 6.6 | wait | Blank gray image |
+| SSD_00848P01 (real) | 12.9 | OOM | — | Full-res screenshot (1125×2436) |
+| SSD_00848P01 (resized) | 12.9 | OOM | — | 375×812 resized, still OOM |
 
-*Note: tested with blank gray screenshot (no game state). Real gameplay would yield varied actions.*
+**OOM root cause**: Inference server loads model in BF16 (full precision). Training used 4-bit NF4 quantization. A `--4bit` flag is needed for production inference with real screenshots.
 
 ## Comparative Analysis
 
