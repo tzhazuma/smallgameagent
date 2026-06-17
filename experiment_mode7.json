@@ -1,0 +1,1 @@
+{"mode7_pipeline_verified": true, "step1_vlm_struct": "19_fields_15.5s", "step2_api_rules": "1_rule_generated", "step3_rule_engine": "5_steps_executed", "pipeline": "VLM->Struct->API->Rules->Engine"}
