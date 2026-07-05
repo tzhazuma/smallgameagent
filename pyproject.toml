@@ -30,6 +30,10 @@ training = [
     "bitsandbytes>=0.45",
     "wandb>=0.19",
 ]
+memory = [
+    "sqlite-vec>=0.1.6",
+    "sentence-transformers>=3.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",

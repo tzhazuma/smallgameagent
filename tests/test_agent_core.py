@@ -6,6 +6,7 @@ No real browsers or API calls — everything is mocked.
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -840,6 +841,164 @@ class TestFullRunLoop:
         assert result["completed"] is False
         assert "Exception" in result["reason"]
         mock_runner.close.assert_called_once()  # cleanup ran
+
+
+# ---------------------------------------------------------------------------
+# Cross-session memory injection
+# ---------------------------------------------------------------------------
+
+
+class TestCrossSessionRetrieval:
+    """_build_system_prompt injects cross-session memory into prompts."""
+
+    # -- helpers ---------------------------------------------------------------
+
+    @staticmethod
+    def _ctx_with_metadata(**overrides: dict) -> Any:
+        """Build an AgentContext with the given metadata overrides."""
+        from src.agent.context import AgentContext
+
+        ctx = AgentContext()
+        for key, value in overrides.items():
+            ctx.metadata[key] = value
+        return ctx
+
+    # -- tests -----------------------------------------------------------------
+
+    def test_prompt_includes_previous_sessions_when_available(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When metadata has previous_sessions, they appear in the prompt."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(
+            previous_sessions=[
+                {
+                    "id": "ses_abc12345",
+                    "result": "win",
+                    "summary": "Completed level 1 quickly",
+                    "score": 95,
+                },
+            ],
+        )
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "## Previous Game Experience" in prompt
+        assert "[win]" in prompt
+        assert "ses_abc1" in prompt  # id[:8]
+        assert "Completed level 1" in prompt
+        assert "score: 95" in prompt
+
+    def test_prompt_includes_relevant_knowledge_when_available(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When metadata has relevant_knowledge, it appears in the prompt."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(
+            relevant_knowledge=[
+                {"content": "The joystick moves the player character", "confidence": 0.95},
+            ],
+        )
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "## Relevant Game Knowledge" in prompt
+        assert "[95%]" in prompt
+
+    def test_prompt_excludes_sessions_when_none_available(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When ctx is None, no system prompt is added."""
+        agent = LLMAgent(mock_client)
+        prompt = agent._build_text_prompt(sample_state, [], ctx=None)
+        assert "## Previous Game Experience" not in prompt
+        assert "## Relevant Game Knowledge" not in prompt
+
+    def test_prompt_handles_empty_previous_sessions_list(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When previous_sessions is an empty list, nothing is shown."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(previous_sessions=[])
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "## Previous Game Experience" not in prompt
+        assert "## Relevant Game Knowledge" not in prompt
+
+    def test_prompt_handles_empty_knowledge_list(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When relevant_knowledge is an empty list, nothing is shown."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(relevant_knowledge=[])
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "## Previous Game Experience" not in prompt
+        assert "## Relevant Game Knowledge" not in prompt
+
+    def test_system_prompt_stays_within_length_bounds(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """_build_system_prompt caps output at ~1000 characters."""
+        agent = LLMAgent(mock_client)
+        long_sessions = [
+            {
+                "id": f"ses_{'x' * 80}",
+                "result": "win",
+                "summary": "A" * 500,
+                "score": 99,
+            },
+        ] * 20
+        ctx = self._ctx_with_metadata(previous_sessions=long_sessions)
+        system = agent._build_system_prompt(ctx=ctx)
+        assert len(system) <= 1000
+
+    def test_multiple_sessions_formatted_correctly(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """Multiple sessions produce multiple bullet-point entries."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(
+            previous_sessions=[
+                {"id": "ses_001aaa", "result": "win", "summary": "First game", "score": 90},
+                {"id": "ses_002bbb", "result": "lose", "summary": "Second game", "score": 30},
+                {"id": "ses_003ccc", "result": "win", "summary": "Third game", "score": 85},
+            ],
+        )
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert prompt.count("- [") == 3
+        assert "[win]" in prompt
+        assert "[lose]" in prompt
+
+    def test_confidence_percentage_format_correct(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """Confidence values render as percentage strings."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(
+            relevant_knowledge=[
+                {"content": "Rule zero", "confidence": 0.0},
+                {"content": "Rule half", "confidence": 0.5},
+                {"content": "Rule full", "confidence": 1.0},
+            ],
+        )
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "[0%]" in prompt
+        assert "[50%]" in prompt
+        assert "[100%]" in prompt
+
+    def test_both_sections_appear_when_both_available(
+        self, mock_client: mock.MagicMock, sample_state: dict
+    ) -> None:
+        """When both memory keys exist, both sections are rendered."""
+        agent = LLMAgent(mock_client)
+        ctx = self._ctx_with_metadata(
+            previous_sessions=[
+                {"id": "ses_001", "result": "win", "summary": "First try", "score": 100},
+            ],
+            relevant_knowledge=[
+                {"content": "Drag to move", "confidence": 0.85},
+            ],
+        )
+        prompt = agent._build_text_prompt(sample_state, [], ctx=ctx)
+        assert "## Previous Game Experience" in prompt
+        assert "## Relevant Game Knowledge" in prompt
+        assert "[win]" in prompt
+        assert "[85%]" in prompt
 
 
 # ---------------------------------------------------------------------------

@@ -168,8 +168,14 @@ def _patch_all(
         return_value=mock.MagicMock(name="quant_config"),
     )
     sys.modules["transformers"] = transformers_mock
+    # Register transformers sub-modules for Gemma4 import path
+    sys.modules["transformers.models"] = mock.MagicMock(name="transformers.models")
+    sys.modules["transformers.models.gemma4"] = mock.MagicMock(name="transformers.models.gemma4")
+    sys.modules["transformers.models.gemma4.modeling_gemma4"] = mock.MagicMock(
+        name="transformers.models.gemma4.modeling_gemma4",
+    )
 
-    # Build and inject peft mock
+    # Build and inject peft mock with sub-modules for package-like import support
     merged = mock.MagicMock()
     merged.merge_and_unload.return_value = mock_model
     peft_mock = mock.MagicMock(name="peft")
@@ -177,6 +183,16 @@ def _patch_all(
         from_pretrained=mock.MagicMock(return_value=merged),
     )
     sys.modules["peft"] = peft_mock
+    # Register sub-modules so `import peft.tuners.lora.model` works
+    sys.modules["peft.tuners"] = mock.MagicMock(name="peft.tuners")
+    sys.modules["peft.tuners.lora"] = mock.MagicMock(name="peft.tuners.lora")
+    sys.modules["peft.tuners.lora.model"] = mock.MagicMock(name="peft.tuners.lora.model")
+    sys.modules["peft.tuners.lora.bnb"] = mock.MagicMock(name="peft.tuners.lora.bnb")
+
+    # Build and inject bitsandbytes mock for module-level import in server.py
+    sys.modules["bitsandbytes"] = mock.MagicMock(name="bitsandbytes")
+    sys.modules["bitsandbytes.nn"] = mock.MagicMock(name="bitsandbytes.nn")
+    sys.modules["bitsandbytes.nn"].Linear4bit = mock.MagicMock(name="Linear4bit")
 
     # Pathlib: is_dir → True, is_file → False by default (no adapter)
     monkeypatch.setattr("pathlib.Path.is_dir", lambda self: True)
@@ -266,7 +282,7 @@ class TestGameAgentInferenceLoading:
 
         # Override VRAM to 8 GB.
         mock_props = mock.MagicMock()
-        mock_props.total_mem = 8 * 1024**3
+        mock_props.total_memory = 8 * 1024**3
         monkeypatch.setattr("torch.cuda.get_device_properties", lambda idx: mock_props)
 
         monkeypatch.setattr("pathlib.Path.is_dir", lambda self: True)
@@ -441,6 +457,45 @@ class TestGameAgentInferencePredict:
 
 
 # ---------------------------------------------------------------------------
+# Warmup
+# ---------------------------------------------------------------------------
+
+
+class TestWarmup:
+    """GameAgentInference._warmup behavior."""
+
+    def test_warmup_completes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Warmup runs 3 predict passes and sets _warmup_complete."""
+        from src.inference.server import GameAgentInference
+
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        monkeypatch.setattr("pathlib.Path.is_dir", lambda self: True)
+        monkeypatch.setattr("pathlib.Path.is_file", lambda self: False)
+
+        engine = GameAgentInference("Qwen/Qwen3.5-4B", device="cuda")
+        assert engine._warmup_complete is True
+        # 3 warmup passes each call model.generate
+        assert engine._model.generate.call_count >= 3
+
+    def test_skip_warmup_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """skip_warmup=True leaves _warmup_complete as False."""
+        from src.inference.server import GameAgentInference
+
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        monkeypatch.setattr("pathlib.Path.is_dir", lambda self: True)
+        monkeypatch.setattr("pathlib.Path.is_file", lambda self: False)
+
+        engine = GameAgentInference(
+            "Qwen/Qwen3.5-4B", device="cuda", skip_warmup=True,
+        )
+        assert engine._warmup_complete is False
+        # model.generate should not have been called by warmup
+        assert engine._model.generate.call_count == 0
+
+
+# ---------------------------------------------------------------------------
 # JSON output parsing
 # ---------------------------------------------------------------------------
 
@@ -608,6 +663,13 @@ class TestHealthEndpoint:
         # mocked cuda → available
         assert data["cuda_available"] is True
         assert data["gpu_count"] == 1
+        # enhanced fields
+        assert data["model_loaded"] is True
+        assert data["warmup_complete"] is True  # warmup ran by default
+        assert data["vram_mb"] is None or isinstance(data["vram_mb"], float)
+        assert isinstance(data["uptime_s"], (int, float))
+        assert data["uptime_s"] >= 0
+        assert data["model_name"] == "qwen35-4b"
 
     def test_health_no_engine(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When engine is None, status is 'loading'."""
@@ -620,6 +682,36 @@ class TestHealthEndpoint:
         data = resp.json()
         assert data["status"] == "loading"
         assert data["ready"] is False
+        # enhanced fields still present with defaults
+        assert data["model_loaded"] is False
+        assert data["warmup_complete"] is False
+        assert isinstance(data["vram_mb"], (float, type(None)))
+        assert data["uptime_s"] >= 0
+        assert data["model_name"] == ""
+
+    def test_health_warmup_not_complete(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Health shows warmup_complete=false when skip_warmup is used."""
+        from src.inference import server as server_mod
+        from src.inference.server import GameAgentInference
+
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        monkeypatch.setattr("pathlib.Path.is_dir", lambda self: True)
+        monkeypatch.setattr("pathlib.Path.is_file", lambda self: False)
+
+        engine = GameAgentInference(
+            "Qwen/Qwen3.5-4B", device="cuda", skip_warmup=True,
+        )
+        monkeypatch.setattr(server_mod, "_inference_engine", engine)
+        client = TestClient(server_mod.app)
+
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["warmup_complete"] is False
+        assert data["ready"] is True  # model is loaded, just not warmed up
 
 
 class TestPredictEndpoint:
@@ -774,6 +866,143 @@ class TestPredictEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /predict/stream (SSE)
+# ---------------------------------------------------------------------------
+
+
+class TestPredictStreamEndpoint:
+    """POST /predict/stream produces SSE events."""
+
+    def test_predict_stream_sse_events(
+        self,
+        client_with_mock_engine: TestClient,
+        dummy_pil_image: Image.Image,
+        dummy_state_json: bytes,
+    ) -> None:
+        """Stream endpoint returns text/event-stream with token events."""
+        from unittest.mock import patch
+
+        # Set up TextIteratorStreamer mock that yields tokens
+        tokens = ['{"action":"move","params":{"dx":0.5,"dy":0.2,"duration_ms":320},"reason":"stream test"}']
+        mock_streamer = mock.MagicMock()
+        mock_streamer.__iter__.return_value = iter(tokens)
+        mock_streamer_cls = mock.MagicMock(return_value=mock_streamer)
+
+        # Patch Thread so start/join don't actually run anything
+        mock_thread = mock.MagicMock()
+        mock_thread_cls = mock.MagicMock(return_value=mock_thread)
+
+        with patch("transformers.TextIteratorStreamer", mock_streamer_cls), \
+             patch("threading.Thread", mock_thread_cls):
+            filename, img_bytes, content_type = _make_screenshot_upload(dummy_pil_image)
+            resp = client_with_mock_engine.post(
+                "/predict/stream",
+                files={"screenshot": (filename, img_bytes, content_type)},
+                data={"state": dummy_state_json.decode("utf-8")},
+            )
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+
+            # Parse SSE output — events separated by \n\n
+            sse_text = resp.text
+            events = []
+            for part in sse_text.strip().split("\n\n"):
+                if part.startswith("data: "):
+                    events.append(json.loads(part[6:]))
+
+            # Should have at least 1 token event + final event
+            assert len(events) >= 2
+            # Token events have "token" key
+            assert "token" in events[0]
+            # Final event has done=true
+            assert events[-1].get("done") is True
+
+    def test_predict_stream_final_event(
+        self,
+        client_with_mock_engine: TestClient,
+        dummy_pil_image: Image.Image,
+        dummy_state_json: bytes,
+    ) -> None:
+        """Final SSE event contains action, params, reason, latency_ms."""
+        from unittest.mock import patch
+
+        output_json = {'{"action":"move","params":{"dx":0.5,"dy":0.2,"duration_ms":320},"reason":"stream test"}'}
+        mock_streamer = mock.MagicMock()
+        mock_streamer.__iter__.return_value = iter([output_json])
+        mock_streamer_cls = mock.MagicMock(return_value=mock_streamer)
+        mock_thread = mock.MagicMock()
+        mock_thread_cls = mock.MagicMock(return_value=mock_thread)
+
+        with patch("transformers.TextIteratorStreamer", mock_streamer_cls), \
+             patch("threading.Thread", mock_thread_cls):
+            filename, img_bytes, content_type = _make_screenshot_upload(dummy_pil_image)
+            resp = client_with_mock_engine.post(
+                "/predict/stream",
+                files={"screenshot": (filename, img_bytes, content_type)},
+                data={"state": dummy_state_json.decode("utf-8")},
+            )
+            assert resp.status_code == 200
+
+            sse_text = resp.text
+            events = []
+            for part in sse_text.strip().split("\n\n"):
+                if part.startswith("data: "):
+                    events.append(json.loads(part[6:]))
+
+            final = events[-1]
+            assert final["done"] is True
+            assert final["action"] == "move"
+            assert final["params"]["dx"] == 0.5
+            assert final["params"]["dy"] == 0.2
+            assert "reason" in final
+            assert "latency_ms" in final
+            assert final["latency_ms"] > 0
+            assert "model_name" in final
+
+    def test_predict_stream_validation(
+        self,
+        client_with_mock_engine: TestClient,
+        dummy_state_json: bytes,
+    ) -> None:
+        """Stream endpoint validates inputs like /predict."""
+        # Missing screenshot → 422
+        resp = client_with_mock_engine.post(
+            "/predict/stream",
+            data={"state": dummy_state_json.decode("utf-8")},
+        )
+        assert resp.status_code == 422
+
+    def test_predict_stream_invalid_image(
+        self,
+        client_with_mock_engine: TestClient,
+        dummy_state_json: bytes,
+    ) -> None:
+        """Invalid image → 400."""
+        resp = client_with_mock_engine.post(
+            "/predict/stream",
+            files={"screenshot": ("frame.png", b"not an image", "image/png")},
+            data={"state": dummy_state_json.decode("utf-8")},
+        )
+        assert resp.status_code == 400
+        assert "Invalid image" in resp.json()["detail"]
+
+    def test_predict_stream_invalid_state(
+        self,
+        client_with_mock_engine: TestClient,
+        dummy_pil_image: Image.Image,
+    ) -> None:
+        """Invalid state JSON → 400."""
+        filename, img_bytes, content_type = _make_screenshot_upload(dummy_pil_image)
+        resp = client_with_mock_engine.post(
+            "/predict/stream",
+            files={"screenshot": (filename, img_bytes, content_type)},
+            data={"state": "not valid json {{{"},
+        )
+        assert resp.status_code == 400
+        assert "Invalid state" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
 # Pydantic model validation
 # ---------------------------------------------------------------------------
 
@@ -896,3 +1125,17 @@ class TestCLIArgs:
         assert args.temperature == 0.7
         assert args.port == 9999
         assert args.host == "127.0.0.1"
+
+    def test_skip_warmup_default(self) -> None:
+        """--skip-warmup defaults to False."""
+        from src.inference.server import _parse_args
+
+        args = _parse_args([])
+        assert args.skip_warmup is False
+
+    def test_skip_warmup_enabled(self) -> None:
+        """--skip-warmup flag sets skip_warmup to True."""
+        from src.inference.server import _parse_args
+
+        args = _parse_args(["--skip-warmup"])
+        assert args.skip_warmup is True

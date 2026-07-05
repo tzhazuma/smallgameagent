@@ -23,11 +23,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .api_client import OpenCodeGoClient
+from .dataset_writer import DatasetWriter
 from .harness import GameRunner
 from .probe_adapter import ProbeAdapter
 
 if TYPE_CHECKING:
-    pass
+    from .context import AgentContext
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +68,9 @@ class LLMAgent:
         'The state dict contains: "ready", "done", "win", "player", '
         '"keyNumbers", "keyFlags", "guideSummary", and optional chain data.\n\n'
         "## Actions\n"
-        '- move:  Joystick drag.  params: '
+        "- move:  Joystick drag.  params: "
         '{{"dx": float(-1..1), "dy": float(-1..1), "duration_ms": 320}}\n'
-        '- tap:   Screen tap.   params: '
+        "- tap:   Screen tap.   params: "
         '{{"x": float, "y": float, "duration_ms": 100}}\n'
         '- wait:  Do nothing.   params: {{"duration_ms": int}}\n\n'
         "## Output Format\n"
@@ -124,6 +125,7 @@ class LLMAgent:
         # Optional dataset collection.
         self._collect_dataset = self._config.get("collect_dataset", False)
         self._dataset: list[dict[str, Any]] = []
+        self._dataset_writer: DatasetWriter | None = None
 
     # ------------------------------------------------------------------
     # Main loop
@@ -167,6 +169,14 @@ class LLMAgent:
         try:
             await runner.start()
             await runner.open_game(game_path)
+
+            # Start dataset writer when collection is enabled.
+            if self._collect_dataset and self._dataset_writer is None:
+                game_id = Path(game_path).stem
+                dataset_output = self._config.get("dataset_output_dir", "./collected_datasets")
+                self._dataset_writer = DatasetWriter(output_dir=dataset_output)
+                self._dataset_writer.start_session(game_id)
+
             await asyncio.sleep(1.5)  # let the game boot
 
             # Inject probe and wait for readiness.
@@ -205,7 +215,8 @@ class LLMAgent:
                     except Exception:
                         logger.warning(
                             "Vision call failed at step %d, continuing with text only",
-                            step, exc_info=True,
+                            step,
+                            exc_info=True,
                         )
 
                 # ---- 4. FUSE ----
@@ -215,11 +226,13 @@ class LLMAgent:
                 await self._execute(decision, runner, state)
 
                 # ---- 6. Record & cooldown ----
-                history.append({
-                    "step": step,
-                    "state_summary": self._summarize_state(state),
-                    "decision": decision,
-                })
+                history.append(
+                    {
+                        "step": step,
+                        "state_summary": self._summarize_state(state),
+                        "decision": decision,
+                    }
+                )
                 if len(history) > 20:
                     history = history[-20:]
 
@@ -240,6 +253,10 @@ class LLMAgent:
             await self._cleanup_runner(runner)
             if self._collect_dataset:
                 result_summary["dataset"] = self._dataset
+            if self._dataset_writer is not None:
+                dataset_path = self._dataset_writer.end_session()
+                if dataset_path is not None:
+                    result_summary["dataset_path"] = str(dataset_path)
 
         return result_summary
 
@@ -289,15 +306,27 @@ class LLMAgent:
     async def _think_text(
         self,
         state: dict[str, Any],
-        history: list[dict[str, Any]],
+        history: list[dict[str, Any]] | None = None,
+        *,
+        ctx: AgentContext | None = None,
     ) -> dict[str, Any]:
         """Call DeepSeek for a structured text decision.
+
+        Parameters
+        ----------
+        state:
+            Current game state dict from the probe.
+        history:
+            Optional list of history entries (ignored when *ctx* is provided).
+        ctx:
+            Optional :class:`AgentContext` — when provided, working memory is
+            used instead of *history*.
 
         Returns a parsed action dict.  Retries with correction hints on
         JSON parse failure; falls back to a ``wait`` action after all
         retries are exhausted.
         """
-        prompt = self._build_text_prompt(state, history)
+        prompt = self._build_text_prompt(state, history, ctx=ctx)
         messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
         last_raw = ""
 
@@ -312,35 +341,118 @@ class LLMAgent:
                 if attempt >= self._max_json_retries:
                     logger.debug(
                         "Text LLM JSON parse exhausted after %d attempts: %s",
-                        attempt + 1, exc,
+                        attempt + 1,
+                        exc,
                     )
                     break
                 logger.debug(
                     "Text LLM JSON parse failure (attempt %d/%d): %s",
-                    attempt + 1, self._max_json_retries, exc,
+                    attempt + 1,
+                    self._max_json_retries,
+                    exc,
                 )
                 messages.append({"role": "assistant", "content": last_raw})
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Your previous response was not valid JSON. "
-                        "Please respond ONLY with a JSON object: "
-                        '{"action": "<action>", "params": {...}, "reason": "..."}'
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response was not valid JSON. "
+                            "Please respond ONLY with a JSON object: "
+                            '{"action": "<action>", "params": {...}, "reason": "..."}'
+                        ),
+                    }
+                )
 
         return {"action": "wait", "params": {"duration_ms": 500}, "reason": "fallback"}
+
+    def _build_system_prompt(self, ctx: AgentContext | None = None) -> str:
+        """Build a system-context string from cross-session memory in *ctx*.
+
+        Reads ``ctx.metadata["previous_sessions"]`` (from
+        :meth:`EpisodicMemory.find_similar`) and
+        ``ctx.metadata["relevant_knowledge"]`` (from
+        :meth:`SemanticMemory.query`) and formats them as bullet-pointed
+        sections.
+
+        Parameters
+        ----------
+        ctx:
+            Optional agent context.  When ``None`` or when neither memory
+            key is present, an empty string is returned.
+
+        Returns
+        -------
+        str
+            Formatted system context, capped at ~1000 characters.
+        """
+        if ctx is None:
+            return ""
+
+        metadata = ctx.metadata
+        previous_sessions = metadata.get("previous_sessions")
+        relevant_knowledge = metadata.get("relevant_knowledge")
+
+        if not previous_sessions and not relevant_knowledge:
+            return ""
+
+        parts: list[str] = []
+
+        if previous_sessions:
+            parts.append("## Previous Game Experience")
+            for s in previous_sessions:
+                sid = s.get("id", "unknown")
+                result = s.get("result", "?")
+                summary = s.get("summary", "")[:200]
+                score = s.get("score", 0)
+                parts.append(f"- [{result}] Session {sid[:8]}: {summary} (score: {score})")
+
+        if relevant_knowledge:
+            parts.append("## Relevant Game Knowledge")
+            for e in relevant_knowledge:
+                content = e.get("content", "")
+                confidence = e.get("confidence", 0.0)
+                parts.append(f"- [{confidence:.0%}] {content}")
+
+        system_text = "\n".join(parts)
+        if len(system_text) > 1000:
+            system_text = system_text[:997] + "..."
+        return system_text
 
     def _build_text_prompt(
         self,
         state: dict[str, Any],
-        history: list[dict[str, Any]],
+        history: list[dict[str, Any]] | None = None,
+        *,
+        ctx: AgentContext | None = None,
     ) -> str:
-        """Format the text prompt with current state and recent history."""
+        """Format the text prompt with current state and recent history.
+
+        When *ctx* with working memory is provided, ``to_prompt_context()``
+        is used to build the history section instead of the raw *history*
+        list.
+
+        When *ctx* carries cross-session memory
+        (``previous_sessions`` / ``relevant_knowledge`` in metadata) the
+        system context is prepended before the main prompt.
+        """
         state_json = json.dumps(state, indent=2, default=str)
-        history_json = json.dumps(history[-5:] if history else [], indent=2, default=str)
+
+        if ctx is not None and ctx.working_memory is not None:
+            history_section = ctx.working_memory.to_prompt_context(5)
+        elif history:
+            history_section = json.dumps(history[-5:], indent=2, default=str)
+        else:
+            history_section = "[]"
+
+        system_context = self._build_system_prompt(ctx=ctx) if ctx else ""
+
+        if system_context:
+            return system_context + "\n\n" + self.TEXT_PROMPT.format(
+                history=history_section, state=state_json,
+            )
+
         return self.TEXT_PROMPT.format(
-            history=history_json,
+            history=history_section,
             state=state_json,
         )
 
@@ -363,25 +475,26 @@ class LLMAgent:
         messages: list[dict[str, Any]] = [{"role": "user", "content": vision_content}]
 
         for attempt in range(1 + self._max_json_retries):
-            resp = self._client.chat_with_vision(
-                messages, model=self._vision_model, max_tokens=512
-            )
+            resp = self._client.chat_with_vision(messages, model=self._vision_model, max_tokens=512)
             raw = resp.choices[0].message.content
             try:
                 return self._parse_llm_response(raw)
-            except (json.JSONDecodeError, ValueError):
+            except json.JSONDecodeError, ValueError:
                 if attempt >= self._max_json_retries:
                     logger.debug("Vision LLM JSON parse exhausted after %d attempts", attempt + 1)
                     break
                 logger.debug(
                     "Vision LLM JSON parse failure (attempt %d/%d)",
-                    attempt + 1, self._max_json_retries,
+                    attempt + 1,
+                    self._max_json_retries,
                 )
                 messages.append({"role": "assistant", "content": raw})
-                messages.append({
-                    "role": "user",
-                    "content": "Respond ONLY with valid JSON (no markdown).",
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "Respond ONLY with valid JSON (no markdown).",
+                    }
+                )
 
         return {"has_arrow": False, "arrow_direction": "none"}
 
@@ -467,7 +580,9 @@ class LLMAgent:
                 decision["reason"] = "Vision: end screen detected, waiting"
 
             # Arrow direction overrides joystick move.
-            elif vision_response.get("has_arrow") and vision_response.get("arrow_direction") not in (None, "none"):
+            elif vision_response.get("has_arrow") and vision_response.get(
+                "arrow_direction"
+            ) not in (None, "none"):
                 direction = vision_response["arrow_direction"]
                 dx, dy = _arrow_to_vector(direction)
                 decision["action"] = "move"
@@ -476,7 +591,9 @@ class LLMAgent:
 
             # Merge any extra visual insights into reason.
             if vision_response.get("extra_notes"):
-                decision["reason"] = f"{decision['reason']} | Vision: {vision_response['extra_notes']}"
+                decision["reason"] = (
+                    f"{decision['reason']} | Vision: {vision_response['extra_notes']}"
+                )
 
         # Normalise to ensure action validity.
         if decision.get("action") not in _VALID_ACTIONS:
@@ -522,7 +639,9 @@ class LLMAgent:
             anchor_y = int(params.get("anchor_y", joystick.get("anchor", [91, 699])[1]))
             radius = int(params.get("radius", joystick.get("radius", 50)))
 
-            await runner.joystick_pulse(dx, dy, duration, anchor=(anchor_x, anchor_y), radius=radius)
+            await runner.joystick_pulse(
+                dx, dy, duration, anchor=(anchor_x, anchor_y), radius=radius
+            )
 
         elif action == "tap":
             x = float(params.get("x", 187))
@@ -552,11 +671,15 @@ class LLMAgent:
 
         This is a no-op when ``config.collect_dataset`` is ``False``.
         """
-        self._dataset.append({
-            "state": state,
-            "screenshot": screenshot_path,
-            "decision": decision,
-        })
+        self._dataset.append(
+            {
+                "state": state,
+                "screenshot": screenshot_path,
+                "decision": decision,
+            }
+        )
+        if self._dataset_writer is not None:
+            self._dataset_writer.write_step(state, screenshot_path, decision)
 
     # ------------------------------------------------------------------
     # Internal utilities
@@ -577,6 +700,7 @@ class LLMAgent:
     def _temp_screenshot_path(step: int) -> str:
         """Generate a temporary screenshot path for a given step."""
         import tempfile
+
         return str(Path(tempfile.gettempdir()) / f"agent_step_{step:04d}.png")
 
     @staticmethod

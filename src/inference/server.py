@@ -27,9 +27,11 @@ import time
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
+from threading import Thread
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
@@ -90,6 +92,11 @@ class HealthResponse(BaseModel):
     torch_version: str = Field(default="")
     cuda_available: bool = Field(default=False)
     gpu_count: int = Field(default=0)
+    model_loaded: bool = Field(default=False, description="Whether the model is loaded")
+    warmup_complete: bool = Field(default=False, description="Whether warmup has finished")
+    vram_mb: float | None = Field(default=None, description="Allocated VRAM in MB")
+    uptime_s: float = Field(default=0.0, description="Server uptime in seconds")
+    model_name: str = Field(default="", description="Short model identifier")
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +200,7 @@ class GameAgentInference:
         use_flash_attn: bool = True,
         max_new_tokens: int = 256,
         temperature: float = 0.0,
+        skip_warmup: bool = False,
     ) -> None:
         self._model_path = model_path
         self._adapter_path = adapter_path
@@ -205,11 +213,14 @@ class GameAgentInference:
         self._model_family = _detect_model_family(model_path)
         self._short_name = _resolve_short_name(model_path)
         self._loaded = False
+        self._warmup_complete: bool = False
+        self._start_time: float = time.time()
 
         # These are set by _load_model.
         self._model: Any = None
         self._processor: Any = None
 
+        self._skip_warmup = skip_warmup
         self._load_model()
 
     # ------------------------------------------------------------------
@@ -310,6 +321,9 @@ class GameAgentInference:
         self._loaded = True
         logger.info("Model loaded successfully (%s)", self._short_name)
 
+        if not self._skip_warmup:
+            self._warmup()
+
     def _load_base_model(
         self,
         model_id: str,
@@ -334,6 +348,7 @@ class GameAgentInference:
         return self._load_gemma4(model_id, kwargs)
 
     
+    @staticmethod
     def _load_qwen35(model_id: str, kwargs: dict[str, Any]) -> Any:
         """Load Qwen3.5-4B with Qwen3_5ForConditionalGeneration, fallback to
         AutoModelForMultimodalLM."""
@@ -356,7 +371,6 @@ class GameAgentInference:
     def _load_gemma4(model_id: str, kwargs: dict[str, Any]) -> Any:
         """Load Gemma-4-E4B with ClippableLinear replacement for PEFT."""
         import torch
-        import torch.nn as nn
         import transformers.models.gemma4.modeling_gemma4 as _gemma_model
 
         # Monkey-patch Gemma4VisionModel for bool pixel_position_ids
@@ -397,6 +411,37 @@ class GameAgentInference:
         replace_clippable(model)
         logger.info("Replaced Gemma4ClippableLinear -> Linear (PEFT compat)")
         return model
+
+    # ------------------------------------------------------------------
+    # Warmup
+    # ------------------------------------------------------------------
+
+    def _warmup(self) -> None:
+        """Run dummy inference passes to trigger JIT compilation and CUDA warmup.
+
+        Creates a tiny black 1×1 image and calls :meth:`predict` three
+        times, then clears the CUDA cache.
+        """
+        from PIL import Image
+
+        logger.info("Starting model warmup (3 passes)...")
+        t0 = time.perf_counter()
+
+        dummy_image = Image.new("RGB", (1, 1), color=0)
+        dummy_state: dict[str, Any] = {"ready": True, "_warmup": True}
+
+        for i in range(3):
+            self.predict(dummy_image, dummy_state)
+            logger.debug("Warmup pass %d/3 complete", i + 1)
+
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        elapsed = round(time.perf_counter() - t0, 2)
+        self._warmup_complete = True
+        logger.info("Warmup complete in %.2fs", elapsed)
 
     # ------------------------------------------------------------------
     # Prediction
@@ -639,6 +684,129 @@ async def predict_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# POST /predict/stream (SSE streaming)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/predict/stream")
+async def predict_stream_endpoint(
+    screenshot: UploadFile = File(..., description="PNG screenshot of the current game frame"),
+    state: str = Form(..., description="JSON-encoded game state from the Cocos probe"),
+) -> StreamingResponse:
+    """Accept a game screenshot + state JSON and stream tokens via SSE.
+
+    Produces ``text/event-stream`` with one ``data:`` line per token and a
+    final event containing the full parsed action.
+    """
+    from PIL import Image
+
+    engine = _engine()
+
+    # ── Validate image ──────────────────────────────────────────────────
+    if screenshot.content_type not in (None, "image/png", "image/jpeg", "image/webp"):
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported media type: {screenshot.content_type}. Use PNG, JPEG, or WebP.",
+        )
+
+    try:
+        image_bytes = await screenshot.read()
+        pil_image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {exc}") from exc
+
+    # ── Validate state JSON ─────────────────────────────────────────────
+    try:
+        state_dict: dict[str, Any] = json.loads(state)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid state JSON: {exc}") from exc
+
+    if not isinstance(state_dict, dict):
+        raise HTTPException(status_code=400, detail="State must be a JSON object")
+
+    async def _event_generator() -> str:  # type: ignore[misc]  # generator yields str
+        import torch
+
+        t0 = time.perf_counter()
+
+        # ── Preprocess (same as /predict) ───────────────────────────────
+        state_str = json.dumps(state_dict, indent=2, default=str, ensure_ascii=False)
+        messages = [
+            {"role": "system", "content": _INFERENCE_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": pil_image},
+                    {"type": "text", "text": _USER_TEXT_TEMPLATE.format(state_json=state_str)},
+                ],
+            },
+        ]
+        prompt_text = engine._processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+        )
+        inputs = engine._processor(
+            text=prompt_text, images=[pil_image], return_tensors="pt",
+        ).to(engine._model.device)
+
+        # ── Try streaming ───────────────────────────────────────────────
+        raw_output = ""
+        streamed = False
+
+        try:
+            from transformers import TextIteratorStreamer
+
+            streamer = TextIteratorStreamer(
+                engine._processor.tokenizer, skip_prompt=True,
+            )
+            gen_kwargs: dict[str, Any] = {
+                **inputs,
+                "streamer": streamer,
+                "max_new_tokens": engine._max_new_tokens,
+                "temperature": engine._temperature if engine._temperature > 0 else None,
+                "do_sample": engine._temperature > 0,
+                "pad_token_id": engine._processor.tokenizer.pad_token_id,
+                "eos_token_id": engine._processor.tokenizer.eos_token_id,
+            }
+
+            thread = Thread(target=engine._model.generate, kwargs=gen_kwargs)
+            thread.start()
+
+            for token_text in streamer:
+                raw_output += token_text
+                yield f"data: {json.dumps({'token': token_text})}\n\n"
+
+            thread.join()
+            streamed = True
+
+        except (ImportError, AttributeError, TypeError, RuntimeError) as exc:
+            logger.warning("Streaming not supported, falling back: %s", exc)
+
+        if not streamed:
+            with torch.inference_mode():
+                outputs = engine._model.generate(
+                    **inputs,
+                    max_new_tokens=engine._max_new_tokens,
+                    temperature=engine._temperature if engine._temperature > 0 else None,
+                    do_sample=engine._temperature > 0,
+                    pad_token_id=engine._processor.tokenizer.pad_token_id,
+                    eos_token_id=engine._processor.tokenizer.eos_token_id,
+                )
+            input_len = inputs["input_ids"].shape[1]
+            generated_ids = outputs[0][input_len:]
+            raw_output = engine._processor.decode(generated_ids, skip_special_tokens=True)
+
+        # ── Final event ─────────────────────────────────────────────────
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+        parsed = engine._parse_model_output(raw_output)
+        parsed["model_name"] = engine._short_name
+        parsed["latency_ms"] = latency_ms
+        parsed["done"] = True
+        yield f"data: {json.dumps(parsed)}\n\n"
+
+    return StreamingResponse(_event_generator(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
 # GET /health
 # ---------------------------------------------------------------------------
 
@@ -649,6 +817,17 @@ async def health_endpoint() -> HealthResponse:
     import torch
 
     engine = _inference_engine
+
+    vram_mb: float | None = None
+    if torch.cuda.is_available():
+        try:
+            alloc = torch.cuda.memory_allocated()
+            vram_mb = round(alloc / (1024**2), 1)
+        except Exception:
+            pass
+
+    uptime_s = round(time.time() - engine._start_time, 1) if engine is not None else 0.0
+
     return HealthResponse(
         status="ok" if (engine is not None and engine.is_ready) else "loading",
         model=engine.model_name if engine is not None else "",
@@ -657,6 +836,11 @@ async def health_endpoint() -> HealthResponse:
         torch_version=torch.__version__,
         cuda_available=torch.cuda.is_available(),
         gpu_count=torch.cuda.device_count() if torch.cuda.is_available() else 0,
+        model_loaded=engine.is_ready if engine is not None else False,
+        warmup_complete=engine._warmup_complete if engine is not None else False,
+        vram_mb=vram_mb,
+        uptime_s=uptime_s,
+        model_name=engine.model_name if engine is not None else "",
     )
 
 
@@ -737,6 +921,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="0.0.0.0",
         help="Host to bind to (default: 0.0.0.0)",
     )
+    parser.add_argument(
+        "--skip-warmup",
+        action="store_true",
+        help="Skip model warmup (3 dummy inference passes)",
+    )
     return parser.parse_args(argv)
 
 
@@ -761,6 +950,7 @@ def main(argv: list[str] | None = None) -> None:
         use_flash_attn=not args.no_flash_attn,
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
+        skip_warmup=args.skip_warmup,
     )
 
     # Swap lifespan with one that uses the already-loaded engine.

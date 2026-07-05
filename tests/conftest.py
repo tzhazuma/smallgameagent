@@ -29,9 +29,10 @@ def _build_mock_torch() -> mock.MagicMock:
     cuda.is_available.return_value = True
     cuda.device_count.return_value = 1
     mock_props = mock.MagicMock(name="device_properties")
-    mock_props.total_mem = 32 * 1024**3  # 32 GiB
+    mock_props.total_memory = 32 * 1024**3  # 32 GiB
     cuda.get_device_properties.return_value = mock_props
     cuda.current_device.return_value = 0
+    cuda.memory_allocated.return_value = 0
     torch_mock.cuda = cuda
 
     torch_mock.inference_mode = mock.MagicMock()
@@ -87,3 +88,10 @@ def _mock_ml_modules() -> None:
 
     sys.modules["torch"].cuda.is_available.return_value = True
     sys.modules["torch"].cuda.device_count.return_value = 1
+    if not hasattr(sys.modules["torch"].cuda, "memory_allocated"):
+        sys.modules["torch"].cuda.memory_allocated.return_value = 0
+
+    # Register torch sub-modules so `import torch.nn` works with mocked torch
+    for submod in ("torch.nn",):
+        if submod not in sys.modules:
+            sys.modules[submod] = mock.MagicMock(name=submod)

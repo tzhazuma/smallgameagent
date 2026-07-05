@@ -9,7 +9,19 @@ venv/
 # Game files (large binaries, not in git)
 playable-agent-12-games-20260608/
 vlm-training-data-cold-start-portable-20260608/
+2026-06-22_tiles-survive_22-games-plus-glossary_for-yudong.zip
+_extracted/
 *.html
+
+# Reference documents (binary, not tracked)
+*.pdf
+*.pptx
+
+# Experiment results (generated at runtime)
+experiment_results.json
+experiment_report.md
+experiment_*.json
+experiment_*.md
 
 # Assets (large binary files)
 *.png
