@@ -105,7 +105,7 @@
   - 失败原因：单帧生成超时（>600 s）与 LM Studio 客户端连接抖动；
   - 真值全部 `has_target=True`，模型即使输出也未能在时限内返回可解析 JSON。
 - 单独用 `max_tokens=256` 重跑一帧 step 2 的测试见
-  `experiment_vlm_one_frame_4b.json`（进行中）。
+  `experiment_vlm_one_frame_4b.json`（**78.7 s 后连接错误，仍未解析成功**）。
 
 ### 6.3 结论
 
