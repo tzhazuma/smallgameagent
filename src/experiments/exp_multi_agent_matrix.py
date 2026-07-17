@@ -51,13 +51,7 @@ def find_games() -> list[tuple[str, Path]]:
     for gid, html in GAMES.items():
         if html.exists():
             games.append((gid, html))
-    # Also pick up 00219 if it was extracted.
-    candidate = GAMES_DIR / "SSD_00219P01_EN_HZA_20251031_SH_Applovin_养牛卖奶"
-    if candidate.exists():
-        html = next(candidate.glob("*.html"), None)
-        if html:
-            games.append(("SSD_00219P01", html))
-    return games[:3]
+    return games
 
 
 async def run_one(game_id: str, html_path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +95,23 @@ async def run_one(game_id: str, html_path: Path, cfg: dict[str, Any]) -> dict[st
     }
     if "error" in result:
         out["error"] = result["error"]
+
+    # Extra diagnostics: bus traffic, decision sources, world-model churn.
+    ctx_meta = result.get("ctx_metadata") or {}
+    bus_stats = ctx_meta.get("bus_stats")
+    if isinstance(bus_stats, dict):
+        out["bus_messages"] = bus_stats.get("total_messages")
+        out["bus_by_type"] = bus_stats.get("by_type")
+    src_log = ctx_meta.get("decision_source_log")
+    if isinstance(src_log, list):
+        from collections import Counter
+
+        out["decision_source_counts"] = dict(Counter(src_log).most_common(10))
+    wm_stats = result.get("world_model_stats")
+    if isinstance(wm_stats, dict):
+        out["wm_observations"] = wm_stats.get("observations")
+        out["wm_replans"] = wm_stats.get("stale_replans")
+
     print(
         f"  [{cfg['name']}] {game_id}: steps={out['steps']} "
         f"composite={out['rubric']['composite']:.3f} elapsed={out['elapsed_s']}s",

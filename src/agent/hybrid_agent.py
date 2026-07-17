@@ -262,6 +262,9 @@ class HybridAgent:
                 # ---- Decide ----
                 decision = await self._decide(ctx)
                 ctx.final_action = decision
+                ctx.metadata.setdefault("decision_source_log", []).append(
+                    ctx.metadata.get("decision_source", decision.get("reason", "unknown"))
+                )
 
                 # ---- Act ----
                 await self._execute(decision, runner)
@@ -337,9 +340,35 @@ class HybridAgent:
             if self._world_model is not None:
                 result_summary["world_model_stats"] = self._world_model.stats()
 
+            # ── Shared context metadata (sanitised) ────────────────
+            if hasattr(self, "_ctx"):
+                result_summary["ctx_metadata"] = self._sanitize_ctx_metadata(self._ctx.metadata)
+
             await runner.close()
 
         return result_summary
+
+    @staticmethod
+    def _sanitize_ctx_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        """Return a JSON-safe subset of the shared AgentContext metadata."""
+        out: dict[str, Any] = {}
+        skip = {"_maker", "relevant_knowledge"}
+        for k, v in metadata.items():
+            if k in skip:
+                continue
+            if hasattr(v, "__dataclass_fields__"):
+                out[k] = {f: getattr(v, f) for f in v.__dataclass_fields__}
+            elif isinstance(v, (str, int, float, bool, type(None))):
+                out[k] = v
+            elif isinstance(v, (list, dict)):
+                try:
+                    json.dumps(v)
+                    out[k] = v
+                except (TypeError, ValueError):
+                    out[k] = repr(v)
+            else:
+                out[k] = repr(v)
+        return out
 
     # ------------------------------------------------------------------
     # Decision layer — dispatches to the selected mode

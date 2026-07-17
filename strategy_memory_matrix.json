@@ -1,0 +1,818 @@
+{
+  "unknown": {
+    "play": [
+      {
+        "pattern": {
+          "action": "wait",
+          "params": {
+            "duration_ms": 1000
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:GameManager._failCount": [
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07180418328694368,
+            "dy": 0.9974187482008222,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07180522136972885,
+            "dy": -0.9974186734686915,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07180538987319036,
+            "dy": 0.9974186613379354,
+            "duration_ms": 165
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07181224265366125,
+            "dy": -0.9974181679742212,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.05902133705680625,
+            "dy": 0.8191854520398402,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.06409260485569701,
+            "dy": -0.8986786451480302,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.039633824649031216,
+            "dy": -0.6044061391494595,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.034499941912879764,
+            "dy": -0.9994046998128475,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07236864358391527,
+            "dy": 0.9973779521454363,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.10847927372456563,
+            "dy": 0.9940987109800469,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.10917724825782188,
+            "dy": -0.9940222977694465,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.28701433110656877,
+            "dy": 0.9579262882599312,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9740303649318577,
+            "dy": -0.22641742024568745,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.22266660758831425,
+            "dy": 0.9748946516753038,
+            "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.5726897481745715,
+            "dy": -0.8197721953907352,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8730614648863352,
+            "dy": 0.4876101706594383,
+            "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8070630284506298,
+            "dy": -0.5904652979710983,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.807062554906604,
+            "dy": 0.5904659452226054,
+            "duration_ms": 165
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.8070618334641851,
+            "dy": 0.5904669313055796,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8070614717885131,
+            "dy": -0.5904674256506951,
+            "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.8070617827615769,
+            "dy": 0.5904670006068969,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.6233576206615449,
+            "dy": -0.45606228842057495,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.5926173043249018,
+            "dy": 0.43356716933979056,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.4482343552262051,
+            "dy": 0.3280752197242222,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8082341106154611,
+            "dy": -0.5888612930373627,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.8282813447234567,
+            "dy": 0.560312425333494,
+            "duration_ms": 165
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.2509390266371399,
+            "dy": 0.9680028950940202,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9945483779588192,
+            "dy": 0.10427619047261655,
+            "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8122785962092158,
+            "dy": -0.5832696478819943,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07180525989564361,
+            "dy": -0.9974186706951695,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.06251529381530335,
+            "dy": 0.8683726946370786,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.06133947088815941,
+            "dy": -0.8520424372824201,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.04675405357685772,
+            "dy": -0.6494357304105047,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07180611632486233,
+            "dy": 0.9974186090395247,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07178446860773065,
+            "dy": -0.9974201672648823,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.04662885849118631,
+            "dy": -0.6481417952806405,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07135224276793037,
+            "dy": -0.9974511804855345,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07193613901467293,
+            "dy": 0.9974092399329683,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07560547627703432,
+            "dy": 0.9971378099124126,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07454411672575967,
+            "dy": -0.9972177167808323,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.06759351707239422,
+            "dy": 0.8627828709239278,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.6678140614045289,
+            "dy": -0.5654122236802859,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9919621476873696,
+            "dy": -0.12653496574252168,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.2718007174819879,
+            "dy": -0.9623535576784016,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.2717998662736426,
+            "dy": 0.9623537980876005,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.2718002337294391,
+            "dy": -0.9623536943061123,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.2449775948737666,
+            "dy": 0.8673864411338214,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.23160666776290634,
+            "dy": -0.8200201692123616,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.17720083693022026,
+            "dy": -0.6287735127361449,
+            "duration_ms": 65
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.2702891588226329,
+            "dy": 0.9627791910001762,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.1791162726332204,
+            "dy": -0.9838279122275307,
+            "duration_ms": 125
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.8602426543783237,
+            "dy": -0.2120420759879689,
+            "duration_ms": 90
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9907730139712256,
+            "dy": -0.13553167447638742,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9272799531677726,
+            "dy": 0.3743686531390864,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9091525296099652,
+            "dy": -0.4164632971869205,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.07331521353495,
+            "dy": 0.997308818503238,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9772108559280012,
+            "dy": -0.21227091900791148,
+            "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      }
+    ]
+  }
+}

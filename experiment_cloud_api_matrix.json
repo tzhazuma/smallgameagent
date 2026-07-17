@@ -1,0 +1,37 @@
+[
+  {
+    "model": "mimo-v2.5",
+    "mode": "vision",
+    "ok": true,
+    "latency_s": 17.574,
+    "content_preview": ""
+  },
+  {
+    "model": "mimo-v2.5",
+    "mode": "text",
+    "ok": true,
+    "latency_s": 6.695,
+    "content_preview": "pong"
+  },
+  {
+    "model": "kimi-k2.7-code",
+    "mode": "text",
+    "ok": true,
+    "latency_s": 2.184,
+    "content_preview": "pong"
+  },
+  {
+    "model": "kimi-k2.6",
+    "mode": "vision",
+    "ok": true,
+    "latency_s": 3.68,
+    "content_preview": "The user wants me to describe the mobile game screenshot in one sentence. Let me analyze the image:\n\n- It's a top-down/isometric mobile game\n- Title \"TILES SURVIVE!\" in top left with \"PLAY NOW\" button"
+  },
+  {
+    "model": "kimi-k2.6",
+    "mode": "text",
+    "ok": true,
+    "latency_s": 1.446,
+    "content_preview": "pong"
+  }
+]

@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 REPORT_MD = ROOT / "REPORT.md"
@@ -104,7 +105,7 @@ def md_to_latex(md: str) -> str:
     table_rows: list[str] = []
 
     def close() -> None:
-        nonlocal in_list, in_table
+        nonlocal in_list, in_table, table_rows
         if in_list:
             out.append("\\end{itemize}")
             in_list = False
@@ -213,7 +214,7 @@ def compile_tex() -> None:
 def write_pptx() -> None:
     from pptx import Presentation
     from pptx.util import Inches, Pt
-    from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+    from pptx.enum.text import PP_ALIGN
 
     prs = Presentation()
     prs.slide_width = Inches(13.333)

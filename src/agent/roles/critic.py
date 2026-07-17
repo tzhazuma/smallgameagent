@@ -36,8 +36,9 @@ class Critic(BaseAgentRole):
         """Read the last action, verifier recommendation, and working memory."""
         wm = ctx.working_memory
         stuck = False
+        probe_state = ctx.probe_state or {}
         if wm is not None and hasattr(wm, "detect_stuck"):
-            player = ctx.probe_state.get("player") or {}
+            player = (probe_state.get("player") or {})
             pos = player.get("worldPosition") or player.get("screenPosition") or {}
             xy = (pos.get("x", 0.0), pos.get("y", 0.0) if "y" in pos else pos.get("z", 0.0))
             stuck = wm.detect_stuck(xy)
@@ -51,8 +52,13 @@ class Critic(BaseAgentRole):
     async def reason(self, ctx: "AgentContext") -> dict[str, Any]:
         """Produce a diagnosis from the observation."""
         obs = await self.observe(ctx)
-        verdict = obs.get("verdict") or {}
-        recommendation = verdict.get("recommendation")
+        verdict = obs.get("verdict")
+        if verdict is None:
+            recommendation = None
+        elif isinstance(verdict, dict):
+            recommendation = verdict.get("recommendation")
+        else:
+            recommendation = getattr(verdict, "recommendation", None)
 
         if recommendation == "escape_rotate":
             feedback = CriticFeedback("stuck", "rotate_joystick", 0.8)
@@ -60,7 +66,7 @@ class Critic(BaseAgentRole):
             feedback = CriticFeedback("uncertain_state", "reobserve", 0.7)
         elif obs.get("stuck"):
             feedback = CriticFeedback("stuck", "escape_random", 0.7)
-        elif ctx.probe_state.get("done"):
+        elif (ctx.probe_state or {}).get("done"):
             feedback = CriticFeedback("terminal_state", "stop", 0.9)
         else:
             feedback = CriticFeedback("ok", "none", 0.9)

@@ -24,53 +24,24 @@
 \maketitle
 \tableofcontents
 \newpage
-\section{smallgameagent 实验报告（终稿）}
+\section{smallgameagent 实验报告（修正与扩充版）}
 
-> 2026-07-18。配套：\_\_CODE\_0000\_\_（方案）、\_\_CODE\_0001\_\_（过程数据）。\\
-> 本文面向合作同学与老师，按四个问题组织结论，附 RTX 5060 本地模型、Agent 通信/记忆、云端 API 实验状态。\\
+> 2026-07-18（本轮）。配套：\_\_CODE\_0000\_\_（方案）、\_\_CODE\_0001\_\_（过程数据）。\\
+> 本轮重点：修正报告中的不实数据，补充 RTX 5060 本地 VLM、云端 API 混合、Agent 通信/记忆的实测结果。\\
 
 \subsection{0. 一页结论}
 
 \begin{itemize}
-  \item \_\_BOLD\_0000\_\_：根因不是「记不住场景」而是\_\_BOLD\_0001\_\_。实证：
+  \item \_\_BOLD\_0002\_\_：WSL2 下使用 Playwright 绑定的 Chromium + \_\_CODE\_0000\_\_ 可正常初始化 Cocos 场景；之前 headless swiftshader 报 \_\_CODE\_0001\_\_ 的阻塞已解决。
+  \item \_\_BOLD\_0001\_\_：在 SSD\_00461P01（塔防）上跑了 rule / multi / multi-bus / multi-bus-memory 四种模式，各 30 步。当前\_\_BOLD\_0002\_\_，根因不是 Agent 通信或记忆，而是该游戏的塔防机制（放置/升级塔、自动战斗）未被现有的 \_\_CODE\_0000\_\_ 摇杆驱动覆盖；Agent 能移动但无法完成游戏目标。
+  \item \_\_BOLD\_0003\_\_：显式总线 \_\_CODE\_0000\_\_ 相比纯 \_\_CODE\_0001\_\_ 墙钟增加约 6\%（30 步 28.4s vs 26.7s），每轮产生 15 条总线消息；\_\_CODE\_0002\_\_ 文件型策略记忆可正常写入/读取，但未在本游戏产生可量化的分数提升（因动作空间不匹配）。
+  \item \_\_BOLD\_0000\_\_：llama.cpp CUDA12 后端 + 4-bit 权重 + q4\_0 KV-cache 量化可加载 Qwen3.5-4B/9B 与 gemma-4-E4B-it。视觉 struct 提取：\_\_BOLD\_0001\_\_；Qwen3.5-9B 2/3 解析成功，\textasciitilde{}45 tok/s，\textasciitilde{}16.9s/帧；Qwen3.5-4B 0/3 解析成功（思考链占满输出或 markdown fence 后带多余文本）。
+  \item \_\_BOLD\_0000\_\_：OpenCodeGo 余额已可调用。mimo-v2.5 / kimi-k2.7-code / kimi-k2.6 文本/视觉请求均成功。结构化视觉提取：\_\_BOLD\_0001\_\_（22–38s/帧）；\_\_BOLD\_0002\_\_（8–10s/帧），原因是在当前 1024 token 预算内先输出大量思考过程，JSON 被截断。
+  \item \_\_BOLD\_0000\_\_：QLoRA 训练脚本与 processed-runs 数据转换已就绪；ssh5090 仍不可访问，尚未开始微调。
+  \item \_\_BOLD\_0004\_\_：本轮修复 verifier/orchestrator/critic 的 None/Verdict 类型处理、报告生成脚本的 ruff 问题；\_\_CODE\_0000\_\_ 671 passed / 6 failed（失败与缺失的 \_\_CODE\_0001\_\_ 目录及 \_\_CODE\_0002\_\_ 扫描根目录副作用有关），\_\_CODE\_0003\_\_ 全绿。
 \end{itemize}
-00461 场景切换后 \_\_CODE\_0000\_\_ 激活阻断摇杆输入，规则 agent 继续发移动指令瘫痪 175+ 步。\\
-解法是\_\_BOLD\_0000\_\_（stale 标记、失败面板自动点击），\\
-A/B 显示活动率 0.54→0.92、墙钟 263→154s（−42\%）。\\
-\begin{itemize}
-  \item \_\_BOLD\_0000\_\_：交付\_\_BOLD\_0001\_\_（三层时间对齐 + settle 复查 + 受保护前缀 hash +
-\end{itemize}
-失败分级 rollback/compensation/stop+replan），29 单测含真实温度案例复刻（131/190 步偏差）。\\
-\begin{itemize}
-  \item \_\_BOLD\_0000\_\_：kimi-k2.7-code 的经济决策实验显示\_\_BOLD\_0001\_\_
-\end{itemize}
-（4K max\_tokens 下 58\% 调用截断无答案）；修正后朴素与引导式在饱和场景打平（0.93），\\
-决定性场景（batch 占优 3-4×）结果见 §3。\\
-\begin{itemize}
-  \item \_\_BOLD\_0000\_\_：动态探针预算模块（五触发器、L0/L1/L2 分层、L2 预算上限 20\%）+ 动态日志分级，
-\end{itemize}
-27 单测，模拟装饰性场景节省观测成本 \textasciitilde{}82\%。\\
-\begin{itemize}
-  \item \_\_BOLD\_0000\_\_：
-  \item Intel 核显 Vulkan：4B 2.75 tok/s，视觉 struct 4 帧解析率 0/4，仅适合作离线标注。
-  \item \_\_BOLD\_0000\_\_：4B 文本 \_\_BOLD\_0001\_\_、视觉 struct 8 帧解析率 \_\_BOLD\_0002\_\_、
-\end{itemize}
-target\_acc \_\_BOLD\_0000\_\_、平均 \_\_BOLD\_0001\_\_；gemma-4-E4B 文本 \_\_BOLD\_0002\_\_。8 GB 显存可跑 4B，\\
-E4B 接近上限（7082 MB）。\\
-\begin{itemize}
-  \item \_\_BOLD\_0002\_\_：新增显式消息总线 \_\_CODE\_0000\_\_、循环流水线 \_\_CODE\_0001\_\_、
-\end{itemize}
-文件型 \_\_CODE\_0000\_\_、\_\_CODE\_0001\_\_ 角色与 \_\_CODE\_0002\_\_ / \_\_CODE\_0003\_\_ 模式；19 单测覆盖。\\
-\begin{itemize}
-  \item \_\_BOLD\_0001\_\_：OpenCodeGo 认证通过但余额不足（\_\_CODE\_0000\_\_），mimo-v2.5 / kimi-k2.7-code /
-\end{itemize}
-kimi-k2.6 矩阵待充值后跑；当前在线 gameplay 亦受 WSL2 headless Chromium 无法初始化 Cocos 场景阻塞。\\
-\begin{itemize}
-  \item \_\_BOLD\_0000\_\_：processed-runs 已转为 7 任务 15,083 样本（14 单测+加载验证），
-\end{itemize}
-训练脚本就绪，等 ssh5090 可访问后开 QLoRA。\\
 
-\subsection{1. 环境打通（新信息）}
+\subsection{1. 环境打通}
 
 \begin{table}[htbp]
 \centering
@@ -79,155 +50,136 @@ kimi-k2.6 矩阵待充值后跑；当前在线 gameplay 亦受 WSL2 headless Chr
 \hline
 项 & 结论 \\
 \hline
-云端 LLM & \_\_CODE\_0000\_\_，kimi-k2.7-code 文本决策 2.4–6.3s/次（旧 deepseek 8–15s），多模态可用；\_\_BOLD\_0001\_\_，已在客户端按模型名省略 \\
+浏览器 & Playwright 绑定 Chromium（\_\_CODE\_0000\_\_），WSLg 显示可用；必须加 \_\_CODE\_0001\_\_ 才能支持 Cocos WebGL \\
 \hline
-本地 VLM & LM Studio 捆绑 llama.cpp Vulkan 后端（WSL2 Mesa Dozen→Intel Graphics）；lms CLI 因版本错位无法认证，改直跑 \_\_CODE\_0000\_\_（模型放 \_\_CODE\_0001\_\_，与 LM Studio 应用互通） \\
+云端 LLM & \_\_CODE\_0000\_\_；kimi 模型不能带显式 \_\_CODE\_0001\_\_，客户端已按模型名自动省略 \\
 \hline
-游戏基线 & rule 模式 SSD\_00461 塔防 300 步基线 composite 0.425（verifiers 风格 rubric） \\
+本地 VLM & 直接用 LM Studio 捆绑的 \_\_CODE\_0000\_\_，GGUF 放在 \_\_CODE\_0001\_\_，与 LM Studio 应用互通 \\
+\hline
+游戏 & SSD\_00461P01 塔防已能加载并返回 probe 状态（\_\_CODE\_0000\_\_，player=\_\_CODE\_0001\_\_） \\
 \hline
 \end{tabular}
 \end{table}
 
-\subsection{2. 空间一致性（问题(1)）}
+\subsection{2. 在线 gameplay 基线与多 Agent 矩阵}
 
-\_\_BOLD\_0000\_\_（三级递进，全部有 run 数据）：\\
-1. 初判「场景切换后撞新障碍卡死」→ 障碍学习+势场避让（P1）上线后仍失败；\\
-2. 再判「英雄死亡」→ 诊断跑血量全程 100，排除；\\
-3. \_\_BOLD\_0000\_\_。\\
-这正是同学说的「交互方式改变」类失效（摇杆交互被模态面板替换）。\\
-
-\_\_BOLD\_0000\_\_：\\
-\begin{itemize}
-  \item \_\_CODE\_0000\_\_（\_\_CODE\_0001\_\_）：entity\_version/scene\_epoch/capability\_epoch，
-\end{itemize}
-观测写入比对、stale 标记、局部重规划，12 单测（含 autoFishing 12 次翻转复刻）。\\
-\begin{itemize}
-  \item 探针新增 \_\_CODE\_0000\_\_：按\_\_BOLD\_0001\_\_匹配按钮（生产构建组件名被 minify 成单字母，
-\end{itemize}
-按类名匹配必然落空），返回设计分辨率坐标；Python 侧 retry 优选、避开 download 广告陷阱，\\
-设计坐标→CSS 像素映射（720×1560 左下原点 → 375×812 顶左）。7 单测。\\
-\begin{itemize}
-  \item RuleEngine 障碍学习（势场避让+定向逃逸，15 单测）——对几何卡死有效，但非本游戏 binding。
-\end{itemize}
-
-\_\_BOLD\_0000\_\_：\\
+实验脚本：\_\_CODE\_0000\_\_，单游戏 SSD\_00461P01，30 步/模式。\\
 
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{|l|l|l|l|l|l|}
+\begin{tabular}{|l|l|l|l|l|l|l|l|}
 \hline
-run & composite & activity & progress & stall 步 & 墙钟 \\
+模式 & 步数 & composite & activity & progress & stall 步 & 墙钟 & 主要决策来源 \\
 \hline
-基线 & 0.425 & 0.535 & 0.667 & 139 & 262.9s \\
+rule & 30 & 0.000 & 0.000 & 0.000 & 29 & 26.7s & \_\_CODE\_0000\_\_ \\
 \hline
-+世界模型/障碍 & 0.351 & 0.408 & 0.583 & 177 & 320.7s \\
+multi & 30 & 0.000 & 0.000 & 0.000 & 29 & 26.8s & \_\_CODE\_0000\_\_ \\
 \hline
-\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+multi-bus & 30 & 0.000 & 0.000 & 0.000 & 29 & 28.4s & \_\_CODE\_0000\_\_（30 次） \\
 \hline
-\end{tabular}
-\end{table}
-
-\subsection{3. 策略优化（问题(3)）}
-
-实验：12 经济场景（gold/双升级项/收入/预算），最优解由穷举模拟器给出，kimi-k2.7-code\\
-朴素 prompt vs 机制引导 prompt（先抽象经济循环+往返成本再决策）。\\
-
-\begin{itemize}
-  \item v1（max\_tokens 4096）：\_\_BOLD\_0000\_\_——思考型模型把 token 预算耗尽于推理，
-\end{itemize}
-JSON 被截断。教训：思考模型必须留足输出预算（≥16K）并约束「末行只放 JSON」。\\
-\begin{itemize}
-  \item v2（16K tokens）：解析失败归零；朴素 vs 引导 0.929 vs 0.932（场景饱和，11/12 greedy 最优，无法区分）。
-  \item v3（8 个 batch 占优 3-4× + 4 对照，模拟器穷举真值）：
-\end{itemize}
-\_\_BOLD\_0000\_\_；按得分比率（所选策略得分/最优得分）：\\
-**朴素 batch=0.711 / control=1.000（overall 0.808）；引导 batch=1.000 / control=0.958\\
-（overall 0.986）**。\\
-结论：机制引导把 batch 经济决策从 71\% 提升到 100\% 最优值，代价仅 greedy 场景 −4\%——\\
-定量证实了「加以引导后探索最优解能力强」的判断。引导的关键是 prompt 里显式给出\\
-「经济循环 + 往返/机会成本」的抽象，而不是让模型自己发现。\\
-
-\subsection{4. 效率（问题(4)）}
-
-\begin{itemize}
-  \item \_\_CODE\_0000\_\_：L0 状态（73ms）/L1 组件（150ms）/L2 截图（400ms）三级，
-\end{itemize}
-五触发器（phase\_change/low\_confidence/action\_no\_effect/collision\_hint/semantic\_flip），\\
-冷却防抖 + L2 窗口占比上限（默认 20\%）+ 高优先挤占；AdaptiveLogger 环形内存 DEBUG +\\
-触发窗口落盘。27 单测；50 步无变化场景模拟节省 81.75\%。\\
-\begin{itemize}
-  \item 失败面板自动恢复即「策略级回退」的首个实例（行为级：障碍逃逸；状态级：stale 重规划；
-\end{itemize}
-策略级：面板 dismiss）。\\
-
-\subsection{5. 时间一致性（问题(2)）}
-
-\_\_CODE\_0000\_\_（29 单测）：TimestampedValue 三层时间戳（event/observed/settled）、\\
-跨字段一致性校验器（复刻 190 步 131 违例）、PhaseGate 状态机（settle 复查防完成假阳性、\\
-守卫违反 VIOLATED、超时 TIMEOUT）、受保护前缀 hash（篡改即 PrefixViolation）、\\
-失败按副作用分级。与游戏 loop 的集成（契约守卫替换硬编码 fail 检测）是下一步。\\
-
-\subsection{6. 本地 VLM 画像（P5）}
-
-\subsubsection{6.1 Intel 核显 Vulkan（旧基线）}
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{|l|l|l|l|}
-\hline
-模型 & server tok/s & wall 60 tokens & 备注 \\
-\hline
-Qwen3.5-4B & 2.75 & 24.6 s & 可用 \\
-\hline
-Qwen3.5-9B & 0.72 & 90.3 s & 慢但可跑 \\
-\hline
-gemma-4-E4B-it & 0.67 & 37.5 s & 输出格式偏闲聊，需强约束 \\
+multi-bus-memory & 30 & 0.000 & 0.000 & 0.000 & 29 & 28.4s & \_\_CODE\_0000\_\_（30 次） \\
 \hline
 \end{tabular}
 \end{table}
 
+关键发现：\\
+1. Agent 能发出移动指令（\_\_CODE\_0000\_\_），但 rubric 的 \_\_CODE\_0001\_\_/\_\_CODE\_0002\_\_ 为 0，说明\_\_BOLD\_0003\_\_——Hero 在基地附近小范围移动，未击杀敌人、未解锁塔、未推进波次。\\
+2. \_\_CODE\_0000\_\_ 只给出 \_\_CODE\_0001\_\_，而该游戏的实际交互是\_\_BOLD\_0002\_\_或\_\_BOLD\_0003\_\_，不是走到 UnlockItem 上。\\
+3. 因此当前最高杠杆不是“多 Agent 通信”或“记忆”，而是\_\_BOLD\_0000\_\_。\\
+
+\_\_CODE\_0000\_\_ 额外数据：每轮 Observer→StateMapper→DecisionAnalyst→Verifier→Critic→Memory，共 \_\_BOLD\_0001\_\_（observe×2、perceive×2、decide×4、verify×4、critic×2、memory×1）。Verifier 触发 2 轮 critic 后仍放行，未造成显著延迟。\\
+
+\subsection{3. 空间、时间、策略与效率问题（本轮观察）}
+
 \begin{itemize}
-  \item 4 帧视觉 struct：解析率 0/4，平均 534 s/帧（超时/连接抖动）。
+  \item \_\_BOLD\_0003\_\_：probe 能稳定返回节点世界/屏幕坐标；当前失败主要不是“记不住场景”，而是\_\_BOLD\_0004\_\_。后续应把“目标类型→动作类型”的映射也纳入世界模型（如 \_\_CODE\_0000\_\_ 对应 \_\_CODE\_0001\_\_ 而非 \_\_CODE\_0002\_\_）。
+  \item \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_ 已接入 rule engine，但本游戏 30 步内未发生显著场景切换或能力翻转，未触发 stale replan；世界模型 stats 为空是因为该游戏 driver 未写入观测（可后续补接入）。
+  \item \_\_BOLD\_0000\_\_：云端 API 实验显示 kimi-k2.7-code 文本决策 latency 仅 2.2s，远快于旧 deepseek；但将其直接用于本游戏仍需先把动作空间描述清楚。
+  \item \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_ 每步 4 条 verify/decide 消息，墙钟开销 <10\%，说明总线本身不是瓶颈；瓶颈在于视觉/云端调用时延（本地 4.8–17s/帧，云端 3.7–38s/帧）。
 \end{itemize}
 
-\subsubsection{6.2 RTX 5060 Laptop CUDA + KV-cache 量化（新基线）}
+\subsection{4. 本地 VLM 基准（RTX 5060 Laptop 8GB）}
 
 后端：\_\_CODE\_0000\_\_\\
 参数：\_\_CODE\_0000\_\_\\
+测试任务：对 3 帧 SSD\_00461P01 截图做视觉 struct 提取（JSON schema），记录解析成功率与生成速度。\\
 
 \begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{|l|l|l|l|l|}
 \hline
-模型 & 文本 tok/s & 60 tokens wall & 显存占用 & 视觉 struct \\
+模型 & 解析成功 & 平均墙钟/帧 & 平均生成 tok/s & 备注 \\
 \hline
-Qwen3.5-4B-Q4\_K\_M & \_\_BOLD\_0000\_\_ & 1.0 s & 3465 MB & 8 帧解析率 \_\_BOLD\_0000\_\_，target\_acc \_\_BOLD\_0001\_\_，平均 \_\_BOLD\_0002\_\_ \\
+Qwen3.5-4B-Q4\_K\_M & 0/3 & 11.3s & \textasciitilde{}62 & 输出为空或 markdown fence 后带多余文本，解析失败 \\
 \hline
-gemma-4-E4B-it-Q4\_K\_M & \_\_BOLD\_0000\_\_ & 0.7 s & 7082 MB & 单帧 14.6 s，输出带 fence 但可解析 \\
+Qwen3.5-9B-Q4\_K\_M & 2/3 & 16.9s & 44.8 & 成功帧输出完整 JSON；失败帧 JSON 被截断 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 输出紧凑，直接可解析 \\
 \hline
 \end{tabular}
 \end{table}
 
-Qwen3.5 为思考模型，必须给足 \_\_CODE\_0000\_\_（2048）才能拿到 content JSON；否则 256/900 tokens\\
-会被 reasoning 占满。\\
-
-\subsubsection{6.3 结论}
-
+结论：\\
 \begin{itemize}
-  \item CUDA 后端让 4B 文本速度提升 \_\_BOLD\_0000\_\_、视觉延迟从 10+ min 降到 \_\_BOLD\_0001\_\_，8 GB 显存跑 4B 宽裕，
+  \item 8GB 显存可同时加载 vision projector + 4-bit 模型；q4\_0 KV-cache 量化有效控制显存。
+  \item gemma-4-E4B 在本任务上综合最好（快、稳、解析率高），适合作为本地小模型候选。
+  \item Qwen3.5 为思考模型，必须给足 \_\_CODE\_0000\_\_（≥2048）并做更强的输出契约约束；当前 512 token 会被 reasoning 占满。
 \end{itemize}
-E4B 已接近上限。\\
+
+\subsection{5. 云端 API 混合实验}
+
+脚本：\_\_CODE\_0000\_\_（连通性/延迟）、\_\_CODE\_0001\_\_（视觉 struct 提取）。\\
+
+\subsubsection{5.1 连通性与延迟}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+模型 & 模态 & 延迟 & 结果 \\
+\hline
+mimo-v2.5 & 视觉 & 17.6s & OK，content 为空（可能为内容过滤或格式问题） \\
+\hline
+mimo-v2.5 & 文本 & 6.7s & OK，返回 "pong" \\
+\hline
+kimi-k2.7-code & 文本 & 2.2s & OK，返回 "pong" \\
+\hline
+kimi-k2.6 & 视觉 & 3.7s & OK，返回图片描述 \\
+\hline
+kimi-k2.6 & 文本 & 1.4s & OK，返回 "pong" \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{5.2 视觉 struct 提取（JSON schema）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+模型 & 解析成功 & 平均延迟 & 主要问题 \\
+\hline
+mimo-v2.5 & 3/3 & 22–38s & 输出完整 JSON，但较慢 \\
+\hline
+kimi-k2.6 & 0/3 & 8–10s & 先输出大量思考过程，1024 token 内未到达 JSON \\
+\hline
+\end{tabular}
+\end{table}
+
+结论：\\
 \begin{itemize}
-  \item 在线控制仍建议使用云端 mimo-v2.5（\textasciitilde{}9.5 s/帧）或更大显存；本地 4B 适合离线标注与
+  \item mimo-v2.5 是可靠的视觉结构提取器，但成本/延迟高于本地 gemma。
+  \item kimi-k2.6 需要更强的输出约束（如“先思考，但\_\_BOLD\_0001\_\_”或提高 \_\_CODE\_0000\_\_ 到 2048+），否则结构化任务失败。
+  \item 在线控制若预算敏感，可用本地 gemma 做逐帧视觉提取；若精度优先，可用 mimo-v2.5。
 \end{itemize}
-低成本原型验证。\\
 
-\subsection{7. Agent 通信与记忆（P8）}
+\subsection{6. Agent 通信与记忆}
 
-新增机制：\\
+新增/修复模块：\\
 
 \begin{table}[htbp]
 \centering
@@ -236,79 +188,50 @@ E4B 已接近上限。\\
 \hline
 模块 & 作用 \\
 \hline
-\_\_CODE\_0000\_\_ & 显式消息总线；\_\_CODE\_0000\_\_ 含 OBSERVE/PERCEIVE/DECIDE/VERIFY/CRITIC/MEMORY/NEGOTIATE \\
+\_\_CODE\_0000\_\_ & 显式消息总线，\_\_CODE\_0000\_\_ 含 OBSERVE/PERCEIVE/DECIDE/VERIFY/CRITIC/MEMORY \\
 \hline
-\_\_CODE\_0000\_\_ & Observer → StateMapper → DecisionAnalyst → Verifier → Critic 循环，Verifier 可触发 re-decide \\
+\_\_CODE\_0000\_\_ & Observer→StateMapper→DecisionAnalyst→Verifier→Critic 循环，Verifier 可触发 re-decide \\
 \hline
-\_\_CODE\_0000\_\_ & 文件型策略记忆，按 \_\_CODE\_0000\_\_ 索引，记录成功/失败次数 \\
+\_\_CODE\_0000\_\_ & 文件型策略记忆，按 \_\_CODE\_0000\_\_ 索引成功/失败记录 \\
 \hline
-\_\_CODE\_0000\_\_ & Critic 角色，给出 \_\_CODE\_0000\_\_ + \_\_CODE\_0001\_\_ \\
+\_\_CODE\_0000\_\_ & Critic 角色，给出 diagnosis + correction \\
 \hline
 \_\_CODE\_0000\_\_ & 注册 \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_ 模式 \\
 \hline
 \end{tabular}
 \end{table}
 
-验证：19 单测（bus 5 + orchestrator 2 + strategy memory 4 + 既有决策 maker 集成）。\\
-
-\subsubsection{实验状态}
-
+本轮修复：\\
 \begin{itemize}
-  \item 在线 gameplay 矩阵（rule / multi / multi-bus / multi-bus-memory / api / api-memory）已编写
-\end{itemize}
-\_\_CODE\_0000\_\_，但当前 WSL2 headless Chromium 无法初始化 Cocos\\
-场景（\_\_CODE\_0000\_\_ 为 null），所有模式 steps=0。待 headed/GPU 环境或浏览器参数\\
-修复后复跑。\\
-
-\subsection{8. 云端 API 实验状态（P8）}
-
-\begin{itemize}
-  \item OpenCodeGo 客户端认证通过（\_\_CODE\_0000\_\_），但调用返回 \_\_CODE\_0001\_\_。
-  \item 因此 \_\_BOLD\_0000\_\_、\_\_BOLD\_0001\_\_、\_\_BOLD\_0002\_\_ 的混合实验当前无法实际跑通；已记录阻塞，
-\end{itemize}
-充值后可直接用 \_\_CODE\_0000\_\_ 扩展 API 配置。\\
-
-\subsection{9. 训练准备（P7，等 ssh5090）}
-
-\begin{itemize}
-  \item \_\_CODE\_0000\_\_：22 游戏 3054 步 → \_\_BOLD\_0001\_\_
-\end{itemize}
-（next\_probe\_action 2645 / probe\_action\_effect 2645 / field\_grounding 2645 /\\
-information\_gain 3054 / pulse\_response 1435 / progression 2645 / failure\_recovery 14），\\
-VLMColdStartDataset 加载验证通过，14 单测。\\
-\begin{itemize}
-  \item failure\_recovery 仅 14 条（成功 run 中卡死窗口少）——建议用 verifiers 环境跑
-\end{itemize}
-对抗性失败 run 补数据（rule 变体/随机扰动注入）。\\
-\begin{itemize}
-  \item \_\_CODE\_0000\_\_（QLoRA 4bit NF4 + ZeRO-2）就绪；gemma4-e4b 需 transformers 补丁复核。
-  \item ssh5090 可访问后：\_\_CODE\_0000\_\_ + 数据同步 + 开训。
+  \item \_\_CODE\_0000\_\_ 对 \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_ 为 None 时鲁棒化。
+  \item \_\_CODE\_0000\_\_ 与 \_\_CODE\_0001\_\_ 兼容 \_\_CODE\_0002\_\_ 数据类（之前按 dict 处理崩溃）。
 \end{itemize}
 
-\subsection{10. verifiers 风格环境（P6）}
+测试：\_\_CODE\_0000\_\_、\_\_CODE\_0001\_\_、\_\_CODE\_0002\_\_、\_\_CODE\_0003\_\_ 均通过；合并后 671 passed，6 failed（与缺失数据集/目录扫描有关）。\\
 
-\_\_CODE\_0000\_\_：score\_trajectory 五轴 rubric（completion/progress/activity/\\
-consistency/composite），可直接评分历史 run JSON，也可 GameEnv.rollout 在线跑分。\\
-8 单测。为后续 RL 微调提供 env+rubric 抽象。\\
+\subsection{7. 训练准备}
 
-\subsection{11. 给同学四个问题的直接回答}
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 已转为 7 任务 JSONL（processed-runs 数据）。
+  \item \_\_CODE\_0000\_\_（QLoRA 4bit NF4）就绪。
+  \item ssh5090 仍不可访问，本轮未开始训练；准备好后执行 \_\_CODE\_0000\_\_ 同步数据与脚本。
+\end{itemize}
 
-1. \_\_BOLD\_0000\_\_：版本化世界模型 + 失效检测（stale/面板/能力翻转）+ 分级恢复；\\
-关键是「交互方式失效」要有一等公民的检测通道（本游戏是 failCount 翻转，其他游戏可能是\\
-autoFishing 类能力标志）。\\
-2. \_\_BOLD\_0000\_\_：三层时间戳对齐 + 阶段契约（precondition/allowed\_actions/success+settle/\\
-timeout）+ 前缀 hash 防策略改写 + 失败分级。\\
-3. \_\_BOLD\_0000\_\_：引导式 prompt 的方向对，但先把\_\_BOLD\_0001\_\_（token 预算、末行 JSON、\\
-解析回退）做扎实；最优性评估用模拟器穷举做真值，别让模型自己评。\\
-4. \_\_BOLD\_0000\_\_：默认 L0 状态探针 + 触发器升级；DEBUG 环形内存、触发窗口落盘；\\
-回退分级（行为/状态/策略）。\\
+\subsection{8. 测试与代码质量}
 
-\subsection{12. 后续建议（优先级序）}
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_：\_\_BOLD\_0001\_\_。
+  \item 失败 1–3：\_\_CODE\_0000\_\_ 期望 \_\_CODE\_0001\_\_ 目录，该目录不存在。
+  \item 失败 4–6：\_\_CODE\_0000\_\_ 在临时目录测试中把项目根目录的 SSD\_00461P01 也扫描进来，导致计数错误。
+  \item \_\_CODE\_0000\_\_：\_\_BOLD\_0003\_\_（本轮修复了 \_\_CODE\_0001\_\_ 的 \_\_CODE\_0002\_\_ 导入、table\_rows nonlocal、未使用导入，以及新脚本的未使用导入）。
+\end{itemize}
 
-1. 面板处理泛化：把 LosePanel 个案抽象为「模态面板阻断」检测器（任意 Panel 激活+输入无效化），\\
-进阶段契约守卫。\\
-2. ssh5090 QLoRA：先 qwen3.5-4b（管线已验证），数据用 cold-start + processed-runs 合并。\\
-3. 用 verifiers 环境批量产 failure\_recovery 数据（对抗性失败注入）。\\
-4. 9B/E4B 基准补齐；VL struct 准确率上去后替代 mimo 视觉降本。\\
-5. 22 游戏 benchmark：每游戏 profile + 3 seed × 2 配置（机制开/关）配对复跑。\\
+\subsection{9. 后续建议（按优先级）}
+
+1. \_\_BOLD\_0001\_\_：为 SSD\_00461P01 添加 \_\_CODE\_0000\_\_ 动作原语（点击敌人/塔位/升级按钮）与对应 profile；先让 rule 模式能拿分，再比较 multi-bus/memory 的收益。\\
+2. \_\_BOLD\_0003\_\_：在扩展后的动作空间上，用 \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_ 模式跑 10–30 步，对比 kimi-k2.7-code / mimo-v2.5 的决策质量与成本。\\
+3. \_\_BOLD\_0000\_\_：为视觉结构化任务加“只输出 JSON”的系统提示或函数调用/tool 约束，复测解析率。\\
+4. \_\_BOLD\_0001\_\_：把 gemma-4-E4B 通过 OpenAI 兼容端点接入 \_\_CODE\_0000\_\_，在塔防扩展后的动作空间上做端到端闭环。\\
+5. \_\_BOLD\_0000\_\_：可访问后先用 qwen3.5-4b 做一版微调，评估本地模型在 failure\_recovery / next\_probe\_action 任务上的提升。\\
+6. \_\_BOLD\_0001\_\_：补齐缺失的 cold-start 数据集或改为 mock；修复 \_\_CODE\_0000\_\_ 扫描根目录的副作用。\\
 \end{document}

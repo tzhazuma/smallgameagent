@@ -92,15 +92,15 @@ class Verifier(BaseAgentRole):
         dict
             Keys ``position_changed`` (bool) and ``score_delta`` (float).
         """
-        prev_state = ctx.metadata.get("prev_probe_state", {})
-        curr_state = ctx.probe_state
+        prev_state = ctx.metadata.get("prev_probe_state") or {}
+        curr_state = ctx.probe_state or {}
 
         pos_changed = False
         score_delta = 0.0
 
         # --- Player position comparison ------------------------------------
-        prev_player = prev_state.get("player", {}).get("worldPosition", {})
-        curr_player = curr_state.get("player", {}).get("worldPosition", {})
+        prev_player = (prev_state.get("player") or {}).get("worldPosition", {})
+        curr_player = (curr_state.get("player") or {}).get("worldPosition", {})
         if prev_player and curr_player:
             pos_changed = (
                 prev_player.get("x") != curr_player.get("x")

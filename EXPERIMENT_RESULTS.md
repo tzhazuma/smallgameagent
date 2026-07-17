@@ -2,6 +2,56 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-18 本轮实测修正
+
+### 在线 gameplay 打通
+- WSL2 + Playwright 绑定 Chromium 已能初始化 Cocos 场景。关键参数：
+  `PLAYWRIGHT_CHROMIUM_PATH=~/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome`
+  `PLAYWRIGHT_CHROMIUM_ARGS="--use-gl=angle --use-angle=gl --ignore-gpu-blocklist --disable-gpu-sandbox"`
+- 之前报告说“headless Chromium 无法初始化 Cocos 场景”是因为未加 GPU 参数；加参数后 `cc.director.getScene()` 正常返回，probe `ready=true`。
+
+### 多 Agent 矩阵（experiment_multi_agent_matrix.json）
+| 模式 | 步数 | composite | activity | progress | stall | 墙钟 | bus_messages |
+|---|---|---|---|---|---|---|---|
+| rule | 30 | 0.000 | 0.000 | 0.000 | 29 | 26.7s | — |
+| multi | 30 | 0.000 | 0.000 | 0.000 | 29 | 26.8s | — |
+| multi-bus | 30 | 0.000 | 0.000 | 0.000 | 29 | 28.4s | 15 |
+| multi-bus-memory | 30 | 0.000 | 0.000 | 0.000 | 29 | 28.4s | 15 |
+
+- composite 为 0 的根因：SSD_00461P01 塔防需要 tap/place/升级类交互，当前 `follow-guide-audited` 摇杆驱动只能让 Hero 移动，无法推进游戏目标。
+- multi-bus 开销 <10%，总线消息分布：observe×2、perceive×2、decide×4、verify×4、critic×2、memory×1。
+
+### 本地 VLM struct 基准（experiment_local_vlm_matrix.json）
+后端：`llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0/llama-server`，参数 `-ngl 999 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 -c 4096 -n 512`。
+
+| 模型 | 解析成功 | 平均墙钟 | 平均生成 tok/s |
+|---|---|---|---|
+| Qwen3.5-4B-Q4_K_M | 0/3 | 11.3s | ~62 |
+| Qwen3.5-9B-Q4_K_M | 2/3 | 16.9s | 44.8 |
+| gemma-4-E4B-it-Q4_K_M | 3/3 | 4.8s | 54.9 |
+
+### 云端 API 混合（experiment_cloud_api_matrix.json / experiment_cloud_api_struct.json）
+| 模型 | 模态 | 延迟 | struct 解析 |
+|---|---|---|---|
+| mimo-v2.5 | 文本 | 6.7s | — |
+| mimo-v2.5 | 视觉 | 17.6s | 3/3（22–38s/帧） |
+| kimi-k2.7-code | 文本 | 2.2s | — |
+| kimi-k2.6 | 文本 | 1.4s | — |
+| kimi-k2.6 | 视觉 | 3.7s | 0/3（思考链占满 token） |
+
+- OpenCodeGo 余额已可用，不再报 `CreditsError`。
+
+### 代码修复
+- `src/agent/roles/verifier.py`：probe_state/player 为 None 时不再崩溃。
+- `src/agent/multi_agent/orchestrator.py` + `src/agent/roles/critic.py`：兼容 `Verdict` 数据类与 dict。
+- `scripts/generate_deliverables.py`：补 `typing.Any`、修正 `table_rows` nonlocal、删未使用导入，ruff 全绿。
+
+### 测试
+- `pytest tests/ -q`：671 passed，55 skipped，6 failed（数据集目录缺失 + game_catalog 扫描根目录副作用）。
+- `ruff check src tests scripts`：全绿。
+
+---
+
 ## 2026-07-18 P8 报告修复、RTX 5060 CUDA、Agent 通信与记忆
 
 ### 报告生成器修复

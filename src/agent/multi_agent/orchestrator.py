@@ -149,13 +149,20 @@ class MultiAgentOrchestrator:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _should_redecide(self, verdict: dict[str, Any]) -> bool:
+    def _should_redecide(self, verdict: Any) -> bool:
         """Return True if the orchestrator should run another decision round."""
-        recommendation = verdict.get("recommendation") if verdict else None
+        if verdict is None:
+            return False
+        if isinstance(verdict, dict):
+            recommendation = verdict.get("recommendation")
+            stuck = verdict.get("stuck")
+            effective = verdict.get("action_effective", True)
+        else:
+            recommendation = getattr(verdict, "recommendation", None)
+            stuck = getattr(verdict, "stuck", False)
+            effective = getattr(verdict, "action_effective", True)
         if recommendation in {"escape_rotate", "reobserve"}:
             return True
-        stuck = verdict.get("stuck") if verdict else False
-        effective = verdict.get("action_effective", True)
         return bool(stuck) or not bool(effective)
 
     async def _update_memory(self, ctx: "AgentContext", action: dict[str, Any]) -> None:

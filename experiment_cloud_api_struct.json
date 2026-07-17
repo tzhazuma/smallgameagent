@@ -1,0 +1,135 @@
+[
+  {
+    "model": "mimo-v2.5",
+    "frame": "_frame_0.png",
+    "ok": true,
+    "latency_s": 30.263,
+    "parsed": true,
+    "extracted": {
+      "has_arrow": true,
+      "arrow_screen_x": 14.0,
+      "arrow_screen_y": 35.0,
+      "arrow_world_dx": -0.5,
+      "arrow_world_dz": 0.5,
+      "has_target": true,
+      "target_screen_x": 50.0,
+      "target_screen_y": 70.0,
+      "has_obstacle": true,
+      "obstacle_screen_x": 38.0,
+      "obstacle_screen_y": 49.0,
+      "is_end_screen": false,
+      "end_screen_type": null,
+      "ui_buttons": [
+        "PLAY NOW"
+      ],
+      "player_screen_x": 50.0,
+      "player_screen_y": 56.0,
+      "has_guide_indicator": true,
+      "guide_direction": "left",
+      "extra_notes": "Base defense game called 'Tiles Survive!' with wooden wall perimeter enclosing two blue buildings and a central tower. A blue football player character stands near the gate. Multiple red enemy soldiers are approaching from below. An arrow indicator on the left points toward a coin collection target (10 coins)."
+    },
+    "content_preview": "{\"has_arrow\": true, \"arrow_screen_x\": 14.0, \"arrow_screen_y\": 35.0, \"arrow_world_dx\": -0.5, \"arrow_world_dz\": 0.5, \"has_target\": true, \"target_screen_x\": 50.0, \"target_screen_y\": 70.0, \"has_obstacle\": true, \"obstacle_screen_x\": 38.0, \"obstacle_screen_y\": 49.0, \"is_end_screen\": false, \"end_screen_typ",
+    "prompt_tokens": 3131,
+    "completion_tokens": 914
+  },
+  {
+    "model": "mimo-v2.5",
+    "frame": "_frame_1.png",
+    "ok": true,
+    "latency_s": 37.85,
+    "parsed": true,
+    "extracted": {
+      "has_arrow": true,
+      "arrow_screen_x": 0.65,
+      "arrow_screen_y": 0.6,
+      "arrow_world_dx": 0.2,
+      "arrow_world_dz": 0.1,
+      "has_target": true,
+      "target_screen_x": 0.65,
+      "target_screen_y": 0.85,
+      "has_obstacle": true,
+      "obstacle_screen_x": 0.45,
+      "obstacle_screen_y": 0.35,
+      "is_end_screen": false,
+      "end_screen_type": null,
+      "ui_buttons": [
+        "PLAY NOW"
+      ],
+      "player_screen_x": 0.53,
+      "player_screen_y": 0.52,
+      "has_guide_indicator": true,
+      "guide_direction": "down",
+      "extra_notes": "The player is at a fence entrance with a green path guiding them towards a group of enemies. The fenced area contains buildings and a tower."
+    },
+    "content_preview": "```json\n{\n  \"has_arrow\": true,\n  \"arrow_screen_x\": 0.65,\n  \"arrow_screen_y\": 0.6,\n  \"arrow_world_dx\": 0.2,\n  \"arrow_world_dz\": 0.1,\n  \"has_target\": true,\n  \"target_screen_x\": 0.65,\n  \"target_screen_y\": 0.85,\n  \"has_obstacle\": true,\n  \"obstacle_screen_x\": 0.45,\n  \"obstacle_screen_y\": 0.35,\n  \"is_end_",
+    "prompt_tokens": 3131,
+    "completion_tokens": 707
+  },
+  {
+    "model": "mimo-v2.5",
+    "frame": "_frame_2.png",
+    "ok": true,
+    "latency_s": 22.332,
+    "parsed": true,
+    "extracted": {
+      "has_arrow": false,
+      "arrow_screen_x": null,
+      "arrow_screen_y": null,
+      "arrow_world_dx": null,
+      "arrow_world_dz": null,
+      "has_target": true,
+      "target_screen_x": 500.0,
+      "target_screen_y": 555.0,
+      "has_obstacle": true,
+      "obstacle_screen_x": 830.0,
+      "obstacle_screen_y": 250.0,
+      "is_end_screen": false,
+      "end_screen_type": null,
+      "ui_buttons": [
+        "PLAY NOW",
+        "TILES SURVIVE!"
+      ],
+      "player_screen_x": 175.0,
+      "player_screen_y": 850.0,
+      "has_guide_indicator": true,
+      "guide_direction": null,
+      "extra_notes": "Game is 'Tiles Survive!' - a survival/adventure game with army units. Player controls a group of red-uniformed soldiers (bottom-left). A large muscular enemy/target is ahead on the path. There's a white glowing figure near the player possibly indicating a collectible or guide. The scene shows a desert-like environment with a fenced base, bridge over water, and scattered trees. Coin counter shows 2 at top-right, and a '10' indicator near the player group."
+    },
+    "content_preview": "{\"has_arrow\": false, \"arrow_screen_x\": null, \"arrow_screen_y\": null, \"arrow_world_dx\": null, \"arrow_world_dz\": null, \"has_target\": true, \"target_screen_x\": 500.0, \"target_screen_y\": 555.0, \"has_obstacle\": true, \"obstacle_screen_x\": 830.0, \"obstacle_screen_y\": 250.0, \"is_end_screen\": false, \"end_scre",
+    "prompt_tokens": 3131,
+    "completion_tokens": 764
+  },
+  {
+    "model": "kimi-k2.6",
+    "frame": "_frame_0.png",
+    "ok": true,
+    "latency_s": 10.562,
+    "parsed": false,
+    "extracted": null,
+    "content_preview": "We need to parse the screenshot and produce JSON with specified fields. Let's carefully inspect the image.\n\nFirst, identify elements:\n- Game appears to be a top-down/isometric mobile game. There's a player character in the center, a base with wooden fence and buildings.\n- Player: A character wearing",
+    "prompt_tokens": 3807,
+    "completion_tokens": 1024
+  },
+  {
+    "model": "kimi-k2.6",
+    "frame": "_frame_1.png",
+    "ok": true,
+    "latency_s": 8.132,
+    "parsed": false,
+    "extracted": null,
+    "content_preview": "The user wants me to analyze a mobile game screenshot and extract structured information into a specific JSON format.\n \n Let me carefully examine the image:\n \n 1. **has_arrow**: There is a green arrow on the ground/path near the bottom right pointing down-left/up? Let me look again. Actually, there'",
+    "prompt_tokens": 3807,
+    "completion_tokens": 1024
+  },
+  {
+    "model": "kimi-k2.6",
+    "frame": "_frame_2.png",
+    "ok": true,
+    "latency_s": 9.734,
+    "parsed": false,
+    "extracted": null,
+    "content_preview": "The user wants me to analyze a game screenshot and extract structured information into a specific JSON format. Let me carefully examine the image.\n \n 1. **has_arrow**: I don't see any arrow in the image. So false.\n 2. **arrow_screen_x, arrow_screen_y, arrow_world_dx, arrow_world_dz**: null\n 3. **has",
+    "prompt_tokens": 3807,
+    "completion_tokens": 1024
+  }
+]

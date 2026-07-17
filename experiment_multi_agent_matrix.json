@@ -1,0 +1,154 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "elapsed_s": 26.7,
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "rubric": {
+      "completion": 0.0,
+      "progress_ratio": 0.0,
+      "activity": 0.0,
+      "consistency": 0.0,
+      "composite": 0.0,
+      "details": {
+        "steps": 30,
+        "move_steps": 29,
+        "transitions": 0,
+        "stall_steps": 29,
+        "fail_flips": 0,
+        "wm_violations": 4
+      }
+    },
+    "decision_source_counts": {
+      "follow_guide_target_dist=0.58": 4,
+      "follow_guide_target_dist=0.93": 2,
+      "follow_guide_target_dist=0.71": 2,
+      "follow_guide_target_dist=0.72": 2,
+      "follow_guide_target_dist=0.62": 2,
+      "completion_detected": 1,
+      "follow_guide_target_dist=8.04": 1,
+      "follow_guide_target_dist=2.49": 1,
+      "follow_guide_target_dist=1.81": 1,
+      "follow_guide_target_dist=1.56": 1
+    },
+    "wm_observations": null,
+    "wm_replans": null
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi",
+    "elapsed_s": 26.8,
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "rubric": {
+      "completion": 0.0,
+      "progress_ratio": 0.0,
+      "activity": 0.0,
+      "consistency": 0.0,
+      "composite": 0.0,
+      "details": {
+        "steps": 30,
+        "move_steps": 29,
+        "transitions": 0,
+        "stall_steps": 29,
+        "fail_flips": 0,
+        "wm_violations": 4
+      }
+    },
+    "decision_source_counts": {
+      "follow_guide_target_dist=0.63": 4,
+      "follow_guide_target_dist=0.55": 4,
+      "follow_guide_target_dist=1.08": 3,
+      "follow_guide_target_dist=0.66": 2,
+      "follow_guide_target_dist=0.74": 2,
+      "follow_guide_target_dist=0.75": 2,
+      "completion_detected": 1,
+      "follow_guide_target_dist=8.04": 1,
+      "follow_guide_target_dist=2.15": 1,
+      "follow_guide_target_dist=0.86": 1
+    },
+    "wm_observations": null,
+    "wm_replans": null
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus",
+    "elapsed_s": 28.4,
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "rubric": {
+      "completion": 0.0,
+      "progress_ratio": 0.0,
+      "activity": 0.0,
+      "consistency": 0.0,
+      "composite": 0.0,
+      "details": {
+        "steps": 30,
+        "move_steps": 29,
+        "transitions": 0,
+        "stall_steps": 29,
+        "fail_flips": 0,
+        "wm_violations": 4
+      }
+    },
+    "bus_messages": 15,
+    "bus_by_type": {
+      "observe": 2,
+      "perceive": 2,
+      "decide": 4,
+      "verify": 4,
+      "critic": 2,
+      "memory": 1
+    },
+    "decision_source_counts": {
+      "rule_engine": 30
+    },
+    "wm_observations": null,
+    "wm_replans": null
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "elapsed_s": 28.4,
+    "completed": false,
+    "win": false,
+    "steps": 30,
+    "reason": "",
+    "rubric": {
+      "completion": 0.0,
+      "progress_ratio": 0.0,
+      "activity": 0.0,
+      "consistency": 0.0,
+      "composite": 0.0,
+      "details": {
+        "steps": 30,
+        "move_steps": 29,
+        "transitions": 0,
+        "stall_steps": 29,
+        "fail_flips": 0,
+        "wm_violations": 4
+      }
+    },
+    "bus_messages": 15,
+    "bus_by_type": {
+      "observe": 2,
+      "perceive": 2,
+      "decide": 4,
+      "verify": 4,
+      "critic": 2,
+      "memory": 1
+    },
+    "decision_source_counts": {
+      "rule_engine": 30
+    },
+    "wm_observations": null,
+    "wm_replans": null
+  }
+]
