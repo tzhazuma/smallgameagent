@@ -194,7 +194,7 @@ class TestRuleDecisionMaker:
             "action": "move", "params": {}, "reason": "with_visual",
         }
         visual_analyzer = mock.MagicMock()
-        visual_analyzer.analyze.return_value = {"obstacle": True}
+        visual_analyzer.analyze_pil.return_value = {"stick": {"dx": 0.5, "dy": 0.0}}
 
         maker = RuleDecisionMaker(
             rule_engine=rule_engine,
@@ -207,10 +207,10 @@ class TestRuleDecisionMaker:
         result = await maker.decide(ctx)
 
         assert result["action"] == "move"
-        visual_analyzer.analyze.assert_called_once()
+        visual_analyzer.analyze_pil.assert_called_once()
         # step receives the visual result
         args, _kwargs = rule_engine.step.call_args
-        assert args[1] is not None  # visual is not None
+        assert args[1] == {"stick": {"dx": 0.5, "dy": 0.0}}  # visual is passed through
 
 
 class TestMultiAgentDecisionMaker:

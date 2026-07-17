@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from io import BytesIO
 from pathlib import Path
@@ -33,6 +34,7 @@ from src.agent.memory import EpisodicMemory, WorkingMemory
 from src.agent.probe_adapter import ProbeAdapter
 from src.agent.registry import DecisionRegistry
 from src.agent.visual_analyzer import VisualAnalyzer
+from src.agent.world_model import VersionedWorldModel
 from src.engine.rules import RuleEngine
 
 if TYPE_CHECKING:
@@ -123,6 +125,15 @@ class HybridAgent:
             self._rule_engine = RuleEngine(game_id)
             self._visual_analyzer = VisualAnalyzer(api_client) if api_client else None
 
+        # ── Versioned world model (rule-engine modes) ─────────────────
+        # Attach a VersionedWorldModel to the rule engine: HybridAgent writes
+        # every observation into it, the engine registers its follow target as
+        # a plan artifact and locally re-plans when the model marks it stale.
+        self._world_model: VersionedWorldModel | None = None
+        if self._rule_engine is not None:
+            self._world_model = VersionedWorldModel()
+            self._rule_engine.world_model = self._world_model
+
     # ------------------------------------------------------------------
     # Main loop
     # ------------------------------------------------------------------
@@ -204,8 +215,17 @@ class HybridAgent:
                 # ---- Observe ----
                 state = await self._observe(probe, runner, ctx)
                 ctx.probe_state = state
+                if self._world_model is not None:
+                    self._wm_observe(state, step, ctx)
                 if self._is_finished(state, result_summary):
                     break
+
+                # ---- Fail-panel recovery ----
+                # A _failCount flip freezes joystick input on some games
+                # (00461: LosePanel appears and movement stops). Dismiss the
+                # panel before deciding anything else.
+                if await self._maybe_dismiss_fail_panel(probe, runner, state, ctx):
+                    continue
 
                 # ---- Screenshot ----
                 screenshot_bytes: bytes | None = None
@@ -283,6 +303,10 @@ class HybridAgent:
                     self._episodic_memory.close()
                 except Exception:
                     logger.warning("Failed to close episodic memory", exc_info=True)
+
+            # ── World model stats ──────────────────────────────────
+            if self._world_model is not None:
+                result_summary["world_model_stats"] = self._world_model.stats()
 
             await runner.close()
 
@@ -506,7 +530,7 @@ class HybridAgent:
             try:
                 from PIL import Image
                 pil = Image.open(BytesIO(ctx.screenshot)).convert("RGB")
-                visual = self._visual_analyzer.analyze(pil)
+                visual = self._visual_analyzer.analyze_pil(pil)
             except Exception:
                 pass
         return self._rule_engine.step(ctx.probe_state, visual)
@@ -514,6 +538,108 @@ class HybridAgent:
     # ------------------------------------------------------------------
     # Observation / execution helpers
     # ------------------------------------------------------------------
+
+    def _wm_observe(self, state: dict[str, Any], step: int, ctx: AgentContext) -> None:
+        """Write one observation into the versioned world model.
+
+        Normalises ``guide_or_target_candidates`` (dicts in probe states) to
+        node-name strings, which is the entity-id format the model versions.
+        Capability flips and newly stale plans are logged; the rule engine
+        performs the actual local re-plan on its next ``step()`` call.
+        """
+        candidates = state.get("guide_or_target_candidates")
+        obs = state
+        if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+            obs = dict(state)
+            obs["guide_or_target_candidates"] = [
+                str(c.get("path", "").split("/")[-1] or c.get("name", ""))
+                for c in candidates
+                if isinstance(c, dict)
+            ]
+        report = self._world_model.write_observation(obs, step)
+        ctx.metadata["wm_report"] = report.to_dict()
+        if report.bumped_epochs.get("capability"):
+            # Hook for interaction-mode switching: this game has no capability
+            # flips, but if one appears the flip is surfaced here.
+            logger.warning(
+                "step %d: capability flip(s) detected (epoch=%d, changed=%s)",
+                step, self._world_model.capability_epoch, report.changed_entities,
+            )
+        if report.stale_plans:
+            logger.info(
+                "step %d: world model marked plan(s) stale: %s",
+                step, report.stale_plans,
+            )
+
+    async def _maybe_dismiss_fail_panel(
+        self, probe: ProbeAdapter, runner: GameRunner, state: dict[str, Any], ctx: AgentContext
+    ) -> bool:
+        """Tap the panel button when a fail/retry panel just appeared.
+
+        A ``_failCount`` flip marks the moment such a panel appears on games
+        like 00461 (``LosePanel`` activates and joystick input freezes). We
+        detect the flip, look up the panel's active buttons via the probe and
+        tap the first one, converting device pixels to CSS pixels via dpr.
+
+        Returns ``True`` when a tap was issued — the caller skips the normal
+        decision for that step.
+        """
+        numbers = state.get("keyNumbers") or {}
+        fail = numbers.get("_failCount") or numbers.get("GameManager._failCount") or 0
+        prev = ctx.metadata.get("prev_fail_count", 0)
+        ctx.metadata["prev_fail_count"] = fail
+        if not (isinstance(fail, (int, float)) and fail != prev):
+            return False
+        buttons = await probe.find_panel_buttons(runner._page)
+        if not buttons:
+            logger.info("failCount flipped to %s but no panel button found", fail)
+            return False
+        btn = self._pick_panel_button(buttons)
+        if btn is None:
+            logger.info("failCount=%s: only ad/download buttons on panel, skipping tap", fail)
+            return False
+        pos = self._panel_button_css(btn, runner)
+        if pos is None:
+            logger.info("failCount=%s: cannot map button %s to css coords", fail, btn.get("path"))
+            return False
+        x, y = pos
+        logger.info(
+            "fail panel detected (failCount=%s): tapping %s at css(%.0f, %.0f)",
+            fail, btn.get("path"), x, y,
+        )
+        await runner.tap(x=x, y=y, duration_ms=80)
+        ctx.metadata["fail_panel_taps"] = ctx.metadata.get("fail_panel_taps", 0) + 1
+        return True
+
+    #: Panel-button names we prefer (retry/continue) vs. ad traps (download).
+    _PANEL_PREFER_RE = re.compile(r"retry|continue|revive|confirm|ok|next|again", re.I)
+    _PANEL_AVOID_RE = re.compile(r"download|install|store|advert|market", re.I)
+
+    def _pick_panel_button(self, buttons: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Choose the safest panel button: retry-like names first, never ad/download."""
+        candidates = [b for b in buttons if not self._PANEL_AVOID_RE.search(str(b.get("name", "")))]
+        if not candidates:
+            return None
+        preferred = [b for b in candidates if self._PANEL_PREFER_RE.search(str(b.get("name", "")))]
+        return (preferred or candidates)[0]
+
+    @staticmethod
+    def _panel_button_css(btn: dict[str, Any], runner: GameRunner) -> tuple[float, float] | None:
+        """Map a panel button's design-resolution position to CSS pixels.
+
+        Cocos UI design space has a bottom-left origin; the viewport's CSS
+        space is top-left, so the y axis flips.
+        """
+        dp = btn.get("designPosition") or {}
+        ds = btn.get("designSize") or {}
+        viewport = (runner._page.viewport_size if runner._page else None) or {}
+        if not all(k in dp for k in ("x", "y")) or not ds.get("width") or not ds.get("height"):
+            return None
+        if not viewport.get("width") or not viewport.get("height"):
+            return None
+        x = float(dp["x"]) / float(ds["width"]) * float(viewport["width"])
+        y = (1.0 - float(dp["y"]) / float(ds["height"])) * float(viewport["height"])
+        return (x, y)
 
     async def _observe(
         self,

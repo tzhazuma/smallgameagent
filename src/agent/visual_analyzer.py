@@ -201,6 +201,43 @@ class VisualAnalyzer:
         return parsed
 
     # ------------------------------------------------------------------
+    # Synchronous local analysis (rule mode)
+    # ------------------------------------------------------------------
+
+    def analyze_pil(self, image: Image.Image) -> dict[str, Any]:
+        """Analyze an in-memory PIL image synchronously — no API calls.
+
+        Runs only local PIL colour-thresholding (the cyan-guide detection
+        shared with the fallback path) and returns the key structure that
+        :class:`src.engine.rules.RuleEngine` actually consumes:
+
+        - ``"stick"``: ``{"dx": float, "dy": float}`` — joystick direction
+          (in [-1, 1], down-positive) from screen centre toward the guide
+          arrow, or ``None`` when no cyan arrow is visible.
+        - ``"arrow"``: ``{"x": int, "y": int, "confidence": float}`` —
+          screen position of the arrow centroid, or ``None``.
+
+        Parameters
+        ----------
+        image:
+            A PIL image (any mode; converted to RGB internally).
+        """
+        img = image.convert("RGB")
+        guides = self._detect_cyan_guides(img)
+        if not guides:
+            return {"stick": None, "arrow": None}
+
+        arrow = guides[0]  # largest component
+        w, h = img.size
+        dx = (arrow["x"] - w / 2) / (w / 2) if w > 1 else 0.0
+        dy = (arrow["y"] - h / 2) / (h / 2) if h > 1 else 0.0
+        stick = {
+            "dx": round(max(-1.0, min(1.0, dx)), 3),
+            "dy": round(max(-1.0, min(1.0, dy)), 3),
+        }
+        return {"stick": stick, "arrow": arrow}
+
+    # ------------------------------------------------------------------
     # PIL fallback analysis
     # ------------------------------------------------------------------
 
@@ -211,29 +248,15 @@ class VisualAnalyzer:
         found in ``detect-cyan-guide.py`` (strategy_audit.md §5a).
         """
         img = Image.open(path).convert("RGB")
+        return self._analyze_fallback_image(img)
+
+    def _analyze_fallback_image(self, img: Image.Image) -> dict[str, Any]:
+        """Fallback analysis on an already-decoded RGB image."""
         pixels = img.load()  # type: ignore[attr-defined]
         w, h = img.size
 
         # –– 1. Detect cyan guide arrows ––––––––––––––––––––––––––––––––
-        cyan_mask = _make_bool_array(w, h)
-        for y in range(h):
-            for x in range(w):
-                r, g, b = pixels[x, y]
-                if _is_cyan_pixel(r, g, b):
-                    cyan_mask[y][x] = True
-
-        components = _find_connected_components(cyan_mask, w, h, _MIN_COMPONENT_SIZE)
-        guides: list[dict[str, Any]] = []
-        for comp in sorted(components, key=len, reverse=True):
-            if not comp:
-                continue
-            avg_x = sum(p[0] for p in comp) // len(comp)
-            avg_y = sum(p[1] for p in comp) // len(comp)
-            # Confidence scales with component size (capped at 400 px).
-            confidence = min(len(comp) / 400.0, 1.0)
-            guides.append(
-                {"x": avg_x, "y": avg_y, "confidence": round(confidence, 2), "type": "arrow"}
-            )
+        guides = self._detect_cyan_guides(img)
 
         # –– 2. Detect end cards –––––––––––––––––––––––––––––––––––––––––
         green_count = 0
@@ -324,6 +347,41 @@ class VisualAnalyzer:
             "player_indicators": player_indicators,
             "raw_response": "fallback:pil",
         }
+
+    # ------------------------------------------------------------------
+    # Shared local detection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_cyan_guides(img: Image.Image) -> list[dict[str, Any]]:
+        """Detect cyan guide arrows in an RGB image.
+
+        Returns guide dicts ``{"x", "y", "confidence", "type": "arrow"}``
+        sorted by decreasing component size.
+        """
+        pixels = img.load()  # type: ignore[attr-defined]
+        w, h = img.size
+
+        cyan_mask = _make_bool_array(w, h)
+        for y in range(h):
+            for x in range(w):
+                r, g, b = pixels[x, y]
+                if _is_cyan_pixel(r, g, b):
+                    cyan_mask[y][x] = True
+
+        components = _find_connected_components(cyan_mask, w, h, _MIN_COMPONENT_SIZE)
+        guides: list[dict[str, Any]] = []
+        for comp in sorted(components, key=len, reverse=True):
+            if not comp:
+                continue
+            avg_x = sum(p[0] for p in comp) // len(comp)
+            avg_y = sum(p[1] for p in comp) // len(comp)
+            # Confidence scales with component size (capped at 400 px).
+            confidence = min(len(comp) / 400.0, 1.0)
+            guides.append(
+                {"x": avg_x, "y": avg_y, "confidence": round(confidence, 2), "type": "arrow"}
+            )
+        return guides
 
 
 # ---------------------------------------------------------------------------

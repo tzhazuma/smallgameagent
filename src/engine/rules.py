@@ -7,10 +7,47 @@ dispatches to the correct strategy implementation for each driver type.
 
 from __future__ import annotations
 
+import logging
+import math
+import random
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
 from configs.game_profiles import get_profile
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Obstacle learning constants (potential-field avoidance)
+# ---------------------------------------------------------------------------
+
+#: Actual displacement below this fraction of the expected displacement counts
+#: as a *blocked* move.
+BLOCK_RATIO = 0.3
+#: Ignore moves whose expected displacement is below this (noise floor, world units).
+BLOCK_MIN_EXPECTED = 0.25
+#: Consecutive blocked moves in roughly the same direction before an obstacle
+#: point is recorded.
+BLOCK_STREAK_THRESHOLD = 2
+#: Cosine similarity above which two commanded directions count as "same direction".
+BLOCK_SAME_DIR_COS = 0.7
+#: Radius (world units) within which a recorded obstacle exerts repulsion.
+OBSTACLE_REPULSE_RADIUS = 2.5
+#: Strength of the obstacle repulsion relative to the unit target direction.
+OBSTACLE_REPULSE_WEIGHT = 1.3
+#: Obstacles closer than this are merged (confidence bump instead of a new point).
+OBSTACLE_MERGE_DIST = 1.0
+#: How far ahead of the player the obstacle point is recorded (world units).
+OBSTACLE_LOOKAHEAD = 1.0
+#: Number of candidate directions scored by ``_escape_direction``.
+ESCAPE_NUM_DIRECTIONS = 8
+#: Radius within which obstacles influence the escape-direction score.
+ESCAPE_SCORE_RADIUS = 3.0
+#: Minimum successful-move samples before blocked-move detection activates.
+SPEED_MIN_SAMPLES = 3
+#: Prior world-units/second at full stick until enough samples are collected.
+SPEED_PRIOR = 14.0
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +117,25 @@ class RuleEngine:
         self.last_action: dict[str, Any] = {}
         self.stuck_streak: int = 0
         self.last_player_pos: tuple[float, float] | None = None
+
+        # ── Obstacle learning (activates the previously unused field) ──
+        # Each entry: {"x", "z", "step", "count", "dir": (ux, uz)} — a world-space
+        # point where commanded movement was repeatedly blocked, plus the blocked
+        # direction and a confidence counter.
         self._learned_obstacles: list[dict[str, Any]] = []
+        # Commanded move awaiting verification: {"pos", "dir", "expected", "step"}.
+        self._prev_move: dict[str, Any] | None = None
+        self._block_dir_streak: int = 0
+        self._block_last_dir: tuple[float, float] | None = None
+        # World-speed estimate (units/second at full stick), median of successful
+        # per-move samples; seeded with SPEED_PRIOR.
+        self._speed_samples: deque[float] = deque(maxlen=24)
+        self._speed_est: float = SPEED_PRIOR
+
+        # ── World model (optional attach, see HybridAgent) ──
+        self.world_model: Any = None
+        self._current_plan_id: str | None = None
+        self.stale_replans: int = 0
 
     def step(self, state: dict[str, Any], visual: dict[str, Any] | None = None) -> dict[str, Any]:
         """Produce an action for the current *state*.
@@ -113,7 +168,16 @@ class RuleEngine:
                 self.stuck_streak += 1
             else:
                 self.stuck_streak = 0
+
+        # 2b. Verify the previous commanded move against the actual displacement
+        # and learn obstacle points from repeatedly blocked directions.
+        if wp:
+            self._learn_from_last_move(current_pos)
         self.last_player_pos = current_pos
+
+        # 2c. If the world model marked the current follow-target plan stale
+        # (scene shift), drop motion state and re-select locally.
+        self._check_plan_stale()
 
         # 3. Delegation to driver-type-specific strategy
         dt = self.driver_type
@@ -136,13 +200,8 @@ class RuleEngine:
         self, state: dict[str, Any], visual: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Profile-based guide follower — canonical architecture."""
-        import math
-
         from src.engine.vector import (
-            world_vector_from_stick,
-            world_distance,
             solve_stick_for_world,
-            normalize_world_vector,
         )
         from src.engine.pulse import get_pulse_duration
 
@@ -173,6 +232,10 @@ class RuleEngine:
 
         tx, tz = target
 
+        # Register the follow target as a plan artifact so a later scene shift
+        # marks it stale and triggers a local re-plan (see ``_check_plan_stale``).
+        self._register_target_plan(guide_candidates)
+
         # --- Compute desired movement ---
         dx_world = tx - px
         dz_world = tz - pz
@@ -180,17 +243,18 @@ class RuleEngine:
 
         # --- Stuck handling ---
         if self.stuck_streak >= 5:
-            # Escape rotation
-            import random
-            escape_angle = random.uniform(-1.0, 1.0)
-            dx_stick = math.cos(escape_angle)
-            dy_stick = math.sin(escape_angle)
+            # Escape along the candidate direction that points away from the
+            # densest cluster of learned obstacles (random when none known).
+            esc_wx, esc_wz = self._escape_direction(px, pz)
+            dx_stick, dy_stick = solve_stick_for_world(basis, esc_wx, esc_wz)
+            duration_ms = get_pulse_duration("follow-guide", 2.0, input_mode)
+            self._note_move((px, pz), dx_stick, dy_stick, duration_ms, basis)
             return {
                 "action": "move",
                 "params": {
                     "dx": dx_stick,
                     "dy": dy_stick,
-                    "duration_ms": get_pulse_duration("follow-guide", 2.0, input_mode),
+                    "duration_ms": duration_ms,
                 },
                 "reason": f"stuck_escape_{self.stuck_streak}",
             }
@@ -200,16 +264,247 @@ class RuleEngine:
             return {"action": "wait", "params": {"duration_ms": 500},
                     "reason": "arrived_at_target"}
 
-        dx_stick, dy_stick = solve_stick_for_world(basis, dx_world, dz_world)
+        # Potential-field steering: target direction + repulsion from nearby
+        # learned obstacle points.
+        steer_wx, steer_wz = self._steer_around_obstacles(px, pz, dx_world, dz_world, dist)
+
+        dx_stick, dy_stick = solve_stick_for_world(basis, steer_wx, steer_wz)
 
         # --- Pulse duration ---
         duration_ms = get_pulse_duration("follow-guide", dist, input_mode)
+
+        self._note_move((px, pz), dx_stick, dy_stick, duration_ms, basis)
 
         return {
             "action": "move",
             "params": {"dx": dx_stick, "dy": dy_stick, "duration_ms": duration_ms},
             "reason": f"follow_guide_target_dist={dist:.2f}",
         }
+
+    # ------------------------------------------------------------------
+    # Obstacle learning + potential-field avoidance
+    # ------------------------------------------------------------------
+
+    def _note_move(
+        self,
+        pos: tuple[float, float],
+        dx_stick: float,
+        dy_stick: float,
+        duration_ms: float,
+        basis: dict[str, Any],
+    ) -> None:
+        """Record a commanded move so the next step can verify its effect."""
+        from src.engine.vector import world_vector_from_stick
+
+        mag = math.hypot(dx_stick, dy_stick)
+        if mag < 1e-6 or duration_ms <= 0 or not basis:
+            self._prev_move = None
+            return
+        wx, wz = world_vector_from_stick(basis, dx_stick, dy_stick)
+        wmag = math.hypot(wx, wz)
+        if wmag < 1e-6:
+            self._prev_move = None
+            return
+        self._prev_move = {
+            "pos": pos,
+            "dir": (wx / wmag, wz / wmag),
+            "expected": mag * (duration_ms / 1000.0) * self._speed_est,
+            "step": self.step_count,
+        }
+
+    def _learn_from_last_move(self, current_pos: tuple[float, float]) -> None:
+        """Compare expected vs actual displacement of the previous move.
+
+        A move whose actual displacement stays below ``BLOCK_RATIO`` of the
+        expected one for ``BLOCK_STREAK_THRESHOLD`` consecutive same-direction
+        moves records an obstacle point ahead of the blocked direction.
+        Successful moves feed the world-speed estimate instead.
+        """
+        prev = self._prev_move
+        self._prev_move = None
+        if prev is None:
+            return
+        expected = prev["expected"]
+        ax = current_pos[0] - prev["pos"][0]
+        az = current_pos[1] - prev["pos"][1]
+        actual = math.hypot(ax, az)
+        if expected < BLOCK_MIN_EXPECTED:
+            return
+        ratio = actual / expected
+        if ratio >= BLOCK_RATIO:
+            # Successful (or at least unblocked) move — refine the speed estimate.
+            dur_dir_mag = expected / self._speed_est if self._speed_est > 0 else 0.0
+            if dur_dir_mag > 1e-6:
+                self._speed_samples.append(actual / dur_dir_mag)
+                if len(self._speed_samples) >= SPEED_MIN_SAMPLES:
+                    s = sorted(self._speed_samples)
+                    self._speed_est = s[len(s) // 2]
+            self._block_dir_streak = 0
+            self._block_last_dir = None
+            return
+
+        # Blocked move — require a consecutive same-direction repeat.
+        d = prev["dir"]
+        if (
+            self._block_last_dir is not None
+            and d[0] * self._block_last_dir[0] + d[1] * self._block_last_dir[1]
+            >= BLOCK_SAME_DIR_COS
+        ):
+            self._block_dir_streak += 1
+        else:
+            self._block_dir_streak = 1
+        self._block_last_dir = d
+
+        if self._block_dir_streak >= BLOCK_STREAK_THRESHOLD:
+            self._record_obstacle(
+                prev["pos"][0] + d[0] * OBSTACLE_LOOKAHEAD,
+                prev["pos"][1] + d[1] * OBSTACLE_LOOKAHEAD,
+                d,
+            )
+            self._block_dir_streak = 0
+            self._block_last_dir = None
+
+    def _record_obstacle(self, x: float, z: float, d: tuple[float, float]) -> None:
+        """Record (or reinforce) an obstacle point at world ``(x, z)``."""
+        for obs in self._learned_obstacles:
+            if math.hypot(obs["x"] - x, obs["z"] - z) < OBSTACLE_MERGE_DIST:
+                obs["count"] += 1
+                obs["step"] = self.step_count
+                obs["x"] = (obs["x"] + x) / 2
+                obs["z"] = (obs["z"] + z) / 2
+                logger.info(
+                    "step %d: obstacle reinforced at (%.2f, %.2f) count=%d",
+                    self.step_count, obs["x"], obs["z"], obs["count"],
+                )
+                return
+        self._learned_obstacles.append(
+            {"x": x, "z": z, "step": self.step_count, "count": 1, "dir": d}
+        )
+        logger.info(
+            "step %d: obstacle learned at (%.2f, %.2f) dir=(%.2f, %.2f)",
+            self.step_count, x, z, d[0], d[1],
+        )
+
+    def _steer_around_obstacles(
+        self, px: float, pz: float, dx_world: float, dz_world: float, dist: float
+    ) -> tuple[float, float]:
+        """Deflect the desired world vector away from nearby learned obstacles.
+
+        Potential-field method: unit target direction plus, for each obstacle
+        within ``OBSTACLE_REPULSE_RADIUS``, a repulsion term pointing from the
+        obstacle to the player, weighted by proximity and confidence. The
+        result keeps the original magnitude ``dist`` so pulse timing is
+        unaffected.
+        """
+        if dist < 1e-6 or not self._learned_obstacles:
+            return (dx_world, dz_world)
+        ux, uz = dx_world / dist, dz_world / dist
+        rx = rz = 0.0
+        for obs in self._learned_obstacles:
+            ox = px - obs["x"]
+            oz = pz - obs["z"]
+            r = math.hypot(ox, oz)
+            if r < 1e-6 or r >= OBSTACLE_REPULSE_RADIUS:
+                continue
+            w = OBSTACLE_REPULSE_WEIGHT * (1 - r / OBSTACLE_REPULSE_RADIUS) * min(obs["count"], 3)
+            rx += w * ox / r
+            rz += w * oz / r
+        if rx == 0.0 and rz == 0.0:
+            return (dx_world, dz_world)
+        sx, sz = ux + rx, uz + rz
+        smag = math.hypot(sx, sz)
+        if smag < 1e-6:
+            return (dx_world, dz_world)
+        return (sx / smag * dist, sz / smag * dist)
+
+    def _escape_direction(self, px: float, pz: float) -> tuple[float, float]:
+        """Pick an escape direction (unit world vector) for stuck handling.
+
+        Scores ``ESCAPE_NUM_DIRECTIONS`` evenly spaced directions by alignment
+        with the away-from-obstacle direction of every learned obstacle within
+        ``ESCAPE_SCORE_RADIUS`` (proximity- and confidence-weighted), and
+        returns the best one. Falls back to a random direction when no obstacle
+        is known.
+        """
+        if not self._learned_obstacles:
+            angle = random.uniform(0, 2 * math.pi)
+            return (math.cos(angle), math.sin(angle))
+        best_dir = (0.0, 0.0)
+        best_score = -float("inf")
+        for k in range(ESCAPE_NUM_DIRECTIONS):
+            angle = 2 * math.pi * k / ESCAPE_NUM_DIRECTIONS
+            ux, uz = math.cos(angle), math.sin(angle)
+            score = 0.0
+            for obs in self._learned_obstacles:
+                ox = px - obs["x"]
+                oz = pz - obs["z"]
+                r = math.hypot(ox, oz)
+                if r >= ESCAPE_SCORE_RADIUS:
+                    continue
+                if r < 1e-6:
+                    # Standing on the obstacle point: penalise the recorded
+                    # blocked direction, reward its opposite.
+                    align = -(ux * obs["dir"][0] + uz * obs["dir"][1])
+                    score += align * min(obs["count"], 3)
+                    continue
+                away_x, away_z = ox / r, oz / r
+                align = ux * away_x + uz * away_z
+                score += align * (1 - r / ESCAPE_SCORE_RADIUS) * min(obs["count"], 3)
+            if score > best_score:
+                best_score = score
+                best_dir = (ux, uz)
+        if best_score == -float("inf"):
+            angle = random.uniform(0, 2 * math.pi)
+            return (math.cos(angle), math.sin(angle))
+        return best_dir
+
+    # ------------------------------------------------------------------
+    # World-model plan hooks
+    # ------------------------------------------------------------------
+
+    def _register_target_plan(self, guide_candidates: list[dict[str, Any]]) -> None:
+        """Register the current follow target as a ``target`` plan artifact."""
+        if self.world_model is None:
+            return
+        names = [
+            str(c.get("path", "").split("/")[-1] or c.get("name", ""))
+            for c in guide_candidates
+            if isinstance(c, dict)
+        ]
+        plan_id = "follow_target"
+        self.world_model.register_plan(plan_id, kind="target", depends_on=names,
+                                       step=self.step_count)
+        self._current_plan_id = plan_id
+
+    def _check_plan_stale(self) -> None:
+        """Reset local motion state when the world model marks the plan stale.
+
+        This is the "local re-plan": only the derived state (stuck streak,
+        pending move verification, blocked-direction streak) is dropped so the
+        strategy re-selects its target from scratch; learned obstacles are
+        world knowledge and survive.
+        """
+        if self.world_model is None or self._current_plan_id is None:
+            return
+        try:
+            stale = self.world_model.is_stale(self._current_plan_id)
+        except KeyError:
+            self._current_plan_id = None
+            return
+        if not stale:
+            return
+        plan = self.world_model.get_plan(self._current_plan_id)
+        scope = self.world_model.local_replan_scope([self._current_plan_id])
+        logger.info(
+            "step %d: plan %s stale (%s) — local replan over %s",
+            self.step_count, self._current_plan_id, plan.stale_reason, sorted(scope),
+        )
+        self.stuck_streak = 0
+        self._prev_move = None
+        self._block_dir_streak = 0
+        self._block_last_dir = None
+        self._current_plan_id = None
+        self.stale_replans += 1
 
     # ------------------------------------------------------------------
     # Strategy: 2D (Family B — 00853)
@@ -226,7 +521,6 @@ class RuleEngine:
         px, py = screen_pos.get("x", 0), screen_pos.get("y", 0)
 
         guide_candidates = state.get("guide_or_target_candidates", [])
-        guide_summary = state.get("guideSummary", {})
 
         # Find nearest target in screen space
         best_target = None
@@ -293,15 +587,12 @@ class RuleEngine:
         import math
 
         from src.engine.vector import (
-            world_vector_from_stick,
-            world_distance,
             solve_stick_for_world,
         )
         from src.engine.pulse import get_pulse_duration
 
         profile = self.profile
         basis = profile.get("calibration", {}).get("basis", {})
-        input_mode = profile.get("joystick", {}).get("input_mode", "touch")
 
         player = state.get("player") or {}
         player_world = player.get("worldPosition") or {}

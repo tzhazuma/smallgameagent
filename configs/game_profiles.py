@@ -10,6 +10,9 @@ Extracted: 2026-06-08
 
 8 games have dedicated *-profile.mjs files.
 4 games (00862, 00863, 00864, 00867) have inline configs in their run-*.mjs files.
+SSD_00461P01 (tower defense) was added locally on 2026-07-16 from live probe
+reconnaissance of the local HTML (floating joystick; screen->world basis
+measured via probe worldPosition deltas).
 """
 
 GAME_PROFILES = {
@@ -251,6 +254,29 @@ GAME_PROFILES = {
         "ground_arrival_threshold": 45,
         "target_dwell_ms": 1500,
         "driver_type": "guide-follow",
+    },
+    "SSD_00461P01": {
+        "game_id": "SSD_00461P01",
+        "label": "塔防营地-箭塔升级",
+        "file_pattern": "SSD_00461P01_EN_WNK_20260116_RBN_Applovin_塔防来着",
+        "joystick": {
+            # Floating joystick (JoystickControl under Canvas): a touch drag
+            # anywhere on screen moves the Hero, so the anchor only needs to
+            # be a spot clear of UI buttons.
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "measured 2026-07-16 via probe worldPosition deltas: 700ms screen-right pulse -> world +X only (+10.1); screen-down pulse -> world +Z only (+10.2); no inversion",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "follow-guide-audited",
     },
 }
 

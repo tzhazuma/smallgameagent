@@ -1139,3 +1139,88 @@ class TestCLIArgs:
 
         args = _parse_args(["--skip-warmup"])
         assert args.skip_warmup is True
+
+
+# ---------------------------------------------------------------------------
+# Module-level PEFT patch — kwargs.pop("device_map") regression
+# ---------------------------------------------------------------------------
+
+
+class TestDeviceMapPatch:
+    """Regression tests for the module-level Gemma-4 PEFT patch.
+
+    ``_new_module_patch`` used to call ``kwargs.pop(device_map, None)``
+    (bare identifier → NameError at call time).  It must pop the string
+    key ``"device_map"`` instead.
+    """
+
+    def test_module_importable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """src.inference.server imports cleanly with mocked ML deps."""
+        import importlib
+        import sys
+
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        monkeypatch.delitem(sys.modules, "src.inference.server", raising=False)
+
+        mod = importlib.import_module("src.inference.server")
+        assert hasattr(mod, "GameAgentInference")
+        assert hasattr(mod, "_new_module_patch")
+
+    def test_new_module_patch_pops_device_map(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Gemma4ClippableLinear + Linear4bit: device_map popped, no NameError."""
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        from src.inference import server as server_mod
+
+        class FakeLinear4bit:
+            pass
+
+        class Gemma4ClippableLinear:  # name must match the patch's check
+            pass
+
+        dispatched = mock.MagicMock(name="dispatched_module")
+        dispatch = mock.MagicMock(return_value=dispatched)
+        fake_bnb = mock.MagicMock(name="bitsandbytes")
+        fake_bnb.nn.Linear4bit = FakeLinear4bit
+        fake_lora_bnb = mock.MagicMock(name="peft.tuners.lora.bnb")
+        fake_lora_bnb.dispatch_bnb_4bit = dispatch
+        monkeypatch.setattr(server_mod, "_bnb", fake_bnb)
+        monkeypatch.setattr(server_mod, "_peft_lora_bnb", fake_lora_bnb)
+
+        target = Gemma4ClippableLinear()
+        inner = FakeLinear4bit()
+        target.linear = inner  # type: ignore[attr-defined]
+
+        result = server_mod._new_module_patch(
+            mock.MagicMock(), "default", target, device_map="auto", extra=1,
+        )
+
+        assert result is dispatched
+        assert result.linear is inner
+        dispatch.assert_called_once()
+        assert "device_map" not in dispatch.call_args.kwargs
+        assert dispatch.call_args.kwargs["extra"] == 1
+
+    def test_new_module_patch_passthrough_for_other_targets(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Non-Gemma4 targets delegate to the original _create_new_module."""
+        mock_model, mock_processor = _build_mock_model_and_processor()
+        _patch_all(mock_model, mock_processor, monkeypatch)
+        from src.inference import server as server_mod
+
+        sentinel = object()
+        orig = mock.MagicMock(return_value=sentinel)
+        monkeypatch.setattr(server_mod, "_orig_create_new_module", orig)
+
+        result = server_mod._new_module_patch(
+            mock.MagicMock(), "default", object(), device_map="auto",
+        )
+
+        assert result is sentinel
+        orig.assert_called_once()
+        # Passthrough leaves kwargs untouched.
+        assert orig.call_args.kwargs["device_map"] == "auto"

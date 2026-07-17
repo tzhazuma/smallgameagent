@@ -111,8 +111,8 @@ def extract_rules_from_api(
     ``RuleSet`` containing extracted rules.
     """
     try:
-        # Get text analysis
-        text_result = text_api_fn(probe_state, [])
+        # Text analysis is currently unused but kept for side-effect-free API shape.
+        _ = text_api_fn(probe_state, [])
 
         # Get vision analysis
         vision_result = vision_api_fn(screenshot) if vision_api_fn else {}

@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agent.hybrid_agent import HybridAgent
-from src.tools.game_catalog import GameEntry, generate_json, scan_games
+from src.tools.game_catalog import GameEntry, scan_games
 
 logger = logging.getLogger(__name__)
 

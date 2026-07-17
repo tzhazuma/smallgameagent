@@ -13,9 +13,15 @@ vlm-training-data-cold-start-portable-20260608/
 _extracted/
 *.html
 
+# Processed run trajectories and derived VLM training data (large, generated)
+processed-runs.rar
+processed-runs/
+vlm-training-data-processed-runs/
+
 # Reference documents (binary, not tracked)
 *.pdf
 *.pptx
+*.zip
 
 # Experiment results (generated at runtime)
 experiment_results.json

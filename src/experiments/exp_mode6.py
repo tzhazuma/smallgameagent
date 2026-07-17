@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Mode 6 experiment: Pure Rule Engine on 5 games x 50 steps."""
-import asyncio, json, time, sys
+import asyncio
+import json
+import time
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.agent.hybrid_agent import HybridAgent

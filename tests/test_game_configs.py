@@ -1,14 +1,12 @@
 """
 Tests for game profile config extraction.
 
-Validates that all 12 game profiles from the Node.js .mjs files have been
-correctly extracted into the Python config with all required fields.
+Validates that all 13 game profiles (12 from the Node.js .mjs files plus the
+locally added SSD_00461P01 tower-defense profile) have been correctly
+extracted into the Python config with all required fields.
 """
 
-import sys
 import math
-
-sys.path.insert(0, "/home/azuma/delivery/delivery")
 
 from configs.game_profiles import GAME_PROFILES, list_all_game_ids, get_profile
 
@@ -25,15 +23,16 @@ EXPECTED_GAME_IDS = [
     "SSD_00863P01",
     "SSD_00864P01",
     "SSD_00867P01",
+    "SSD_00461P01",
 ]
 
 
-def test_all_twelve_games_present():
-    """Verify all 12 expected games exist in the profile dict."""
+def test_all_thirteen_games_present():
+    """Verify all 13 expected games exist in the profile dict."""
     actual = list_all_game_ids()
     for gid in EXPECTED_GAME_IDS:
         assert gid in actual, f"Missing game: {gid}"
-    assert len(actual) == 12, f"Expected 12 games, got {len(actual)}"
+    assert len(actual) == 13, f"Expected 13 games, got {len(actual)}"
 
 
 def test_get_profile_helper():

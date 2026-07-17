@@ -34,6 +34,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+# PEFT / BitsAndBytes imports for the Gemma-4 patch at module load time.
+import bitsandbytes as _bnb
+import peft.tuners.lora.bnb as _peft_lora_bnb
+import peft.tuners.lora.model as _peft_lora_model
+
 if TYPE_CHECKING:
     import torch as torch  # noqa: F811
     from PIL.Image import Image as PILImage
@@ -963,11 +968,6 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Starting server on %s:%d", args.host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
-# PEFT Gemma-4 patch - applied at module level
-import peft.tuners.lora.model as _peft_lora_model
-import peft.tuners.lora.bnb as _peft_lora_bnb
-import bitsandbytes as _bnb
-
 _orig_create_new_module = _peft_lora_model.LoraModel._create_new_module
 
 def _new_module_patch(lora_config, adapter_name, target, **kwargs):
@@ -975,7 +975,7 @@ def _new_module_patch(lora_config, adapter_name, target, **kwargs):
     if cls_name == "Gemma4ClippableLinear" and hasattr(target, "linear"):
         inner = target.linear
         if isinstance(inner, _bnb.nn.Linear4bit):
-            kwargs.pop(device_map, None)
+            kwargs.pop("device_map", None)
             result = _peft_lora_bnb.dispatch_bnb_4bit(inner, adapter_name, config=lora_config, **kwargs)
             if result is not None:
                 result.linear = inner

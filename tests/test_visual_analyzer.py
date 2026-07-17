@@ -9,9 +9,11 @@ from __future__ import annotations
 import json
 import struct
 import zlib
+from io import BytesIO
 from unittest import mock
 
 import pytest
+from PIL import Image
 
 from src.agent.visual_analyzer import (
     VisualAnalyzer,
@@ -734,3 +736,105 @@ class TestMisc:
         result = await va.analyze(png)
 
         assert result["end_state"] is None
+
+
+# ---------------------------------------------------------------------------
+# Tests — analyze_pil (synchronous local analysis for rule mode)
+# ---------------------------------------------------------------------------
+
+
+def _make_cyan_pil_image() -> Image.Image:
+    """A 100×100 RGB image with a 20×20 cyan block at top-left (centroid ~19,19)."""
+    img = Image.new("RGB", (100, 100), (0, 0, 0))
+    for y in range(10, 30):
+        for x in range(10, 30):
+            img.putpixel((x, y), (80, 120, 200))
+    return img
+
+
+def _minimal_probe_state() -> dict:
+    """Minimal observe_fast()-style state for RuleEngine.step()."""
+    return {
+        "ready": True,
+        "player": {"worldPosition": {"x": 0.0, "z": 0.0}},
+        "guide_or_target_candidates": [],
+        "guideSummary": {},
+    }
+
+
+class TestAnalyzePil:
+    """VisualAnalyzer.analyze_pil — sync, offline, rules.py-compatible schema."""
+
+    def test_returns_rules_consumed_keys(self) -> None:
+        result = VisualAnalyzer(api_client=None).analyze_pil(_make_cyan_pil_image())
+        assert set(result) == {"stick", "arrow"}
+
+    def test_stick_schema_and_range(self) -> None:
+        result = VisualAnalyzer(api_client=None).analyze_pil(_make_cyan_pil_image())
+        stick = result["stick"]
+        assert isinstance(stick, dict)
+        assert isinstance(stick["dx"], float)
+        assert isinstance(stick["dy"], float)
+        assert -1.0 <= stick["dx"] <= 1.0
+        assert -1.0 <= stick["dy"] <= 1.0
+
+    def test_arrow_schema(self) -> None:
+        result = VisualAnalyzer(api_client=None).analyze_pil(_make_cyan_pil_image())
+        arrow = result["arrow"]
+        assert isinstance(arrow, dict)
+        assert isinstance(arrow["x"], int)
+        assert isinstance(arrow["y"], int)
+        assert 0.0 <= arrow["confidence"] <= 1.0
+
+    def test_cyan_arrow_position_and_stick_direction(self) -> None:
+        """Cyan block at (10..29, 10..29) → centroid ≈ (19, 19), up-left of centre."""
+        result = VisualAnalyzer(api_client=None).analyze_pil(_make_cyan_pil_image())
+        assert abs(result["arrow"]["x"] - 19) <= 1
+        assert abs(result["arrow"]["y"] - 19) <= 1
+        assert result["stick"]["dx"] < 0  # left of screen centre
+        assert result["stick"]["dy"] < 0  # above screen centre
+
+    def test_no_cyan_returns_none_stick_and_arrow(self) -> None:
+        img = Image.new("RGB", (100, 100), (128, 128, 128))
+        result = VisualAnalyzer(api_client=None).analyze_pil(img)
+        assert result == {"stick": None, "arrow": None}
+
+    def test_never_calls_api(self) -> None:
+        client = _make_mock_client()
+        va = VisualAnalyzer(client)
+        result = va.analyze_pil(_make_cyan_pil_image())
+        assert result["stick"] is not None
+        client.chat_with_vision.assert_not_called()
+        client.encode_image_base64.assert_not_called()
+
+    def test_result_feeds_rule_engine(self) -> None:
+        """The returned visual dict is consumed by RuleEngine.step() as-is."""
+        from src.engine.rules import RuleEngine
+
+        engine = RuleEngine("SSD_00848P01")  # follow-guide-audited profile
+        visual = VisualAnalyzer(api_client=None).analyze_pil(_make_cyan_pil_image())
+        action = engine.step(_minimal_probe_state(), visual)
+        # A visible guide arrow → not a completion state, engine follows it.
+        assert action["action"] == "move"
+        assert action["reason"].startswith("follow_guide_target_dist")
+
+
+class TestRuleDecisionMakerVisualPath:
+    """Regression: rule mode must call sync analyze_pil, not async analyze."""
+
+    async def test_decide_uses_sync_visual_analysis(self) -> None:
+        from src.agent.context import AgentContext
+        from src.agent.decision_makers.rule_maker import RuleDecisionMaker
+        from src.engine.rules import RuleEngine
+
+        buf = BytesIO()
+        _make_cyan_pil_image().save(buf, format="PNG")
+
+        maker = RuleDecisionMaker(
+            rule_engine=RuleEngine("SSD_00848P01"),
+            visual_analyzer=VisualAnalyzer(api_client=None),
+        )
+        ctx = AgentContext(screenshot=buf.getvalue(), probe_state=_minimal_probe_state())
+        result = await maker.decide(ctx)
+        assert result["action"] == "move"
+        assert result["reason"].startswith("follow_guide_target_dist")

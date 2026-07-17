@@ -47,7 +47,7 @@ class RuleDecisionMaker(BaseDecisionMaker):
                 from PIL import Image
 
                 pil = Image.open(BytesIO(ctx.screenshot)).convert("RGB")
-                visual = self._visual_analyzer.analyze(pil)
+                visual = self._visual_analyzer.analyze_pil(pil)
             except Exception:
                 pass
 

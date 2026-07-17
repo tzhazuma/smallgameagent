@@ -1,5 +1,8 @@
 """Mode 2 VLM inference with real game screenshot on ssh5090."""
-import os, sys, json, time
+import os
+import sys
+import json
+import time
 os.environ["HF_HUB_OFFLINE"] = "1"
 sys.path.insert(0, ".")
 

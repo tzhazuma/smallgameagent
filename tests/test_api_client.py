@@ -89,8 +89,9 @@ class TestInit:
         client = OpenCodeGoClient(api_key="sk-explicit-000")
         assert client._api_key == "sk-explicit-000"
 
-    def test_missing_key_raises(self, monkeypatch) -> None:
+    def test_missing_key_raises(self, monkeypatch, tmp_path) -> None:
         monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", tmp_path / "nonexistent.json")
         with pytest.raises(ValueError, match="API key"):
             OpenCodeGoClient()
 
@@ -102,6 +103,120 @@ class TestInit:
     def test_default_base_url(self) -> None:
         client = OpenCodeGoClient(api_key="sk")
         assert client._base_url == "https://opencode.ai/zen/go/v1"
+
+
+class TestAuthFileFallback:
+    """API key fallback to the OpenCode auth.json file."""
+
+    @staticmethod
+    def _write_auth_file(tmp_path, payload: str) -> object:
+        auth_file = tmp_path / "auth.json"
+        auth_file.write_text(payload, encoding="utf-8")
+        return auth_file
+
+    def test_auth_file_fallback(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        auth_file = self._write_auth_file(
+            tmp_path, '{"opencode-go": {"key": "sk-from-auth-file"}}'
+        )
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        client = OpenCodeGoClient()
+        assert client._api_key == "sk-from-auth-file"
+
+    def test_env_var_beats_auth_file(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.setenv("OPENCODE_API_KEY", "sk-env-wins")
+        auth_file = self._write_auth_file(
+            tmp_path, '{"opencode-go": {"key": "sk-from-auth-file"}}'
+        )
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        client = OpenCodeGoClient()
+        assert client._api_key == "sk-env-wins"
+
+    def test_explicit_beats_auth_file(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        auth_file = self._write_auth_file(
+            tmp_path, '{"opencode-go": {"key": "sk-from-auth-file"}}'
+        )
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        client = OpenCodeGoClient(api_key="sk-explicit")
+        assert client._api_key == "sk-explicit"
+
+    def test_missing_auth_file_raises(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", tmp_path / "nope.json")
+        with pytest.raises(ValueError, match="API key"):
+            OpenCodeGoClient()
+
+    def test_missing_field_raises(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        auth_file = self._write_auth_file(tmp_path, '{"other-provider": {"key": "sk-x"}}')
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        with pytest.raises(ValueError, match="API key"):
+            OpenCodeGoClient()
+
+    def test_empty_key_field_raises(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        auth_file = self._write_auth_file(tmp_path, '{"opencode-go": {"key": "  "}}')
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        with pytest.raises(ValueError, match="API key"):
+            OpenCodeGoClient()
+
+    def test_malformed_json_raises(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+        auth_file = self._write_auth_file(tmp_path, "not json {")
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        with pytest.raises(ValueError, match="API key"):
+            OpenCodeGoClient()
+
+
+class TestModelResolution:
+    """Text / vision model name resolution (ctor > env > default)."""
+
+    def test_default_models(self) -> None:
+        client = OpenCodeGoClient(api_key="sk")
+        assert client._text_model == "deepseek-v4-flash"
+        assert client._vision_model == "mimo-v2.5"
+
+    def test_env_var_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_TEXT_MODEL", "kimi-k2.7-code")
+        monkeypatch.setenv("OPENCODE_VISION_MODEL", "mimo-v2.5-pro")
+        client = OpenCodeGoClient(api_key="sk")
+        assert client._text_model == "kimi-k2.7-code"
+        assert client._vision_model == "mimo-v2.5-pro"
+
+    def test_constructor_beats_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_TEXT_MODEL", "kimi-k2.7-code")
+        monkeypatch.setenv("OPENCODE_VISION_MODEL", "mimo-v2.5-pro")
+        client = OpenCodeGoClient(api_key="sk", text_model="deepseek-v4-pro", vision_model="mimo")
+        assert client._text_model == "deepseek-v4-pro"
+        assert client._vision_model == "mimo"
+
+    def test_chat_uses_resolved_text_model(self, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_TEXT_MODEL", "kimi-k2.7-code")
+        client = OpenCodeGoClient(api_key="sk")
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat(messages=[{"role": "user", "content": "hi"}])
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "kimi-k2.7-code"
+
+    def test_chat_with_vision_uses_resolved_vision_model(self, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_VISION_MODEL", "kimi-k2.7-code")
+        client = OpenCodeGoClient(api_key="sk")
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat_with_vision(messages=[{"role": "user", "content": "describe"}])
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "kimi-k2.7-code"
+
+    def test_explicit_model_arg_beats_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("OPENCODE_TEXT_MODEL", "kimi-k2.7-code")
+        client = OpenCodeGoClient(api_key="sk")
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat(messages=[{"role": "user", "content": "hi"}], model="deepseek-v4-flash")
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "deepseek-v4-flash"
 
 
 class TestChatMocked:
@@ -129,6 +244,18 @@ class TestChatMocked:
             client.chat(messages=[{"role": "user", "content": "hi"}])
             _, kwargs = m.call_args
             assert kwargs["model"] == "deepseek-v4-flash"
+
+    def test_chat_omits_temperature_for_kimi_models(self, client) -> None:
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat(
+                messages=[{"role": "user", "content": "hi"}],
+                model="kimi-k2.7-code",
+                temperature=0.0,
+            )
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "kimi-k2.7-code"
+            assert "temperature" not in kwargs
 
     def test_chat_with_vision(self, client) -> None:
         with mock.patch.object(client._client.chat.completions, "create") as m:

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 
 import pytest
 
-from src.agent.probe_adapter import ProbeAdapter
+from src.agent.probe_adapter import DEFAULT_PROBE_PATH, PROBE_PATH_ENV_VAR, ProbeAdapter
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +189,52 @@ class TestProbeAdapterConstructor:
         )
         with pytest.raises(ValueError, match="Empty probe source"):
             ProbeAdapter(probe_source_path=str(empty))
+
+
+class TestProbePathResolution:
+    """DEFAULT_PROBE_PATH points at the vendored copy; the env var overrides it."""
+
+    def test_default_path_is_vendored_next_to_module(self) -> None:
+        import src.agent.probe_adapter as mod
+
+        expected = Path(mod.__file__).resolve().parent / "browser-probe-source.js"
+        assert DEFAULT_PROBE_PATH == expected
+        assert DEFAULT_PROBE_PATH.exists(), f"Vendored probe missing at {DEFAULT_PROBE_PATH}"
+
+    def test_loads_vendored_probe_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(PROBE_PATH_ENV_VAR, raising=False)
+        adapter = ProbeAdapter()
+        assert "installPlayableAgentProbe" in adapter._source
+        assert len(adapter._source) > 1000
+
+    def test_env_override_takes_precedence(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        custom = tmp_path / "custom-probe.js"
+        custom.write_text(
+            "export const browserProbeSource = String.raw `\n"
+            "(function installPlayableAgentProbe() { window.__customProbe = 1; })();\n"
+            "`;",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv(PROBE_PATH_ENV_VAR, str(custom))
+        adapter = ProbeAdapter()
+        assert "window.__customProbe" in adapter._source
+
+    def test_env_override_missing_file_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv(PROBE_PATH_ENV_VAR, str(tmp_path / "nonexistent.js"))
+        with pytest.raises(FileNotFoundError):
+            ProbeAdapter()
+
+    def test_explicit_path_beats_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Explicit constructor arg wins even when the env var points nowhere.
+        monkeypatch.setenv(PROBE_PATH_ENV_VAR, str(tmp_path / "nonexistent.js"))
+        adapter = ProbeAdapter(probe_source_path=str(DEFAULT_PROBE_PATH))
+        assert "installPlayableAgentProbe" in adapter._source
 
 
 class TestInject:

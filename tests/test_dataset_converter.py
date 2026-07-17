@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
-from PIL import Image
 
 from src.training.data_loader import VALID_TASK_NAMES
 from src.training.dataset_converter import VLMDatasetConverter, _build_state_summary
@@ -250,7 +249,7 @@ class TestToHFDataset:
             for key in ("messages", "sample_id", "task_type"):
                 assert key in record, f"Missing key {key}"
             # Image data stored as "image_paths" (strings) instead of "images" (PIL) for Arrow compat
-            assert "image_paths" in record, f"Missing key image_paths in record"
+            assert "image_paths" in record, "Missing key image_paths in record"
 
     @requires_dataset
     def test_images_are_pil_images(self) -> None:

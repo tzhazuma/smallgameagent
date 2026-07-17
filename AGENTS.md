@@ -11,7 +11,7 @@ LLM-driven game-playing agent for Cocos Creator HTML5 playable ads (Phase 1) and
 | File | Description |
 |------|-------------|
 | `pyproject.toml` | Project metadata, dependencies, ruff/pytest config |
-| `configs/game_profiles.py` | 12 game profiles with joystick anchors, calibration bases, driver types |
+| `configs/game_profiles.py` | 13 game profiles with joystick anchors, calibration bases, driver types (12 from Node.js extraction + SSD_00461P01 added locally 2026-07-16) |
 | `scripts/scp_to_ssh5090.sh` | Sync source code to the GPU compute server |
 | `scripts/scp_training_data.sh` | Sync training data to the storage/data server |
 
@@ -20,16 +20,19 @@ LLM-driven game-playing agent for Cocos Creator HTML5 playable ads (Phase 1) and
 | Directory | Purpose |
 |-----------|---------|
 | `src/` | All source code (see `src/AGENTS.md`) |
-| `src/agent/` | Phase 1: agent loop, API client, harness, probe, visual analyzer, hybrid multi-mode agent |
-| `src/engine/` | Rule engine: vector math, pulse timing, game strategies, cyan guide detection |
-| `src/training/` | Phase 2: data loading, dataset conversion, QLoRA training scripts |
+| `src/agent/` | Phase 1: agent loop, API client, harness, probe, visual analyzer, hybrid multi-mode agent; consistency modules: `world_model.py` (versioned world model), `phase_contract.py` (phase contracts + time alignment), `probe_budget.py` (dynamic probe/logging budget), `lmstudio_client.py` (local VLM) |
+| `src/engine/` | Rule engine: vector math, pulse timing, game strategies, cyan guide detection; `rules.py` includes obstacle learning + potential-field avoidance |
+| `src/training/` | Phase 2: data loading, dataset conversion, QLoRA training scripts, `processed_runs_converter.py` (processed-runs trajectories → 7-task JSONL) |
 | `src/inference/` | VLM inference server (FastAPI), structured visual extraction, rule extraction |
+| `src/experiments/` | `game_env.py` verifiers-style env + rubric scoring |
 | `src/docs/` | Architecture, training, inference modes, and strategy audit documentation |
 | `configs/` | Game profiles and configuration |
-| `tests/` | 245 tests across 8 test files |
+| `tests/` | 630+ tests across 20+ test files |
 | `scripts/` | SCP/rsync transfer scripts for GPU servers |
 | `playable-agent-12-games-20260608/` | Game HTMLs (gitignored, ~53K files) |
 | `vlm-training-data-cold-start-portable-20260608/` | Training dataset (gitignored, ~9K samples) |
+| `processed-runs/` | Extracted run trajectories, 22 games (gitignored) |
+| `vlm-training-data-processed-runs/` | Converted dataset, 15K samples (gitignored) |
 
 ## For AI Agents
 

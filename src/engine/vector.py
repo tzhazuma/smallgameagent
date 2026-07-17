@@ -18,7 +18,6 @@ The typical basis is a 2×2 matrix with columns *screen_right* and
 from __future__ import annotations
 
 import math
-from typing import Any
 
 
 # ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from playwright.async_api import async_playwright
 
@@ -155,6 +155,13 @@ class GameRunner:
         if chromium_path:
             launch_kwargs["executable_path"] = chromium_path
             launch_kwargs.setdefault("args", []).append("--no-sandbox")
+
+        # Extra launch flags via env, e.g. WebGL software rendering on
+        # headless hosts without a GPU:
+        #   PLAYWRIGHT_CHROMIUM_ARGS="--enable-unsafe-swiftshader --in-process-gpu"
+        extra_args = os.environ.get("PLAYWRIGHT_CHROMIUM_ARGS", "").split()
+        if extra_args:
+            launch_kwargs.setdefault("args", []).extend(extra_args)
 
         self._browser = await pw.chromium.launch(**launch_kwargs)
 

@@ -12,6 +12,7 @@ This module provides a thin Python wrapper so callers never need to write raw
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import time
 from pathlib import Path
@@ -20,10 +21,21 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
-DEFAULT_PROBE_PATH = Path(
-    "/home/azuma/delivery/delivery/playable-agent-12-games-20260608/"
-    "playable-automation/vendor/cocos-probe/browser-probe-source.js"
-)
+# Vendored copy of the probe shipped next to this module, so the package is
+# self-contained and does not depend on machine-specific absolute paths.
+DEFAULT_PROBE_PATH = Path(__file__).resolve().parent / "browser-probe-source.js"
+
+# Environment variable that overrides the default probe location.
+PROBE_PATH_ENV_VAR = "PLAYABLE_AGENT_PROBE_PATH"
+
+
+def _resolve_default_probe_path() -> Path:
+    """Return the probe path: ``PLAYABLE_AGENT_PROBE_PATH`` env override wins,
+    otherwise the vendored copy next to this module."""
+    env = os.environ.get(PROBE_PATH_ENV_VAR)
+    if env:
+        return Path(env)
+    return DEFAULT_PROBE_PATH
 
 # Regex that strips the ESM export wrapper to leave the raw IIFE source.
 # The file format is::
@@ -92,7 +104,7 @@ class ProbeAdapter:
     """
 
     def __init__(self, probe_source_path: str | None = None) -> None:
-        path = Path(probe_source_path) if probe_source_path else DEFAULT_PROBE_PATH
+        path = Path(probe_source_path) if probe_source_path else _resolve_default_probe_path()
         raw = path.read_text(encoding="utf-8")
         self._source = _extract_probe_source(raw)
         if not self._source.strip():
@@ -218,3 +230,24 @@ class ProbeAdapter:
             return {item["id"]: item for item in result if isinstance(item, dict)}
         except Exception:
             return _NOT_READY
+
+    async def find_panel_buttons(
+        self, page: Page, panel_pattern: str = r"LosePanel|FailPanel|RetryPanel|GameOverPanel"
+    ) -> list[dict]:
+        """Call ``probe.findPanelButtons(panelPattern)``.
+
+        Returns a list of ``{name, path, designPosition: {x, y},
+        designSize: {width, height}, dpr}`` for tap targets under an active
+        matching panel (fail/retry panels that block joystick input), or an
+        empty list. Component class names are minified in production builds,
+        so node-name matching (``btn|button``) is used instead.
+        """
+        js = (
+            f"window.__playableAgentProbe &&"
+            f" window.__playableAgentProbe.findPanelButtons({panel_pattern!r})"
+        )
+        try:
+            result = await page.evaluate(js)
+            return result if isinstance(result, list) else []
+        except Exception:
+            return []

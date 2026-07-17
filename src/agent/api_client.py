@@ -7,6 +7,7 @@ through the OpenCodeGo inference endpoint with retry logic and image encoding.
 from __future__ import annotations
 
 import base64
+import json
 import os
 import time
 from pathlib import Path
@@ -30,17 +31,27 @@ class OpenCodeGoClient:
     """
 
     DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1"
+    DEFAULT_TEXT_MODEL = "deepseek-v4-flash"
+    DEFAULT_VISION_MODEL = "mimo-v2.5"
+    AUTH_FILE = Path.home() / ".local" / "share" / "opencode" / "auth.json"
     MAX_RETRIES = 3
     RETRY_STATUSES = {429, 503}
     BASE_DELAY = 1.0  # seconds — doubled on each retry
+    #: The Console Go proxy answers 400 "Upstream request failed" when an
+    #: explicit ``temperature`` is sent for these models — omit the parameter.
+    _NO_TEMPERATURE_PREFIXES = ("kimi",)
 
     def __init__(
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        text_model: str | None = None,
+        vision_model: str | None = None,
     ) -> None:
         if api_key is None:
             api_key = os.environ.get("OPENCODE_API_KEY", "")
+        if not api_key:
+            api_key = self._read_auth_file_key()
         if not api_key:
             raise ValueError(
                 "API key is required. Provide it explicitly or set "
@@ -49,6 +60,12 @@ class OpenCodeGoClient:
 
         self._api_key = api_key
         self._base_url = base_url or self.DEFAULT_BASE_URL
+        self._text_model = (
+            text_model or os.environ.get("OPENCODE_TEXT_MODEL") or self.DEFAULT_TEXT_MODEL
+        )
+        self._vision_model = (
+            vision_model or os.environ.get("OPENCODE_VISION_MODEL") or self.DEFAULT_VISION_MODEL
+        )
         self._client = OpenAI(api_key=api_key, base_url=self._base_url)
 
     # ------------------------------------------------------------------
@@ -58,7 +75,7 @@ class OpenCodeGoClient:
     def chat(
         self,
         messages: list[dict[str, Any]],
-        model: str = "deepseek-v4-flash",
+        model: str | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.0,
     ) -> Any:
@@ -73,24 +90,30 @@ class OpenCodeGoClient:
             List of message dicts conforming to the OpenAI chat format,
             e.g. ``[{"role": "user", "content": "..."}]``.
         model:
-            Model name. Defaults to ``deepseek-v4-flash``.
+            Model name.  When ``None`` the instance text model is used
+            (constructor ``text_model`` > ``OPENCODE_TEXT_MODEL`` env var >
+            ``deepseek-v4-flash``).
         max_tokens:
             Maximum tokens in the completion.
         temperature:
-            Sampling temperature. 0.0 = deterministic.
+            Sampling temperature. 0.0 = deterministic. Omitted entirely for
+            models matching ``_NO_TEMPERATURE_PREFIXES`` (the Console Go proxy
+            rejects any explicit temperature for them with a 400 error).
         """
-        return self._with_retry(
-            self._client.chat.completions.create,
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        model_name = model or self._text_model
+        kwargs: dict[str, Any] = {
+            "model": model_name,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        if not model_name.startswith(self._NO_TEMPERATURE_PREFIXES):
+            kwargs["temperature"] = temperature
+        return self._with_retry(self._client.chat.completions.create, **kwargs)
 
     def chat_with_vision(
         self,
         messages: list[dict[str, Any]],
-        model: str = "mimo-v2.5",
+        model: str | None = None,
         max_tokens: int = 1024,
     ) -> Any:
         """Send a multimodal (vision) chat completion request.
@@ -104,13 +127,15 @@ class OpenCodeGoClient:
         messages:
             List of message dicts with text and/or image_url content.
         model:
-            Vision-capable model. Defaults to ``mimo-v2.5``.
+            Vision-capable model.  When ``None`` the instance vision model
+            is used (constructor ``vision_model`` > ``OPENCODE_VISION_MODEL``
+            env var > ``mimo-v2.5``).
         max_tokens:
             Maximum tokens in the completion.
         """
         return self._with_retry(
             self._client.chat.completions.create,
-            model=model,
+            model=model or self._vision_model,
             messages=messages,
             max_tokens=max_tokens,
         )
@@ -141,6 +166,26 @@ class OpenCodeGoClient:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @classmethod
+    def _read_auth_file_key(cls) -> str:
+        """Best-effort read of the OpenCode Go key from the local auth file.
+
+        Reads ``["opencode-go"]["key"]`` from :attr:`AUTH_FILE`.  Returns
+        an empty string when the file is missing, unreadable, malformed, or
+        lacks the field.  The key value is never logged.
+        """
+        try:
+            data = json.loads(cls.AUTH_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return ""
+        if not isinstance(data, dict):
+            return ""
+        entry = data.get("opencode-go")
+        if not isinstance(entry, dict):
+            return ""
+        key = entry.get("key")
+        return key.strip() if isinstance(key, str) else ""
 
     def _with_retry(self, callable, **kwargs: Any) -> Any:
         """Call *callable* with exponential-backoff retry on 429 / 503."""

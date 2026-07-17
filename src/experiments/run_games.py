@@ -76,7 +76,7 @@ async def run_all():
     print("\n" + "="*60)
     print("EXPERIMENT 2: Mode 1 (Direct API: DeepSeek + Mimo)")
     print("="*60)
-    print(f"\n  Running SSD_00848P01...")
+    print("\n  Running SSD_00848P01...")
     r = await run_experiment("api", "SSD_00848P01", GAMES["SSD_00848P01"], steps=10, api_client=api_client)
     results.append(r)
     print(format_result(r))
