@@ -23,6 +23,13 @@ vlm-training-data-processed-runs/
 *.pptx
 *.zip
 
+# Deliverable reports (tracked)
+!reports/
+!reports/*.pdf
+!reports/*.pptx
+!reports/*.tex
+!reports/*.py
+
 # Experiment results (generated at runtime)
 experiment_results.json
 experiment_report.md
