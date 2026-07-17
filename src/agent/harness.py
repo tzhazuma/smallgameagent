@@ -151,10 +151,10 @@ class GameRunner:
         launch_kwargs: dict[str, Any] = {
             "headless": not self.headed,
             "slow_mo": self.slow_mo,
+            "args": ["--no-sandbox", "--disable-setuid-sandbox"],
         }
         if chromium_path:
             launch_kwargs["executable_path"] = chromium_path
-            launch_kwargs.setdefault("args", []).append("--no-sandbox")
 
         # Extra launch flags via env, e.g. WebGL software rendering on
         # headless hosts without a GPU:

@@ -1,7 +1,7 @@
 # smallgameagent 实验报告（终稿）
 
-> 2026-07-17。配套：`EXPERIMENT_PLAN.md`（方案）、`EXPERIMENT_RESULTS.md`（过程数据）。
-> 本文面向合作同学与老师，按四个问题组织结论，附三条决策路线的效率-质量画像与训练准备状态。
+> 2026-07-18。配套：`EXPERIMENT_PLAN.md`（方案）、`EXPERIMENT_RESULTS.md`（过程数据）。
+> 本文面向合作同学与老师，按四个问题组织结论，附 RTX 5060 本地模型、Agent 通信/记忆、云端 API 实验状态。
 
 ## 0. 一页结论
 
@@ -16,10 +16,15 @@
   决定性场景（batch 占优 3-4×）结果见 §3。
 - **效率**：动态探针预算模块（五触发器、L0/L1/L2 分层、L2 预算上限 20%）+ 动态日志分级，
   27 单测，模拟装饰性场景节省观测成本 ~82%。
-- **VLM 本地推理**：Intel 核显（WSL2 Mesa Dozen/Vulkan）文本基准实测：
-  **Qwen3.5-4B 2.75 tok/s、Qwen3.5-9B 0.72 tok/s、gemma-4-E4B 0.67 tok/s**（Q4_K_M，-ngl 99）。
-  视觉编码必须 `--no-mmproj-offload` 回 CPU，否则挂死或输出空白；4B 视觉 struct 4 帧评测
-  **解析率 0/4**（超时/连接抖动），平均 534 s/帧，**当前仅适合离线标注，不适合在线逐步控制**。
+- **VLM 本地推理**：
+  - Intel 核显 Vulkan：4B 2.75 tok/s，视觉 struct 4 帧解析率 0/4，仅适合作离线标注。
+  - **RTX 5060 CUDA + KV-cache q4_0**：4B 文本 **82.6 tok/s**、视觉 struct 8 帧解析率 **0.75**、
+    target_acc **0.83**、平均 **24.8 s/帧**；gemma-4-E4B 文本 **39.9 tok/s**。8 GB 显存可跑 4B，
+    E4B 接近上限（7082 MB）。
+- **Agent 通信与记忆**：新增显式消息总线 `AgentBus`、循环流水线 `MultiAgentOrchestrator`、
+  文件型 `StrategyMemory`、`Critic` 角色与 `multi-bus` / `multi-bus-memory` 模式；19 单测覆盖。
+- **云端 API 实验**：OpenCodeGo 认证通过但余额不足（`CreditsError`），mimo-v2.5 / kimi-k2.7-code /
+  kimi-k2.6 矩阵待充值后跑；当前在线 gameplay 亦受 WSL2 headless Chromium 无法初始化 Cocos 场景阻塞。
 - **训练**：processed-runs 已转为 7 任务 15,083 样本（14 单测+加载验证），
   训练脚本就绪，等 ssh5090 可访问后开 QLoRA。
 
@@ -89,32 +94,64 @@
 
 ## 6. 本地 VLM 画像（P5）
 
-### 6.1 文本生成基准（Q4_K_M，-ngl 99，prompt="1, 2, 3,"，max_tokens=60）
+### 6.1 Intel 核显 Vulkan（旧基线）
 
 | 模型 | server tok/s | wall 60 tokens | 备注 |
 |---|---|---|---|
-| Qwen3.5-4B | **2.75** | 24.6 s | 可用 |
+| Qwen3.5-4B | 2.75 | 24.6 s | 可用 |
 | Qwen3.5-9B | 0.72 | 90.3 s | 慢但可跑 |
 | gemma-4-E4B-it | 0.67 | 37.5 s | 输出格式偏闲聊，需强约束 |
 
-### 6.2 视觉 struct 离线评测
+- 4 帧视觉 struct：解析率 0/4，平均 534 s/帧（超时/连接抖动）。
 
-- 4 帧真实截图（`SSD_00496P01` step 2/11，`SSD_00219P01` step 1/10），
-  Qwen3.5-4B Q4_K_M + `--no-mmproj-offload`：
-  - **解析率 0/4**，目标准确率 0/4，平均延迟 534 s/帧；
-  - 失败原因：单帧生成超时（>600 s）与 LM Studio 客户端连接抖动；
-  - 真值全部 `has_target=True`，模型即使输出也未能在时限内返回可解析 JSON。
-- 单独用 `max_tokens=256` 重跑一帧 step 2 的测试见
-  `experiment_vlm_one_frame_4b.json`（**78.7 s 后连接错误，仍未解析成功**）。
+### 6.2 RTX 5060 Laptop CUDA + KV-cache 量化（新基线）
+
+后端：`llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0`  
+参数：`-ngl 99 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 -c 4096 --no-mmproj-offload`
+
+| 模型 | 文本 tok/s | 60 tokens wall | 显存占用 | 视觉 struct |
+|---|---|---|---|---|
+| Qwen3.5-4B-Q4_K_M | **82.6** | 1.0 s | 3465 MB | 8 帧解析率 **0.75**，target_acc **0.83**，平均 **24.8 s/帧** |
+| gemma-4-E4B-it-Q4_K_M | **39.9** | 0.7 s | 7082 MB | 单帧 14.6 s，输出带 fence 但可解析 |
+
+Qwen3.5 为思考模型，必须给足 `max_tokens`（2048）才能拿到 content JSON；否则 256/900 tokens
+会被 reasoning 占满。
 
 ### 6.3 结论
 
-- 本地 4B/9B/E4B 在 Intel 核显上**仅适合离线数据标注**；在线逐步控制应继续使用
-  云端 mimo-v2.5（约 9.5 s/帧）或更强的本地 GPU。
-- 视觉管线瓶颈在 **CPU mmproj 编码**（~30–90 s）和 **低 tok/s 生成**，二者叠加后
-  单帧常超 5 min；QLoRA 微调前应先固定 `--no-mmproj-offload` 与足够长的 HTTP 超时。
+- CUDA 后端让 4B 文本速度提升 **30×**、视觉延迟从 10+ min 降到 **~20 s**，8 GB 显存跑 4B 宽裕，
+  E4B 已接近上限。
+- 在线控制仍建议使用云端 mimo-v2.5（~9.5 s/帧）或更大显存；本地 4B 适合离线标注与
+  低成本原型验证。
 
-## 7. 训练准备（P7，等 ssh5090）
+## 7. Agent 通信与记忆（P8）
+
+新增机制：
+
+| 模块 | 作用 |
+|---|---|
+| `src/agent/multi_agent/bus.py` | 显式消息总线；`MessageType` 含 OBSERVE/PERCEIVE/DECIDE/VERIFY/CRITIC/MEMORY/NEGOTIATE |
+| `src/agent/multi_agent/orchestrator.py` | Observer → StateMapper → DecisionAnalyst → Verifier → Critic 循环，Verifier 可触发 re-decide |
+| `src/agent/strategy_memory.py` | 文件型策略记忆，按 `(game_id, phase_id)` 索引，记录成功/失败次数 |
+| `src/agent/roles/critic.py` | Critic 角色，给出 `diagnosis` + `correction` |
+| `src/agent/decision_makers/bus_multi_maker.py` | 注册 `multi-bus` / `multi-bus-memory` 模式 |
+
+验证：19 单测（bus 5 + orchestrator 2 + strategy memory 4 + 既有决策 maker 集成）。
+
+### 实验状态
+
+- 在线 gameplay 矩阵（rule / multi / multi-bus / multi-bus-memory / api / api-memory）已编写
+  `src/experiments/exp_multi_agent_matrix.py`，但当前 WSL2 headless Chromium 无法初始化 Cocos
+  场景（`cc.director.getScene()` 为 null），所有模式 steps=0。待 headed/GPU 环境或浏览器参数
+  修复后复跑。
+
+## 8. 云端 API 实验状态（P8）
+
+- OpenCodeGo 客户端认证通过（`AICODEWITH_API_KEY`），但调用返回 `CreditsError: Insufficient balance`。
+- 因此 **mimo-v2.5**、**kimi-k2.7-code**、**kimi-k2.6** 的混合实验当前无法实际跑通；已记录阻塞，
+  充值后可直接用 `exp_multi_agent_matrix.py` 扩展 API 配置。
+
+## 9. 训练准备（P7，等 ssh5090）
 
 - `vlm-training-data-processed-runs/`：22 游戏 3054 步 → **15,083 样本 / 7 任务**
   （next_probe_action 2645 / probe_action_effect 2645 / field_grounding 2645 /
@@ -125,13 +162,13 @@
 - `train_qwen35.py`（QLoRA 4bit NF4 + ZeRO-2）就绪；gemma4-e4b 需 transformers 补丁复核。
 - ssh5090 可访问后：`bash scripts/scp_to_ssh5090.sh` + 数据同步 + 开训。
 
-## 8. verifiers 风格环境（P6）
+## 10. verifiers 风格环境（P6）
 
 `src/experiments/game_env.py`：score_trajectory 五轴 rubric（completion/progress/activity/
 consistency/composite），可直接评分历史 run JSON，也可 GameEnv.rollout 在线跑分。
 8 单测。为后续 RL 微调提供 env+rubric 抽象。
 
-## 9. 给同学四个问题的直接回答
+## 11. 给同学四个问题的直接回答
 
 1. **空间一致性**：版本化世界模型 + 失效检测（stale/面板/能力翻转）+ 分级恢复；
    关键是「交互方式失效」要有一等公民的检测通道（本游戏是 failCount 翻转，其他游戏可能是
@@ -143,7 +180,7 @@ consistency/composite），可直接评分历史 run JSON，也可 GameEnv.rollo
 4. **效率**：默认 L0 状态探针 + 触发器升级；DEBUG 环形内存、触发窗口落盘；
    回退分级（行为/状态/策略）。
 
-## 10. 后续建议（优先级序）
+## 12. 后续建议（优先级序）
 
 1. 面板处理泛化：把 LosePanel 个案抽象为「模态面板阻断」检测器（任意 Panel 激活+输入无效化），
    进阶段契约守卫。

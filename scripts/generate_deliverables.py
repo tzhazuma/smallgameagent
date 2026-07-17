@@ -17,32 +17,58 @@ PDF_PATH = REPORTS_DIR / "smallgameagent_report.pdf"
 PPTX_PATH = REPORTS_DIR / "smallgameagent_report.pptx"
 
 
+_LATEX_SPECIAL = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "$": r"\$",
+    "&": r"\&",
+    "%": r"\%",
+    "#": r"\#",
+    "_": r"\_",
+    "^": r"\^{}",
+    "~": r"\textasciitilde{}",
+}
+
+
 def esc(s: str) -> str:
-    """Escape LaTeX special chars."""
-    s = s.replace("\\", "\\textbackslash{}")
-    s = s.replace("{", "\\{")
-    s = s.replace("}", "\\}")
-    s = s.replace("$", "\\$")
-    s = s.replace("&", "\\&")
-    s = s.replace("%", "\\%")
-    s = s.replace("#", "\\#")
-    s = s.replace("_", "\\_")
-    s = s.replace("^", "\\^{}")
-    s = s.replace("~", "\\textasciitilde{}")
-    return s
+    """Escape LaTeX special chars in a single pass."""
+    return re.sub(r"[\\{}$&%#_^~]", lambda m: _LATEX_SPECIAL[m.group(0)], s)
 
 
 def inline_fmt(s: str) -> str:
-    # code
-    s = re.sub(r"`([^`]+)`", lambda m: f"\\texttt{{{esc(m.group(1))}}}", s)
-    # bold
-    s = re.sub(r"\*\*([^*]+)\*\*", lambda m: f"\\textbf{{{esc(m.group(1))}}}", s)
-    # italic
-    s = re.sub(r"\*([^*]+)\*", lambda m: f"\\textit{{{esc(m.group(1))}}}", s)
-    # links [text](url)
-    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", lambda m: f"\\href{{{esc(m.group(2))}}}{{{esc(m.group(1))}}}", s)
-    # plain escape for remaining text
-    return esc(s)
+    """Convert markdown inline formatting to LaTeX without double-escaping commands."""
+    placeholders: dict[str, Any] = {}
+    counter = 0
+
+    def stash(kind: str, content: Any) -> str:
+        nonlocal counter
+        key = f"__{kind}_{counter:04d}__"
+        counter += 1
+        placeholders[key] = content
+        return key
+
+    s = re.sub(r"`([^`]+)`", lambda m: stash("CODE", m.group(1)), s)
+    s = re.sub(r"\*\*([^*]+)\*\*", lambda m: stash("BOLD", m.group(1)), s)
+    s = re.sub(r"\*([^*]+)\*", lambda m: stash("ITALIC", m.group(1)), s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", lambda m: stash("LINK", (m.group(1), m.group(2))), s)
+
+    # Now safe to escape remaining plain text.
+    s = esc(s)
+
+    # Restore placeholders with properly escaped content.
+    for key, val in placeholders.items():
+        if key.startswith("__CODE_"):
+            replacement = f"\\texttt{{{esc(val)}}}"
+        elif key.startswith("__BOLD_"):
+            replacement = f"\\textbf{{{esc(val)}}}"
+        elif key.startswith("__ITALIC_"):
+            replacement = f"\\textit{{{esc(val)}}}"
+        else:  # LINK
+            text, url = val
+            replacement = f"\\href{{{esc(url)}}}{{{esc(text)}}}"
+        s = s.replace(key, replacement)
+    return s
 
 
 def render_table(rows: list[str]) -> str:
@@ -66,7 +92,11 @@ def render_table(rows: list[str]) -> str:
     return "\n".join(lines)
 
 
+_CIRCLED_DIGITS = {chr(0x2460 + i): f"({i+1})" for i in range(20)}
+
+
 def md_to_latex(md: str) -> str:
+    md = "".join(_CIRCLED_DIGITS.get(ch, ch) for ch in md)
     lines = md.splitlines()
     out: list[str] = []
     in_list = False
@@ -263,13 +293,34 @@ def write_pptx() -> None:
         "50 步无变化场景节省观测成本 ~82%"
     ])
 
-    add_bullet_slide("本地 VLM 实测画像", [
-        "Intel 核显 Vulkan Q4_K_M 文本生成：",
-        "  Qwen3.5-4B  2.75 tok/s",
-        "  Qwen3.5-9B  0.72 tok/s",
-        "  gemma-4-E4B 0.67 tok/s",
-        "视觉编码必须 --no-mmproj-offload 回 CPU；4 帧 struct 解析率 0/4",
-        "当前本地 VLM 仅适合作离线标注，不适合在线逐步控制"
+    add_bullet_slide("本地 VLM：Intel 核显 Vulkan（旧基线）", [
+        "Qwen3.5-4B 2.75 tok/s，9B 0.72 tok/s，E4B 0.67 tok/s",
+        "视觉编码必须 --no-mmproj-offload 回 CPU",
+        "4 帧 struct 解析率 0/4，平均 534 s/帧",
+        "结论：仅适合作离线数据标注"
+    ])
+
+    add_bullet_slide("本地 VLM：RTX 5060 CUDA + KV-cache 量化（新基线）", [
+        "后端：llama.cpp CUDA12，-ngl 99 --flash-attn，K/V cache q4_0",
+        "Qwen3.5-4B：文本 82.6 tok/s，视觉 8 帧解析率 0.75，target_acc 0.83，平均 24.8 s/帧",
+        "gemma-4-E4B：文本 39.9 tok/s，单帧视觉 14.6 s",
+        "8 GB 显存跑 4B 宽裕，E4B 接近上限（7082 MB）",
+        "Qwen3.5 思考模型需 max_tokens=2048 才能输出 content JSON"
+    ])
+
+    add_bullet_slide("Agent 通信与记忆（P8）", [
+        "新增显式消息总线 AgentBus：OBSERVE / PERCEIVE / DECIDE / VERIFY / CRITIC / MEMORY",
+        "MultiAgentOrchestrator：循环流水线，Verifier 可触发 re-decide",
+        "StrategyMemory：文件型策略记忆，不依赖 sqlite-vec",
+        "新增 multi-bus / multi-bus-memory 模式与 Critic 角色",
+        "19 单测覆盖；在线 gameplay 矩阵脚本已就绪"
+    ])
+
+    add_bullet_slide("云端 API 与在线 gameplay 状态", [
+        "OpenCodeGo 认证通过但余额不足（CreditsError）",
+        "mimo-v2.5 / kimi-k2.7-code / kimi-k2.6 混合实验待充值后跑",
+        "WSL2 headless Chromium 无法初始化 Cocos 场景（cc.director.getScene() 为 null）",
+        "在线矩阵当前被环境阻塞，已记录并准备复跑"
     ])
 
     add_bullet_slide("训练准备与后续工作", [

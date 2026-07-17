@@ -49,6 +49,10 @@ _VALID_MODES = frozenset({
     "api", "vlm", "vlm-struct", "vlm-rule", "api-rule", "rule",
     "vlm-struct-api-rule",
     "multi",
+    "multi-bus",
+    "multi-bus-memory",
+    "api-memory",
+    "api-vlm-local",
 })
 
 
@@ -92,6 +96,7 @@ class HybridAgent:
         self._episodic_memory: EpisodicMemory | None = None
         self._semantic_memory: Any = None  # SemanticMemory loaded lazily
         self._procedural_memory: Any = None  # ProceduralMemory loaded lazily
+        self._strategy_memory: Any = None  # StrategyMemory loaded lazily
         if "db_path" in self._memory_config:
             db_path = self._memory_config["db_path"]
             self._episodic_memory = EpisodicMemory(db_path)
@@ -108,6 +113,14 @@ class HybridAgent:
                 )
             except Exception:
                 logger.debug("ProceduralMemory not available", exc_info=True)
+        # Light-weight strategy memory (works without sqlite-vec)
+        strategy_path = self._memory_config.get("strategy_memory_path")
+        if strategy_path:
+            try:
+                from src.agent.strategy_memory import StrategyMemory
+                self._strategy_memory = StrategyMemory(strategy_path)
+            except Exception:
+                logger.debug("StrategyMemory not available", exc_info=True)
 
         # ── Dataset collection ──────────────────────────────────────────
         self._collect_dataset = self._config.get("collect_dataset", False)
@@ -118,14 +131,13 @@ class HybridAgent:
         self._rule_engine: RuleEngine | None = None
         self._visual_analyzer: VisualAnalyzer | None = None
 
-        if mode == "api" and api_client:
+        if mode in ("api", "api-memory", "api-vlm-local") and api_client:
             self._llm_agent = LLMAgent(api_client, config)
 
-        if mode in ("rule", "vlm-rule", "api-rule", "multi") and game_id:
+        if mode in ("rule", "vlm-rule", "api-rule", "multi", "multi-bus", "multi-bus-memory", "api-vlm-local") and game_id:
             self._rule_engine = RuleEngine(game_id)
             self._visual_analyzer = VisualAnalyzer(api_client) if api_client else None
 
-        # ── Versioned world model (rule-engine modes) ─────────────────
         # Attach a VersionedWorldModel to the rule engine: HybridAgent writes
         # every observation into it, the engine registers its follow target as
         # a plan artifact and locally re-plans when the model marks it stale.
@@ -194,6 +206,8 @@ class HybridAgent:
         runner = GameRunner(headed=headed)
         probe = ProbeAdapter()
 
+        result_summary["step_log"] = []
+
         try:
             await runner.start()
             await runner.open_game(game_path)
@@ -217,6 +231,16 @@ class HybridAgent:
                 ctx.probe_state = state
                 if self._world_model is not None:
                     self._wm_observe(state, step, ctx)
+
+                # Record step state for rubric scoring.
+                result_summary["step_log"].append({
+                    "player": state.get("player"),
+                    "action": None,
+                    "keyNumbers": state.get("keyNumbers", {}),
+                    "keyFlags": state.get("keyFlags", {}),
+                    "reason": "observe",
+                })
+
                 if self._is_finished(state, result_summary):
                     break
 
@@ -241,6 +265,11 @@ class HybridAgent:
 
                 # ---- Act ----
                 await self._execute(decision, runner)
+
+                # Update the step log with the chosen action.
+                if result_summary["step_log"]:
+                    result_summary["step_log"][-1]["action"] = decision.get("action")
+                    result_summary["step_log"][-1]["reason"] = decision.get("reason", "")
 
                 # ---- Post-step bookkeeping ----
                 ctx.step_number = step + 1
@@ -345,6 +374,7 @@ class HybridAgent:
             "episodic_memory": self._episodic_memory,
             "semantic_memory": self._semantic_memory,
             "procedural_memory": self._procedural_memory,
+            "strategy_memory": self._strategy_memory,
         }
 
     async def _legacy_decide(self, ctx: AgentContext) -> dict[str, Any]:

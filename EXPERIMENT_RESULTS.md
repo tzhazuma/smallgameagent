@@ -2,6 +2,50 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-18 P8 报告修复、RTX 5060 CUDA、Agent 通信与记忆
+
+### 报告生成器修复
+- 问题：`scripts/generate_deliverables.py` 的 `inline_fmt` 在最后又对整段文本做 `esc()`，
+  把已生成的 LaTeX 命令（`\textbf{}`、`\texttt{}`）转义成乱码。
+- 修复：采用 placeholder 机制——先提取 markdown 标记（code/bold/italic/link），
+  转义普通文本，再插回 LaTeX 命令；同时把 `①②③④` 替换为 `(1)(2)(3)(4)` 避免字体 tofu。
+- 产物：`reports/smallgameagent_report.pdf`、`reports/smallgameagent_report.pptx`。
+
+### RTX 5060 Laptop 8 GB 本地模型基线（CUDA12 llama.cpp + KV-cache 量化）
+
+后端：`~/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0`
+启动参数：`-ngl 99 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 -c 4096 --no-mmproj-offload`
+
+| 模型 | 文本 tok/s (server) | 60 tokens wall | 显存占用 | 视觉单帧 |
+|---|---|---|---|---|
+| Qwen3.5-4B-Q4_K_M | **82.6** | 1.0 s | 3465 MB | 8 帧 struct 解析率 0.75，target_acc 0.83，平均 24.8 s |
+| gemma-4-E4B-it-Q4_K_M | **39.9** | 0.7 s | 7082 MB | 单帧 14.6 s，输出含 markdown fence 但可解析 |
+
+结论：CUDA 后端让 4B 从 Vulkan 的 ~2 tok/s 提升到 ~80 tok/s，视觉从 10+ min/帧降到
+~20 s/帧，**首次具备在线逐步控制的本地可行性**（但仍慢于云端 mimo-v2.5 的 ~9 s/帧）。
+
+### Agent 通信与记忆机制
+
+新增模块：
+- `src/agent/multi_agent/bus.py`：显式消息总线，`MessageType` + `Message` + `AgentBus`。
+- `src/agent/multi_agent/orchestrator.py`：Observer → StateMapper → DecisionAnalyst → Verifier → Critic 的循环流水线，Verifier 可触发 `re-decide`。
+- `src/agent/strategy_memory.py`：文件型策略记忆，不依赖 `sqlite-vec`。
+- `src/agent/decision_makers/bus_multi_maker.py`：注册 `multi-bus` / `multi-bus-memory` 模式。
+- `src/agent/roles/critic.py`：Critic 角色，给出诊断与修正方向。
+
+测试：`test_multi_agent_bus.py`、`test_multi_agent_orchestrator.py`、`test_strategy_memory.py`；
+与既有测试合并后 **641 passed, 20 skipped**。
+
+### 云端 API 与在线 gameplay 实验状态
+
+- **云端 API**：OpenCodeGo 客户端认证通过（`AICODEWITH_API_KEY`），但调用返回
+  `CreditsError: Insufficient balance`，当前余额不足以跑 mimo-v2.5 / kimi-k2.7-code /
+  kimi-k2.6 矩阵。已记录该阻塞，待充值后继续。
+- **在线 gameplay**：headless Chromium 在 WSL2 中无法初始化 Cocos 场景（`cc.director.getScene()` 为 null），
+  与是否启用 `--no-sandbox` 无关；尝试 `--enable-unsafe-swiftshader` 时浏览器崩溃。
+  推断需要 headed 显示环境或带 GPU 的容器才能跑通实时交互实验。当前已用单元测试与
+  离线 VLM 评测替代，完整 gameplay 矩阵待环境修复后补跑。
+
 ## 2026-07-17 P0 环境与基线
 
 ### 环境打通

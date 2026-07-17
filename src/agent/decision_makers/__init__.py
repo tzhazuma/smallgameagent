@@ -8,6 +8,7 @@ from __future__ import annotations
 
 # Import all maker modules to trigger @DecisionRegistry.register decorators
 from . import api_maker  # noqa: F401
+from . import bus_multi_maker  # noqa: F401
 from . import multi_maker  # noqa: F401
 from . import rule_maker  # noqa: F401
 
