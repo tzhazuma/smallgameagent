@@ -1,0 +1,75 @@
+[
+  {
+    "name": "api_kimi_k27",
+    "mode": "api",
+    "text_model": "kimi-k2.7-code",
+    "elapsed_s": 310.6,
+    "steps": 15,
+    "composite": 0.15,
+    "activity": 0.0,
+    "details": {
+      "steps": 15,
+      "move_steps": 0,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 14,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "reason": "",
+    "decision_source_counts": {
+      "fallback": 14,
+      "Waiting for game to load or initial menu to appear": 1
+    }
+  },
+  {
+    "name": "api_mimo_v25",
+    "mode": "api",
+    "text_model": "mimo-v2.5",
+    "elapsed_s": 307.5,
+    "steps": 15,
+    "composite": 0.15,
+    "activity": 0.0,
+    "details": {
+      "steps": 15,
+      "move_steps": 0,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 14,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "reason": "",
+    "decision_source_counts": {
+      "fallback": 14,
+      "Waiting for game to load further.": 1
+    }
+  },
+  {
+    "name": "rule_baseline",
+    "mode": "rule",
+    "text_model": null,
+    "elapsed_s": 15.3,
+    "steps": 15,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 15,
+      "move_steps": 3,
+      "tap_steps": 11,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 2
+    },
+    "reason": "",
+    "decision_source_counts": {
+      "tap_guide_dist=2.08": 10,
+      "completion_detected": 1,
+      "tap_guide_move_dist=8.04": 1,
+      "stuck_escape_5": 1,
+      "tap_guide_move_dist=4.26": 1,
+      "tap_guide_dist=1.55": 1
+    }
+  }
+]

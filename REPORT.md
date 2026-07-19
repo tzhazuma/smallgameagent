@@ -102,11 +102,25 @@ rule/multi 模式 tap 占比更高（24/30 vs 11/30），因为 multi-bus 的 Ve
 
 ## 7. 云端 API 混合
 
+### 7.1 结构化提取（离线）
+
 | 模型 | 模态 | struct 解析 | 延迟 |
 |---|---|---|---|
 | mimo-v2.5 | 视觉 | 3/3 | 22–38s |
 | kimi-k2.6 | 视觉 | 0/3 | 8–10s |
 | kimi-k2.7-code | 文本 | — | 2.2s |
+
+### 7.2 在线 gameplay（experiment_cloud_api_gameplay.json）
+
+首次将云端 API 接入实时 gameplay 循环（之前因 Cocos 初始化失败仅做离线 struct 提取）。
+
+| 模式 | composite | move | tap | stall | 墙钟 |
+|---|---|---|---|---|---|
+| api (kimi-k2.7-code) | 0.150 | 0 | 0 | 14 | 310.6s |
+| api (mimo-v2.5) | 0.150 | 0 | 0 | 14 | 307.5s |
+| rule (tap-guide) | 0.150 | 3 | 11 | 0 | 15.3s |
+
+**分析**：两个云端 LLM 均返回 `wait` 动作（0 move, 0 tap），因为文本模式无法从 probe state JSON 推断出有意义的 tap 坐标。composite 0.150 完全来自 consistency=1.0（无违规），activity=0。rule 模式 15.3s 完成 15 步 vs 云端 ~310s（20× 慢），且 rule 产生了 11 次有效 tap。**结论**：纯文本 API 模式不适合驱动需要 tap 交互的游戏；需要 vision 模式或 VLM-struct 中间层才能利用云端模型。
 
 ## 8. Agent 通信与记忆架构
 

@@ -118,9 +118,11 @@ class LMStudioClient:
         """
         message = response.choices[0].message
         content = getattr(message, "content", None) or ""
+        if not isinstance(content, str):
+            content = ""
         if not content.strip():
             reasoning = getattr(message, "reasoning_content", None) or ""
-            if reasoning.strip():
+            if isinstance(reasoning, str) and reasoning.strip():
                 content = reasoning
         return content.strip()
 

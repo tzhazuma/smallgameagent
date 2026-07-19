@@ -160,6 +160,7 @@ def test_each_game_has_driver_type():
         "taskguide",
         "target-arrow",
         "guide-follow",
+        "tap-guide",
     }
     for gid, profile in GAME_PROFILES.items():
         assert "driver_type" in profile, f"{gid} missing driver_type"

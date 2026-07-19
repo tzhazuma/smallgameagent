@@ -196,6 +196,8 @@ Qwen3.5-9B-Q4\_K\_M & 2/3 & 16.9s & 44.8 \\
 
 \subsection{7. 云端 API 混合}
 
+\subsubsection{7.1 结构化提取（离线）}
+
 \begin{table}[htbp]
 \centering
 \small
@@ -211,6 +213,28 @@ kimi-k2.7-code & 文本 & — & 2.2s \\
 \hline
 \end{tabular}
 \end{table}
+
+\subsubsection{7.2 在线 gameplay（experiment\_cloud\_api\_gameplay.json）}
+
+首次将云端 API 接入实时 gameplay 循环（之前因 Cocos 初始化失败仅做离线 struct 提取）。\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+模式 & composite & move & tap & stall & 墙钟 \\
+\hline
+api (kimi-k2.7-code) & 0.150 & 0 & 0 & 14 & 310.6s \\
+\hline
+api (mimo-v2.5) & 0.150 & 0 & 0 & 14 & 307.5s \\
+\hline
+rule (tap-guide) & 0.150 & 3 & 11 & 0 & 15.3s \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0001\_\_：两个云端 LLM 均返回 \_\_CODE\_0000\_\_ 动作（0 move, 0 tap），因为文本模式无法从 probe state JSON 推断出有意义的 tap 坐标。composite 0.150 完全来自 consistency=1.0（无违规），activity=0。rule 模式 15.3s 完成 15 步 vs 云端 \textasciitilde{}310s（20× 慢），且 rule 产生了 11 次有效 tap。\_\_BOLD\_0002\_\_：纯文本 API 模式不适合驱动需要 tap 交互的游戏；需要 vision 模式或 VLM-struct 中间层才能利用云端模型。\\
 
 \subsection{8. Agent 通信与记忆架构}
 

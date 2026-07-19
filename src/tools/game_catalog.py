@@ -94,9 +94,10 @@ def _resolve_new_games_dir(override: str | None = None) -> Path:
     """Return the path to the new (annotated) games directory.
 
     Precedence: override > env var > project-relative default.
+    An empty string means *skip* (returns a non-existent sentinel).
     """
     if override is not None:
-        return Path(override)
+        return Path(override) if override else Path("/dev/null/_skip_new")
     env = os.environ.get("GAMES_NEW_DIR")
     if env:
         return Path(env)
@@ -107,8 +108,11 @@ def _resolve_old_games_dir(override: str | None = None) -> Path:
     """Return the path to the old (flat HTML) games directory.
 
     Precedence: override > env var.
+    An empty string means *skip* (returns a non-existent sentinel).
     """
     if override is not None:
+        if not override:
+            return Path("/dev/null/_skip_old")
         return Path(override)
     env = os.environ.get("GAMES_OLD_DIR")
     if env:

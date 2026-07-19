@@ -40,6 +40,7 @@ def converter() -> VLMDatasetConverter:
 # ---------------------------------------------------------------------------
 
 class TestConstructor:
+    @requires_dataset
     def test_accepts_valid_dataset_root(self) -> None:
         c = VLMDatasetConverter(DATASET_ROOT)
         assert c.dataset_root == DATASET_ROOT.resolve()
@@ -53,11 +54,13 @@ class TestConstructor:
         with pytest.raises(FileNotFoundError, match="dataset-manifest.json"):
             VLMDatasetConverter(tmp_path)
 
+    @requires_dataset
     def test_stores_processor_when_provided(self) -> None:
         fake_processor = object()
         c = VLMDatasetConverter(DATASET_ROOT, processor_or_tokenizer=fake_processor)
         assert c.processor is fake_processor
 
+    @requires_dataset
     def test_processor_is_none_by_default(self) -> None:
         c = VLMDatasetConverter(DATASET_ROOT)
         assert c.processor is None

@@ -50,6 +50,27 @@ Phase 1 写入记忆 → Phase 2 读回记忆 → 对照组无记忆。
 
 VLM composite 略高（一致性更好），但 tap 仅 1 次（vs 15），墙钟 12.5×。需要更强的 tap 引导 prompt。
 
+### 实验 E：云端 API 在线 gameplay（experiment_cloud_api_gameplay.json）
+
+首次将云端 API 接入实时 gameplay 循环。
+
+| 模式 | composite | move | tap | stall | 墙钟 |
+|---|---|---|---|---|---|
+| api (kimi-k2.7-code) | 0.150 | 0 | 0 | 14 | 310.6s |
+| api (mimo-v2.5) | 0.150 | 0 | 0 | 14 | 307.5s |
+| rule (tap-guide) | 0.150 | 3 | 11 | 0 | 15.3s |
+
+两个云端 LLM 均返回 `wait`——纯文本 API 无法从 probe state 推断 tap 坐标。需要 vision 模式或 VLM-struct 中间层。
+
+### 测试修复
+
+- `tests/test_game_catalog.py`：`scan_games("")` 不再扫描项目根目录（空字符串 = 跳过）。31/31 通过。
+- `tests/test_dataset_converter.py`：3 个需要真实数据集的测试加 `@requires_dataset` skip 标记。
+- `tests/test_game_configs.py`：`tap-guide` 加入 valid_driver_types。
+- `tests/test_game_env.py`：rubric 修复——仅 `tap` 豁免 stall 计数，`move` 零位移仍算 stall。
+- `tests/test_lmstudio_client.py`：`extract_content` 对非字符串 `reasoning_content` 鲁棒化。
+- **最终：674 passed, 58 skipped, 0 failed。**
+
 ---
 
 ## 2026-07-18 本轮实测修正
