@@ -300,3 +300,37 @@ VLMColdStartDataset 实载抽查通过：
 - P3 策略优化引导实验（含 00461 step123 即死事件的诊断）
 - P6 verifiers 风格环境
 - ssh5090 QLoRA（等可访问）
+
+## 2026-07-20 第三轮：分层架构 + 批量框架 + Node.js 逻辑移植
+
+### 分析 ~/delivery/ 同学系统
+- Node.js 系统（playable-agent-12-games）：12 游戏完整驱动，含 coin override / soft lock / guide signature / A* routing。
+- 训练数据：10,336 样本 7 任务（cold-start），含 known_facts/unknowns 探索认识论。
+- 我们的 Python src/ 已领先（memory/world_model/multi_agent/roles），集成价值在 Node.js 驱动 + 数据集 + .omo 训练笔记。
+
+### 实验 H：移植高级循环逻辑
+- soft target lock（8 步锁定防 thrashing）、guide-signature change detection（path+45° bucket）、coin demand override。
+- 问题：soft lock 在 tap-guide 下降低 tap 频率（0.150→0.10）；修复：tap 后释放 lock。
+
+### 实验 F：分层多 Agent 架构（HierarchicalPlanner）
+- L0 rule（每步）+ L1 本地 VLM（每 5 步/stuck）+ L2 云端 API（每 15 步/phase 切换）。
+- 新建 `src/agent/hierarchical_planner.py` + `hierarchical_maker.py`，注册 `hierarchical` 模式。
+- 批量结果：hierarchical composite=0.150，但 L1 因本地 VLM 未常驻而退化，L2 kimi 思考链截断 JSON。
+
+### 实验 G：批量实验框架 + 数据采集
+- `batch_runner.py`（BatchConfig + run_batch，自动写轨迹 JSONL，支持 resume）+ `analyze_batch.py`（Markdown 对比表）。
+- `exp_batch_matrix.py`：1 game × 4 modes × 2 seeds = 8 runs。
+
+### 批量矩阵结果（batch_results/analysis.md）
+| Mode | Mean Composite | Mean Activity | Mean Latency |
+|---|---|---|---|
+| **multi-bus** | **0.300** | 1.000 | 21.9s |
+| multi-bus-memory | 0.215 | 0.931 | 23.4s |
+| hierarchical | 0.150 | 0.000 | 205.1s |
+| rule | 0.101 | 0.672 | 34.7s |
+
+- multi-bus 两 seed 一致 0.300，确认总线+记忆组合为当前最佳。
+- 8 个轨迹 JSONL 已采集，可用于 VLM 微调 / 离线回放 / A/B 可视化。
+
+### 测试
+- 674 passed, 0 failed, ruff 全绿。

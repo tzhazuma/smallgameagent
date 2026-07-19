@@ -137,6 +137,20 @@ class RuleEngine:
         self._current_plan_id: str | None = None
         self.stale_replans: int = 0
 
+        # ── Advanced loop logic (ported from Node.js follow-guide-audited) ──
+        # Soft target lock: once a target is chosen, hold it for up to
+        # _LOCK_MAX_STEPS steps unless alignment degrades.
+        self._target_lock: dict[str, Any] | None = None
+        self._LOCK_MAX_STEPS: int = 8
+        self._LOCK_MAX_BAD: int = 2
+        # Guide-signature change detection: tracks the last guide path+angle
+        # bucket so we can detect when the backend guide shifts.
+        self._guide_signature: str = ""
+        self.guide_changes: int = 0
+        # Coin demand override: when a station needs coins the player lacks,
+        # force navigation to the coin table.
+        self._coin_override: dict[str, Any] | None = None
+
     def step(self, state: dict[str, Any], visual: dict[str, Any] | None = None) -> dict[str, Any]:
         """Produce an action for the current *state*.
 
@@ -215,13 +229,27 @@ class RuleEngine:
         player = state.get("player") or {}
         player_world = player.get("worldPosition") or {}
         px, pz = player_world.get("x", 0), player_world.get("z", 0)
+        self._last_player_for_sig = (px, pz)
 
         # Get guide candidates from state
         guide_candidates = state.get("guide_or_target_candidates", [])
         guide_summary = state.get("guideSummary", {})
 
-        # --- Target selection ---
-        target = self._select_target(px, pz, guide_candidates, visual, guide_summary)
+        # --- Guide-signature change detection ---
+        guide_changed = self._guide_changed(guide_candidates)
+        if guide_changed:
+            self._target_lock = None
+
+        # --- Coin demand override ---
+        coin_target = self._check_coin_override(state, px, pz)
+        if coin_target is not None:
+            target = coin_target
+        else:
+            # --- Target selection ---
+            target = self._select_target(px, pz, guide_candidates, visual, guide_summary)
+
+        # --- Soft target lock ---
+        target = self._apply_target_lock(target, px, pz, guide_candidates)
 
         if target is None:
             # No target — check completion or wait
@@ -315,12 +343,26 @@ class RuleEngine:
         player = state.get("player") or {}
         player_world = player.get("worldPosition") or {}
         px, pz = player_world.get("x", 0), player_world.get("z", 0)
+        self._last_player_for_sig = (px, pz)
 
         guide_candidates = state.get("guide_or_target_candidates", [])
         guide_summary = state.get("guideSummary", {})
 
-        # --- Target selection (reuse follow-guide logic) ---
-        target = self._select_target(px, pz, guide_candidates, visual, guide_summary)
+        # --- Guide-signature change detection ---
+        guide_changed = self._guide_changed(guide_candidates)
+        if guide_changed:
+            self._target_lock = None  # release lock on guide change
+
+        # --- Coin demand override ---
+        coin_target = self._check_coin_override(state, px, pz)
+        if coin_target is not None:
+            target = coin_target
+        else:
+            # --- Target selection (reuse follow-guide logic) ---
+            target = self._select_target(px, pz, guide_candidates, visual, guide_summary)
+
+        # --- Soft target lock ---
+        target = self._apply_target_lock(target, px, pz, guide_candidates)
 
         if target is None:
             if self._is_completion_state(state, guide_candidates, visual):
@@ -356,12 +398,14 @@ class RuleEngine:
             )
             if tap_css is not None:
                 cx, cy = tap_css
+                self._target_lock = None  # release lock after tap
                 return {
                     "action": "tap",
                     "params": {"x": cx, "y": cy, "duration_ms": 120},
                     "reason": f"tap_guide_dist={dist:.2f}",
                 }
             # No screenPosition available — dwell then wait
+            self._target_lock = None
             return {"action": "wait", "params": {"duration_ms": 500},
                     "reason": "arrived_no_screen_pos"}
 
@@ -634,6 +678,117 @@ class RuleEngine:
         self._block_last_dir = None
         self._current_plan_id = None
         self.stale_replans += 1
+
+    # ------------------------------------------------------------------
+    # Advanced loop logic (ported from Node.js follow-guide-audited.mjs)
+    # ------------------------------------------------------------------
+
+    def _guide_sig(self, guide_candidates: list[dict[str, Any]]) -> str:
+        """Compute a signature for the current guide state.
+
+        Uses the first candidate's path + angle bucket (45° resolution)
+        so we can detect when the backend guide shifts direction.
+        """
+        if not guide_candidates:
+            return ""
+        c = guide_candidates[0]
+        path = c.get("path", "")
+        wp = c.get("worldPosition") or {}
+        player = getattr(self, "_last_player_for_sig", (0, 0))
+        dx = wp.get("x", 0) - player[0]
+        dz = wp.get("z", 0) - player[1]
+        angle = math.atan2(dz, dx)
+        bucket = int(round(angle / (math.pi / 4))) % 8
+        return f"{path}:{bucket}"
+
+    def _guide_changed(self, guide_candidates: list[dict[str, Any]]) -> bool:
+        """Return True if the guide signature changed since last step."""
+        sig = self._guide_sig(guide_candidates)
+        changed = bool(self._guide_signature) and sig != self._guide_signature
+        self._guide_signature = sig
+        if changed:
+            self.guide_changes += 1
+        return changed
+
+    def _apply_target_lock(
+        self,
+        target: tuple[float, float] | None,
+        px: float, pz: float,
+        guide_candidates: list[dict[str, Any]],
+    ) -> tuple[float, float] | None:
+        """Soft target lock: hold the chosen target for up to N steps.
+
+        Returns the locked target if the lock is still valid, otherwise
+        the freshly selected *target*.  Updates ``self._target_lock``.
+        """
+        lock = self._target_lock
+        if lock is not None:
+            lock["steps_remaining"] -= 1
+            # Check alignment: is the player still heading toward the lock?
+            lx, lz = lock["target"]
+            dist_to_lock = math.hypot(lx - px, lz - pz)
+            if dist_to_lock < 0.5:
+                # Arrived — release lock
+                self._target_lock = None
+                return target
+            if lock["steps_remaining"] <= 0 or lock["bad_steps"] >= self._LOCK_MAX_BAD:
+                self._target_lock = None
+            else:
+                return lock["target"]
+
+        # No active lock — try to acquire one if we have a target
+        if target is not None:
+            self._target_lock = {
+                "target": target,
+                "steps_remaining": self._LOCK_MAX_STEPS,
+                "bad_steps": 0,
+            }
+        return target
+
+    def _check_coin_override(
+        self, state: dict[str, Any], px: float, pz: float,
+    ) -> tuple[float, float] | None:
+        """Coin demand override: if a station needs coins the player lacks,
+        force navigation to the coin/money table.
+
+        Returns the coin-table world position if override is active, else None.
+        """
+        numbers = state.get("keyNumbers") or {}
+        money = numbers.get("money") or numbers.get("coin") or numbers.get("Coin") or 0
+        if not isinstance(money, (int, float)):
+            money = 0
+
+        # Look for coin/money targets in guide candidates
+        override = self._coin_override
+        if override and override.get("active"):
+            if override["expires_step"] <= self.step_count:
+                self._coin_override = None
+                return None
+            # Check if we now have enough coins
+            if money >= override.get("needed", 1):
+                self._coin_override = None
+                return None
+            return override["target"]
+
+        # Detect coin demand: look for sell/upgrade nodes with price > money
+        sell_chain = state.get("sellChain") or {}
+        customer = sell_chain.get("customerManager") or {}
+        fields = customer.get("fields") or {}
+        price = fields.get("tempPrice") or fields.get("price") or 0
+        if isinstance(price, (int, float)) and price > 0 and money < price:
+            # Find the money/coin table target
+            for key in ("moneySpotRoot", "moneySpot"):
+                node = sell_chain.get(key) or {}
+                wp = node.get("worldPosition")
+                if wp:
+                    self._coin_override = {
+                        "active": True,
+                        "target": (wp.get("x", 0), wp.get("z", 0)),
+                        "needed": price,
+                        "expires_step": self.step_count + 20,
+                    }
+                    return self._coin_override["target"]
+        return None
 
     # ------------------------------------------------------------------
     # Strategy: 2D (Family B — 00853)

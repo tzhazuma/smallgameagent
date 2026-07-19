@@ -54,6 +54,7 @@ _VALID_MODES = frozenset({
     "api-memory",
     "api-vlm-local",
     "vlm-local",
+    "hierarchical",
 })
 
 

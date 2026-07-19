@@ -1,0 +1,162 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 30,
+    "composite": 0.0982758620689655,
+    "activity": 0.6551724137931034,
+    "elapsed_s": 35.9,
+    "details": {
+      "steps": 30,
+      "move_steps": 10,
+      "tap_steps": 19,
+      "transitions": 0,
+      "stall_steps": 10,
+      "fail_flips": 0,
+      "wm_violations": 6
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_rule_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "seed": 123,
+    "steps": 30,
+    "composite": 0.10344827586206896,
+    "activity": 0.6896551724137931,
+    "elapsed_s": 33.5,
+    "details": {
+      "steps": 30,
+      "move_steps": 9,
+      "tap_steps": 20,
+      "transitions": 0,
+      "stall_steps": 9,
+      "fail_flips": 0,
+      "wm_violations": 6
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_rule_seed123.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 30,
+    "composite": 0.1293103448275862,
+    "activity": 0.8620689655172413,
+    "elapsed_s": 24.9,
+    "details": {
+      "steps": 30,
+      "move_steps": 4,
+      "tap_steps": 25,
+      "transitions": 0,
+      "stall_steps": 4,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "seed": 123,
+    "steps": 30,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 21.9,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 29,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_multi-bus-memory_seed123.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "hierarchical",
+    "seed": 42,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 0.0,
+    "elapsed_s": 193.6,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 29,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_hierarchical_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "hierarchical",
+    "seed": 123,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 0.0,
+    "elapsed_s": 216.7,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 29,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_hierarchical_seed123.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus",
+    "seed": 42,
+    "steps": 30,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 21.8,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 29,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_multi-bus_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus",
+    "seed": 123,
+    "steps": 30,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 21.9,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 29,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/batch_results/trajectories/SSD_00461P01_multi-bus_seed123.jsonl",
+    "error": ""
+  }
+]
