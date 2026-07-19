@@ -2,7 +2,7 @@
   {
     "game_id": "SSD_00461P01",
     "mode": "rule",
-    "elapsed_s": 26.7,
+    "elapsed_s": 25.2,
     "completed": false,
     "win": false,
     "steps": 30,
@@ -10,29 +10,29 @@
     "rubric": {
       "completion": 0.0,
       "progress_ratio": 0.0,
-      "activity": 0.0,
+      "activity": 1.0,
       "consistency": 0.0,
-      "composite": 0.0,
+      "composite": 0.15,
       "details": {
         "steps": 30,
-        "move_steps": 29,
+        "move_steps": 5,
+        "tap_steps": 24,
         "transitions": 0,
-        "stall_steps": 29,
+        "stall_steps": 0,
         "fail_flips": 0,
         "wm_violations": 4
       }
     },
     "decision_source_counts": {
-      "follow_guide_target_dist=0.58": 4,
-      "follow_guide_target_dist=0.93": 2,
-      "follow_guide_target_dist=0.71": 2,
-      "follow_guide_target_dist=0.72": 2,
-      "follow_guide_target_dist=0.62": 2,
+      "tap_guide_dist=2.19": 10,
+      "tap_guide_dist=2.77": 5,
+      "tap_guide_dist=1.30": 5,
+      "stuck_escape_5": 3,
+      "tap_guide_dist=2.21": 3,
       "completion_detected": 1,
-      "follow_guide_target_dist=8.04": 1,
-      "follow_guide_target_dist=2.49": 1,
-      "follow_guide_target_dist=1.81": 1,
-      "follow_guide_target_dist=1.56": 1
+      "tap_guide_move_dist=8.04": 1,
+      "tap_guide_dist=2.52": 1,
+      "tap_guide_move_dist=11.20": 1
     },
     "wm_observations": null,
     "wm_replans": null
@@ -40,7 +40,7 @@
   {
     "game_id": "SSD_00461P01",
     "mode": "multi",
-    "elapsed_s": 26.8,
+    "elapsed_s": 24.3,
     "completed": false,
     "win": false,
     "steps": 30,
@@ -48,29 +48,30 @@
     "rubric": {
       "completion": 0.0,
       "progress_ratio": 0.0,
-      "activity": 0.0,
+      "activity": 1.0,
       "consistency": 0.0,
-      "composite": 0.0,
+      "composite": 0.15,
       "details": {
         "steps": 30,
-        "move_steps": 29,
+        "move_steps": 6,
+        "tap_steps": 23,
         "transitions": 0,
-        "stall_steps": 29,
+        "stall_steps": 0,
         "fail_flips": 0,
-        "wm_violations": 4
+        "wm_violations": 6
       }
     },
     "decision_source_counts": {
-      "follow_guide_target_dist=0.63": 4,
-      "follow_guide_target_dist=0.55": 4,
-      "follow_guide_target_dist=1.08": 3,
-      "follow_guide_target_dist=0.66": 2,
-      "follow_guide_target_dist=0.74": 2,
-      "follow_guide_target_dist=0.75": 2,
+      "tap_guide_dist=2.14": 10,
+      "tap_guide_dist=3.11": 5,
+      "tap_guide_dist=3.37": 5,
+      "stuck_escape_5": 3,
+      "tap_guide_dist=3.30": 2,
       "completion_detected": 1,
-      "follow_guide_target_dist=8.04": 1,
-      "follow_guide_target_dist=2.15": 1,
-      "follow_guide_target_dist=0.86": 1
+      "tap_guide_move_dist=8.04": 1,
+      "tap_guide_move_dist=6.54": 1,
+      "tap_guide_dist=3.36": 1,
+      "tap_guide_move_dist=13.20": 1
     },
     "wm_observations": null,
     "wm_replans": null
@@ -78,7 +79,7 @@
   {
     "game_id": "SSD_00461P01",
     "mode": "multi-bus",
-    "elapsed_s": 28.4,
+    "elapsed_s": 29.0,
     "completed": false,
     "win": false,
     "steps": 30,
@@ -86,16 +87,17 @@
     "rubric": {
       "completion": 0.0,
       "progress_ratio": 0.0,
-      "activity": 0.0,
+      "activity": 1.0,
       "consistency": 0.0,
-      "composite": 0.0,
+      "composite": 0.15,
       "details": {
         "steps": 30,
-        "move_steps": 29,
+        "move_steps": 18,
+        "tap_steps": 11,
         "transitions": 0,
-        "stall_steps": 29,
+        "stall_steps": 0,
         "fail_flips": 0,
-        "wm_violations": 4
+        "wm_violations": 5
       }
     },
     "bus_messages": 15,
@@ -116,7 +118,7 @@
   {
     "game_id": "SSD_00461P01",
     "mode": "multi-bus-memory",
-    "elapsed_s": 28.4,
+    "elapsed_s": 30.5,
     "completed": false,
     "win": false,
     "steps": 30,
@@ -124,14 +126,15 @@
     "rubric": {
       "completion": 0.0,
       "progress_ratio": 0.0,
-      "activity": 0.0,
+      "activity": 1.0,
       "consistency": 0.0,
-      "composite": 0.0,
+      "composite": 0.15,
       "details": {
         "steps": 30,
-        "move_steps": 29,
+        "move_steps": 18,
+        "tap_steps": 11,
         "transitions": 0,
-        "stall_steps": 29,
+        "stall_steps": 0,
         "fail_flips": 0,
         "wm_violations": 4
       }

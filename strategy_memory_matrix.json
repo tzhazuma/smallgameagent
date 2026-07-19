@@ -8,8 +8,8 @@
             "duration_ms": 1000
           }
         },
-        "attempts": 2,
-        "successes": 2,
+        "attempts": 4,
+        "successes": 4,
         "failures": 0,
         "notes": ""
       }
@@ -24,8 +24,8 @@
             "duration_ms": 740
           }
         },
-        "attempts": 2,
-        "successes": 2,
+        "attempts": 4,
+        "successes": 4,
         "failures": 0,
         "notes": ""
       },
@@ -806,6 +806,328 @@
             "dx": -0.9772108559280012,
             "dy": -0.21227091900791148,
             "duration_ms": 300
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 0.0,
+            "y": 812.0,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 22,
+        "successes": 22,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -1.0,
+            "dy": 1.2246467991473532e-16,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 11,
+        "successes": 11,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8469170735926228,
+            "dy": -0.5317249951406346,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 6.123233995736766e-17,
+            "dy": 1.0,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.7071067811865475,
+            "dy": 0.7071067811865476,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.6851828339014588,
+            "dy": -0.7283711170322212,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.7071067811865477,
+            "dy": -0.7071067811865475,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9921630526529464,
+            "dy": 0.1249498977606099,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.981551539972132,
+            "dy": -0.19119773633162118,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.12041724481388559,
+            "dy": 0.9927233688956016,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.740870032753309,
+            "dy": -0.6716484158904202,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7876730999287702,
+            "dy": -0.616093408217132,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9999368886915407,
+            "dy": -0.011234706666451953,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7852338885343343,
+            "dy": -0.619199273495414,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.7852332651163824,
+            "dy": 0.6192000640783761,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.6641814974579942,
+            "dy": 0.7475713600951126,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.6923510273494448,
+            "dy": -0.7215608463103915,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 1.0,
+            "dy": 0.0,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7071067811865474,
+            "dy": -0.7071067811865477,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.933650041579029,
+            "dy": -0.3581865433813466,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9615111848718656,
+            "dy": -0.2747657936612582,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9886644556811606,
+            "dy": 0.15014191311114464,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -1.8369701987210297e-16,
+            "dy": -1.0,
+            "duration_ms": 220
           }
         },
         "attempts": 1,

@@ -83,6 +83,7 @@ class MultiAgentBusDecisionMaker(BaseDecisionMaker):
             rule_engine=rule_engine,
             procedural_memory=procedural_memory,
             llm_agent=llm_agent,
+            strategy_memory=strategy_memory,
         )
 
         verifier = Verifier()
@@ -105,7 +106,7 @@ class MultiAgentBusDecisionMaker(BaseDecisionMaker):
             critic=critic,
             memory_curator=memory_curator,
             strategy_memory=strategy_memory,
-            max_rounds=2,
+            max_rounds=kwargs.get("max_rounds", 2),
         )
 
     async def decide(self, ctx: "AgentContext") -> dict[str, Any]:

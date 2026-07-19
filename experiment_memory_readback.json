@@ -1,0 +1,67 @@
+[
+  {
+    "name": "phase1_write",
+    "mode": "multi-bus-memory",
+    "elapsed_s": 26.1,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 30,
+      "move_steps": 4,
+      "tap_steps": 25,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "memory_hits": 92,
+    "decision_source_counts": {
+      "strategy_memory": 23,
+      "rule_engine": 7
+    }
+  },
+  {
+    "name": "phase2_read",
+    "mode": "multi-bus-memory",
+    "elapsed_s": 21.7,
+    "steps": 30,
+    "composite": 0.3,
+    "activity": 1.0,
+    "details": {
+      "steps": 30,
+      "move_steps": 0,
+      "tap_steps": 29,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "memory_hits": 116,
+    "decision_source_counts": {
+      "strategy_memory": 29,
+      "rule_engine": 1
+    }
+  },
+  {
+    "name": "control_no_memory",
+    "mode": "multi-bus",
+    "elapsed_s": 28.6,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 30,
+      "move_steps": 17,
+      "tap_steps": 12,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "memory_hits": 0,
+    "decision_source_counts": {
+      "rule_engine": 30
+    }
+  }
+]

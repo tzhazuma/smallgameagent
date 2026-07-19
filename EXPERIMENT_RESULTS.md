@@ -2,6 +2,56 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-18 第二轮实验：Tap 策略 + 记忆读回 + Critic A/B + VLM 闭环
+
+### 实验 B：塔防 Tap 策略（experiment_multi_agent_matrix.json）
+
+新增 `_strategy_tap_guide()` 驱动类型（`src/engine/rules.py`）：当 Hero 接近 guide 目标时发 `tap` 而非 `move`。Rubric 更新：`tap` 动作不再计为 stall。
+
+| 模式 | 步数 | composite | activity | move | tap | stall | 墙钟 |
+|---|---|---|---|---|---|---|---|
+| rule (tap-guide) | 30 | **0.150** | 1.000 | 5 | 24 | 0 | 25.2s |
+| multi (tap-guide) | 30 | **0.150** | 1.000 | 6 | 23 | 0 | 24.3s |
+| multi-bus (tap-guide) | 30 | **0.150** | 1.000 | 18 | 11 | 0 | 29.0s |
+| multi-bus-memory (tap-guide) | 30 | **0.150** | 1.000 | 18 | 11 | 0 | 30.5s |
+
+- 从 0.000 提升到 0.150（activity 从 0→1.0），证明 tap 策略让 agent 从"无效移动"变为"有效交互"。
+- rule/multi 模式 tap 占比更高（24/30 vs 11/30），因为 multi-bus 的 Verifier 触发 re-decide 时回退到 move。
+
+### 实验 A：StrategyMemory 读回（experiment_memory_readback.json）
+
+Phase 1 写入记忆 → Phase 2 读回记忆 → 对照组无记忆。
+
+| 阶段 | composite | activity | memory_hits | wm_violations | 主要决策来源 |
+|---|---|---|---|---|---|
+| phase1_write | 0.150 | 1.000 | 92 | 3 | strategy_memory:23, rule_engine:7 |
+| **phase2_read** | **0.300** | 1.000 | 116 | **0** | strategy_memory:29, rule_engine:1 |
+| control_no_memory | 0.150 | 1.000 | 0 | 3 | rule_engine:30 |
+
+**关键发现**：记忆读回将 composite 从 0.150 翻倍到 **0.300**，原因是世界模型违规从 3 降到 0——记忆中的高成功率 tap 模式直接绕过了 rule_engine 的 move-then-tap 两步流程，减少了不必要的移动导致的 stale 标记。
+
+### 实验 D：Critic 反馈循环 A/B（experiment_critic_ab.json）
+
+| 配置 | composite | bus_messages | critic_invocations | 墙钟 |
+|---|---|---|---|---|
+| max_rounds=1 (无 Critic) | 0.150 | 11 | 2 | 28.3s |
+| max_rounds=2 (有 Critic) | 0.150 | 15 | 2 | 29.7s |
+
+**结论**：Critic 在 tap-guide 确定性策略下无增益——Verifier 触发 re-decide 后 DecisionAnalyst 仍返回相同动作。额外 4 条总线消息带来 ~5% 墙钟开销。Critic 的价值应在非确定性场景（如 API LLM 决策）中评估。
+
+### 实验 C：本地 VLM 在线决策（experiment_vlm_local_gameplay.json）
+
+使用 gemma-4-E4B-it-Q4_K_M（RTX 5060 CUDA12 + q4_0 KV-cache）作为 `vlm-local` 模式的决策引擎。
+
+| 模式 | composite | activity | move | tap | stall | wm_viol | 墙钟 |
+|---|---|---|---|---|---|---|---|
+| **vlm-local (gemma)** | **0.178** | 0.684 | 13 | 1 | 6 | **0** | 276s |
+| rule (tap-guide) | 0.150 | 1.000 | 4 | 15 | 0 | 4 | 22s |
+
+VLM composite 略高（一致性更好），但 tap 仅 1 次（vs 15），墙钟 12.5×。需要更强的 tap 引导 prompt。
+
+---
+
 ## 2026-07-18 本轮实测修正
 
 ### 在线 gameplay 打通

@@ -31,10 +31,12 @@ class DecisionAnalyst(BaseAgentRole):
         rule_engine: Any = None,
         procedural_memory: Any = None,
         llm_agent: Any = None,
+        strategy_memory: Any = None,
     ) -> None:
         self._rule_engine = rule_engine
         self._procedural = procedural_memory
         self._llm_agent = llm_agent
+        self._strategy_memory = strategy_memory
 
     async def observe(self, ctx: AgentContext) -> dict[str, Any]:
         """Gather decision inputs from context."""
@@ -48,7 +50,7 @@ class DecisionAnalyst(BaseAgentRole):
     async def reason(self, ctx: AgentContext) -> dict[str, Any]:
         """Evaluate available decision sources and select action.
 
-        Precedence: procedural memory → rule engine → API LLM → fallback wait.
+        Precedence: procedural memory → strategy memory → rule engine → API LLM → fallback wait.
         """
         action: dict[str, Any] | None = None
         source = "none"
@@ -64,6 +66,30 @@ class DecisionAnalyst(BaseAgentRole):
                         "reason": f"procedural:{matched.name}",
                     }
                     source = "procedural_memory"
+            except Exception:
+                pass
+
+        # 1b. StrategyMemory readback — use high-success-rate patterns
+        if action is None and self._strategy_memory is not None:
+            try:
+                game_id = ctx.metadata.get("game_id", "unknown")
+                phase = self._strategy_memory.phase_id(ctx.probe_state)
+                patterns = self._strategy_memory.lookup(game_id, phase, top_k=1, min_attempts=2)
+                if patterns:
+                    pat = patterns[0]
+                    attempts = pat.get("attempts", 1)
+                    successes = pat.get("successes", 0)
+                    rate = successes / max(1, attempts)
+                    if rate >= 0.6:
+                        stored = pat.get("pattern", {})
+                        action = {
+                            "action": stored.get("action", "wait"),
+                            "params": stored.get("params", {"duration_ms": 500}),
+                            "reason": f"strategy_memory:{rate:.2f}",
+                        }
+                        source = "strategy_memory"
+                        ctx.metadata.setdefault("memory_hits", 0)
+                        ctx.metadata["memory_hits"] += 1
             except Exception:
                 pass
 

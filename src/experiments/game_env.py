@@ -109,8 +109,15 @@ def score_trajectory(
     progress = min(1.0, transitions / max(1.0, n / 100.0) / 4.0)
 
     move_steps = [s for s in step_log if s.get("action") == "move"]
+    tap_steps = [s for s in step_log if s.get("action") == "tap"]
     disps = _displacements(step_log)
-    stall = sum(1 for d in disps if d < STALL_DISPLACEMENT)
+    # A step where the agent issued a tap is intentional interaction, not a
+    # stall — even though the player position doesn't change.
+    active_actions = {i for i, s in enumerate(step_log) if s.get("action") in ("move", "tap")}
+    stall = sum(
+        1 for i, d in enumerate(disps)
+        if d < STALL_DISPLACEMENT and (i + 1) not in active_actions
+    )
     stall_ratio = stall / max(1, len(disps))
     activity = 1.0 - stall_ratio
 
@@ -144,6 +151,7 @@ def score_trajectory(
         details={
             "steps": n,
             "move_steps": len(move_steps),
+            "tap_steps": len(tap_steps),
             "transitions": transitions,
             "stall_steps": stall,
             "fail_flips": fail_flips,

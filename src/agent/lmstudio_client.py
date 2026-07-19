@@ -108,12 +108,20 @@ class LMStudioClient:
     def extract_content(response: Any) -> str:
         """Extract assistant content, tolerating thinking models.
 
-        Qwen3.5 is a thinking model: reasoning goes to ``reasoning_content``
-        and the final answer to ``content``. Some builds fold the chain into
-        ``content``; either way we return the answer part.
+        Qwen3.5 / Gemma-4 are thinking models: reasoning goes to
+        ``reasoning_content`` and the final answer to ``content``.
+        Some builds fold the chain into ``content``; either way we
+        return whichever field has the answer.  When ``content`` is
+        empty but ``reasoning_content`` has text, we fall back to it
+        so callers can at least attempt to parse a JSON action from
+        the reasoning chain.
         """
         message = response.choices[0].message
         content = getattr(message, "content", None) or ""
+        if not content.strip():
+            reasoning = getattr(message, "reasoning_content", None) or ""
+            if reasoning.strip():
+                content = reasoning
         return content.strip()
 
     @staticmethod

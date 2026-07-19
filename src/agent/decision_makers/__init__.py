@@ -11,6 +11,7 @@ from . import api_maker  # noqa: F401
 from . import bus_multi_maker  # noqa: F401
 from . import multi_maker  # noqa: F401
 from . import rule_maker  # noqa: F401
+from . import vlm_local_maker  # noqa: F401
 
 __all__ = [
     "api_maker",

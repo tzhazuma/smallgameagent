@@ -183,6 +183,8 @@ class RuleEngine:
         dt = self.driver_type
         if dt == "follow-guide-audited":
             return self._strategy_follow_guide(state, visual)
+        elif dt == "tap-guide":
+            return self._strategy_tap_guide(state, visual)
         elif dt == "2d-audited":
             return self._strategy_2d(state, visual)
         elif dt == "learned":
@@ -280,6 +282,133 @@ class RuleEngine:
             "params": {"dx": dx_stick, "dy": dy_stick, "duration_ms": duration_ms},
             "reason": f"follow_guide_target_dist={dist:.2f}",
         }
+
+    # ------------------------------------------------------------------
+    # Strategy: Tap-Guide (tower defense / tap-driven games)
+    # ------------------------------------------------------------------
+
+    def _strategy_tap_guide(
+        self, state: dict[str, Any], visual: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Move toward guide targets and tap them when close enough.
+
+        Designed for tower-defense and other tap-driven games where the
+        agent must walk to a location *and* interact (tap) to place /
+        upgrade / collect.  Falls back to pure movement when the target
+        has no usable ``screenPosition``.
+        """
+        from src.engine.vector import solve_stick_for_world
+        from src.engine.pulse import get_pulse_duration
+
+        profile = self.profile
+        basis = profile.get("calibration", {}).get("basis", {})
+        input_mode = profile.get("joystick", {}).get("input_mode", "touch")
+        arrival = profile.get("ground_arrival_threshold", 55)
+        # Convert arrival threshold from screen-pixels to world units
+        # (rough heuristic: 1 world unit ≈ 15 screen pixels for 00461).
+        arrival_world = arrival / 15.0
+
+        # Design-resolution → CSS-pixel mapping
+        design_res = profile.get("design_resolution", [720, 1560])
+        viewport = profile.get("viewport", [375, 812])
+
+        player = state.get("player") or {}
+        player_world = player.get("worldPosition") or {}
+        px, pz = player_world.get("x", 0), player_world.get("z", 0)
+
+        guide_candidates = state.get("guide_or_target_candidates", [])
+        guide_summary = state.get("guideSummary", {})
+
+        # --- Target selection (reuse follow-guide logic) ---
+        target = self._select_target(px, pz, guide_candidates, visual, guide_summary)
+
+        if target is None:
+            if self._is_completion_state(state, guide_candidates, visual):
+                return {"action": "wait", "params": {"duration_ms": 1000},
+                        "reason": "completion_detected"}
+            return {"action": "wait", "params": {"duration_ms": 500},
+                    "reason": "no_target"}
+
+        tx, tz = target
+        dx_world = tx - px
+        dz_world = tz - pz
+        dist = math.hypot(dx_world, dz_world)
+
+        self._register_target_plan(guide_candidates)
+
+        # --- Stuck handling ---
+        if self.stuck_streak >= 5:
+            esc_wx, esc_wz = self._escape_direction(px, pz)
+            dx_stick, dy_stick = solve_stick_for_world(basis, esc_wx, esc_wz)
+            duration_ms = get_pulse_duration("follow-guide", 2.0, input_mode)
+            self._note_move((px, pz), dx_stick, dy_stick, duration_ms, basis)
+            return {
+                "action": "move",
+                "params": {"dx": dx_stick, "dy": dy_stick, "duration_ms": duration_ms},
+                "reason": f"stuck_escape_{self.stuck_streak}",
+            }
+
+        # --- Close enough? → tap the target ---
+        if dist < arrival_world:
+            # Find the screenPosition of the closest guide candidate
+            tap_css = self._target_screen_to_css(
+                px, pz, guide_candidates, design_res, viewport,
+            )
+            if tap_css is not None:
+                cx, cy = tap_css
+                return {
+                    "action": "tap",
+                    "params": {"x": cx, "y": cy, "duration_ms": 120},
+                    "reason": f"tap_guide_dist={dist:.2f}",
+                }
+            # No screenPosition available — dwell then wait
+            return {"action": "wait", "params": {"duration_ms": 500},
+                    "reason": "arrived_no_screen_pos"}
+
+        # --- Move toward target ---
+        steer_wx, steer_wz = self._steer_around_obstacles(
+            px, pz, dx_world, dz_world, dist,
+        )
+        dx_stick, dy_stick = solve_stick_for_world(basis, steer_wx, steer_wz)
+        duration_ms = get_pulse_duration("follow-guide", dist, input_mode)
+        self._note_move((px, pz), dx_stick, dy_stick, duration_ms, basis)
+
+        return {
+            "action": "move",
+            "params": {"dx": dx_stick, "dy": dy_stick, "duration_ms": duration_ms},
+            "reason": f"tap_guide_move_dist={dist:.2f}",
+        }
+
+    @staticmethod
+    def _target_screen_to_css(
+        px: float, pz: float,
+        guide_candidates: list[dict[str, Any]],
+        design_res: list[int],
+        viewport: list[int],
+    ) -> tuple[float, float] | None:
+        """Convert the closest guide candidate's screenPosition to CSS pixels.
+
+        The probe's ``screenPosition`` is in Cocos design-resolution space
+        (bottom-left origin).  CSS viewport uses top-left origin.
+        """
+        best_dist = float("inf")
+        best_sp = None
+        for c in guide_candidates:
+            wp = c.get("worldPosition") or {}
+            cx, cz = wp.get("x", 0), wp.get("z", 0)
+            d = math.hypot(cx - px, cz - pz)
+            if d < best_dist:
+                best_dist = d
+                best_sp = c.get("screenPosition")
+        if not best_sp:
+            return None
+        dw, dh = design_res
+        vw, vh = viewport
+        sx = best_sp.get("x", 0)
+        sy = best_sp.get("y", 0)
+        css_x = sx / dw * vw
+        css_y = (1.0 - sy / dh) * vh
+        return (css_x, css_y)
 
     # ------------------------------------------------------------------
     # Obstacle learning + potential-field avoidance

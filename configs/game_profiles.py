@@ -276,7 +276,9 @@ GAME_PROFILES = {
         },
         "ground_arrival_threshold": 55,
         "target_dwell_ms": 4000,
-        "driver_type": "follow-guide-audited",
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
     },
 }
 

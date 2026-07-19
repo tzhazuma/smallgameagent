@@ -53,6 +53,7 @@ _VALID_MODES = frozenset({
     "multi-bus-memory",
     "api-memory",
     "api-vlm-local",
+    "vlm-local",
 })
 
 
@@ -394,7 +395,7 @@ class HybridAgent:
         Passes all sub-components so that each decision maker can pick
         what it needs.
         """
-        return {
+        kwargs: dict[str, Any] = {
             "llm_agent": self._llm_agent,
             "vlm_engine": self._vlm_engine,
             "rule_engine": self._rule_engine,
@@ -405,6 +406,10 @@ class HybridAgent:
             "procedural_memory": self._procedural_memory,
             "strategy_memory": self._strategy_memory,
         }
+        # Pass through max_rounds from config for multi-bus variants.
+        if "max_rounds" in self._config:
+            kwargs["max_rounds"] = self._config["max_rounds"]
+        return kwargs
 
     async def _legacy_decide(self, ctx: AgentContext) -> dict[str, Any]:
         """Fallback dispatch for modes not yet migrated to the registry."""

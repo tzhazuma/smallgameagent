@@ -1,0 +1,48 @@
+[
+  {
+    "name": "no_critic_r1",
+    "max_rounds": 1,
+    "elapsed_s": 28.3,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 30,
+      "move_steps": 15,
+      "tap_steps": 14,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "bus_messages": 11,
+    "critic_invocations": 2,
+    "verify_invocations": 2,
+    "decision_source_counts": {
+      "rule_engine": 30
+    }
+  },
+  {
+    "name": "with_critic_r2",
+    "max_rounds": 2,
+    "elapsed_s": 29.7,
+    "steps": 30,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 30,
+      "move_steps": 19,
+      "tap_steps": 10,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 6
+    },
+    "bus_messages": 15,
+    "critic_invocations": 2,
+    "verify_invocations": 4,
+    "decision_source_counts": {
+      "rule_engine": 30
+    }
+  }
+]

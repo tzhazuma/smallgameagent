@@ -1,0 +1,36 @@
+[
+  {
+    "name": "vlm_local_gemma",
+    "mode": "vlm-local",
+    "elapsed_s": 276.0,
+    "steps": 20,
+    "composite": 0.17763157894736842,
+    "activity": 0.6842105263157895,
+    "details": {
+      "steps": 20,
+      "move_steps": 13,
+      "tap_steps": 1,
+      "transitions": 0,
+      "stall_steps": 6,
+      "fail_flips": 1,
+      "wm_violations": 0
+    }
+  },
+  {
+    "name": "rule_baseline",
+    "mode": "rule",
+    "elapsed_s": 22.1,
+    "steps": 20,
+    "composite": 0.15,
+    "activity": 1.0,
+    "details": {
+      "steps": 20,
+      "move_steps": 4,
+      "tap_steps": 15,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 4
+    }
+  }
+]

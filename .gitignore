@@ -89,3 +89,4 @@ logs/
 *.blg
 *.fls
 *.fdb_latexmk
+.qoder/
