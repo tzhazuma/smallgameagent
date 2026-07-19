@@ -399,3 +399,18 @@ VLMColdStartDataset 实载抽查通过：
 2. **00736 multi-bus-memory 达 0.300**——与已校准的 00461 持平！记忆读回机制补偿了未校准基线：它记住了成功的 tap 模式，使 activity 从 0.79→1.00、stall 从 5→0。
 3. **multi-bus-memory ≥ rule** 在所有 5 游戏上一致成立。
 4. 00482/00342/00532 的 activity=0 是**诚实信号**：未校准基线导致方向全错→全 stall→需要该游戏的 profile 校准。
+
+### 自动校准（auto_calibrate.py）
+
+新建 `src/experiments/auto_calibrate.py`：对每个游戏发 4 方向 joystick 脉冲 + 返回脉冲，测量 worldPosition delta 计算 screen→world 基线。含 warmup（3 脉冲 + 中心 tap 关闭教程覆盖层）、失败方向重试、joystick 无效时回退到 probe 的 `moveByCocosInput`。
+
+| 游戏 | 校准结果 | basis (screen_right / screen_down) | 说明 |
+|---|---|---|---|
+| 00736 养蛙捕鱼 | **VALID** | (1.44, -2.90) / (1.49, 2.90) | warmup 后 3/4 方向有效，重试补齐第 4 方向 |
+| 00482 砍树扩地 | INVALID | — | joystick + moveByCocosInput 均 0 位移；非 joystick 驱动游戏 |
+| 00342 建造合并 | INVALID | — | 同上 |
+| 00532 瀑布巨木 | INVALID | — | 同上 |
+
+**关键发现**：00482/00342/00532 对 joystick 和 Cocos Actor.move 都无响应——这些是 **tap-to-move 或自动移动** 类游戏，需要完全不同的驱动策略（如点击目标位置、等待自动战斗）。自动校准正确识别了这一分类。
+
+00736 校准后写入 `configs/game_profiles.py`（第 14 个 profile），重跑多游戏实验确认：00736 标记为 calibrated，multi-bus-memory 仍达 **0.300**（activity=1.00, tap=25, stall=0）。

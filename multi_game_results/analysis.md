@@ -4,8 +4,8 @@
 
 | Mode | Runs | Mean Composite | Mean Activity | Mean Latency (s) | Errors |
 |---|---|---|---|---|---|
-| multi-bus-memory | 5 | 0.210 | 0.400 | 28.8 | 0 |
-| rule | 5 | 0.165 | 0.300 | 30.3 | 0 |
+| multi-bus-memory | 5 | 0.210 | 0.400 | 27.7 | 0 |
+| rule | 5 | 0.175 | 0.325 | 29.0 | 0 |
 
 ## Per-Game Breakdown
 
@@ -13,32 +13,32 @@
 
 | Mode | Seed | Steps | Composite | Activity | Latency | Tap | Move | Stall |
 |---|---|---|---|---|---|---|---|---|
-| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 31.5s | 0 | 0 | 24 |
-| rule | 7 | 25 | 0.150 | 0.000 | 31.8s | 0 | 0 | 24 |
+| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 31.3s | 0 | 0 | 24 |
+| rule | 7 | 25 | 0.150 | 0.000 | 32.4s | 0 | 0 | 24 |
 ### SSD_00461P01
 
 | Mode | Seed | Steps | Composite | Activity | Latency | Tap | Move | Stall |
 |---|---|---|---|---|---|---|---|---|
-| multi-bus-memory | 7 | 25 | 0.300 | 1.000 | 19.9s | 24 | 0 | 0 |
-| rule | 7 | 25 | 0.106 | 0.708 | 24.2s | 17 | 7 | 7 |
+| multi-bus-memory | 7 | 25 | 0.300 | 1.000 | 18.5s | 24 | 0 | 0 |
+| rule | 7 | 25 | 0.155 | 0.833 | 20.5s | 20 | 4 | 4 |
 ### SSD_00482P01
 
 | Mode | Seed | Steps | Composite | Activity | Latency | Tap | Move | Stall |
 |---|---|---|---|---|---|---|---|---|
-| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 34.9s | 0 | 0 | 24 |
-| rule | 7 | 25 | 0.150 | 0.000 | 34.5s | 0 | 0 | 24 |
+| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 33.2s | 0 | 0 | 24 |
+| rule | 7 | 25 | 0.150 | 0.000 | 33.2s | 0 | 0 | 24 |
 ### SSD_00532P01
 
 | Mode | Seed | Steps | Composite | Activity | Latency | Tap | Move | Stall |
 |---|---|---|---|---|---|---|---|---|
-| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 32.3s | 0 | 25 | 24 |
-| rule | 7 | 25 | 0.150 | 0.000 | 34.7s | 0 | 25 | 24 |
+| multi-bus-memory | 7 | 25 | 0.150 | 0.000 | 32.1s | 0 | 25 | 24 |
+| rule | 7 | 25 | 0.150 | 0.000 | 33.9s | 0 | 25 | 24 |
 ### SSD_00736P01
 
 | Mode | Seed | Steps | Composite | Activity | Latency | Tap | Move | Stall |
 |---|---|---|---|---|---|---|---|---|
-| multi-bus-memory | 7 | 25 | 0.300 | 1.000 | 25.2s | 25 | 0 | 0 |
-| rule | 7 | 25 | 0.269 | 0.792 | 26.4s | 20 | 5 | 5 |
+| multi-bus-memory | 7 | 25 | 0.300 | 1.000 | 23.6s | 25 | 0 | 0 |
+| rule | 7 | 25 | 0.269 | 0.792 | 24.8s | 20 | 5 | 5 |
 
 ## Trajectory Data
 

@@ -1,0 +1,429 @@
+[
+  {
+    "game_id": "SSD_00482P01",
+    "valid": false,
+    "reasons": [
+      "right did not move (dist=0.000)",
+      "down did not move (dist=0.000)",
+      "left did not move (dist=0.000)",
+      "up did not move (dist=0.000)",
+      "right or down did not produce measurable movement"
+    ],
+    "basis": null,
+    "samples": [
+      {
+        "name": "right",
+        "dx": 1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "down",
+        "dx": 0,
+        "dz": 1,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "left",
+        "dx": -1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "up",
+        "dx": 0,
+        "dz": -1,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 6.972
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      }
+    ],
+    "drift": {
+      "x": 0.0,
+      "z": 0.0
+    },
+    "anchor": [
+      187,
+      650
+    ],
+    "radius": 60,
+    "pulse_ms": 650,
+    "return_ms": 320,
+    "settle_ms": 250,
+    "timestamp": "2026-07-20T06:02:33"
+  },
+  {
+    "game_id": "SSD_00736P01",
+    "valid": true,
+    "reasons": [],
+    "basis": {
+      "screen_right": {
+        "x": 1.4428,
+        "z": -2.899
+      },
+      "screen_down": {
+        "x": 1.4858,
+        "z": 2.8986
+      }
+    },
+    "samples": [
+      {
+        "name": "right",
+        "dx": 1,
+        "dy": 0,
+        "before": {
+          "x": 2.8281443119049072,
+          "y": 4.768371586472142e-08,
+          "z": -1.6718552112579346
+        },
+        "after": {
+          "x": 4.270928859710693,
+          "y": 4.768371586472142e-08,
+          "z": -4.570850372314453
+        },
+        "delta_x": 1.4428,
+        "delta_z": -2.899,
+        "distance": 3.2382,
+        "moved": true
+      },
+      {
+        "name": "down",
+        "dx": 0,
+        "dy": 1,
+        "before": {
+          "x": 2.785156726837158,
+          "y": 4.768371586472142e-08,
+          "z": -3.0850777626037598
+        },
+        "after": {
+          "x": 4.270928859710693,
+          "y": 4.768371586472142e-08,
+          "z": -0.18650543689727783
+        },
+        "delta_x": 1.4858,
+        "delta_z": 2.8986,
+        "distance": 3.2572,
+        "moved": true
+      },
+      {
+        "name": "left",
+        "dx": -1,
+        "dy": 0,
+        "before": {
+          "x": 2.7868528366088867,
+          "y": 4.768371586472142e-08,
+          "z": -1.6705811023712158
+        },
+        "after": {
+          "x": -0.11214327067136765,
+          "y": 4.768371586472142e-08,
+          "z": 1.2284150123596191
+        },
+        "delta_x": -2.899,
+        "delta_z": 2.899,
+        "distance": 4.0998,
+        "moved": true
+      },
+      {
+        "name": "up",
+        "dx": 0,
+        "dy": -1,
+        "before": {
+          "x": 1.3732051849365234,
+          "y": 4.768371586472142e-08,
+          "z": -0.2569335699081421
+        },
+        "after": {
+          "x": -1.5253667831420898,
+          "y": 4.768371586472142e-08,
+          "z": -3.155505895614624
+        },
+        "delta_x": -2.8986,
+        "delta_z": -2.8986,
+        "distance": 4.0992,
+        "moved": true
+      }
+    ],
+    "drift": {
+      "x": -2.8677,
+      "z": 0.0021
+    },
+    "anchor": [
+      187,
+      650
+    ],
+    "radius": 60,
+    "pulse_ms": 650,
+    "return_ms": 320,
+    "settle_ms": 250,
+    "timestamp": "2026-07-20T06:02:54"
+  },
+  {
+    "game_id": "SSD_00342P01",
+    "valid": false,
+    "reasons": [
+      "right did not move (dist=0.000)",
+      "down did not move (dist=0.000)",
+      "left did not move (dist=0.000)",
+      "up did not move (dist=0.000)",
+      "right or down did not produce measurable movement"
+    ],
+    "basis": null,
+    "samples": [
+      {
+        "name": "right",
+        "dx": 1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "down",
+        "dx": 0,
+        "dz": 1,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "left",
+        "dx": -1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "up",
+        "dx": 0,
+        "dz": -1,
+        "method": "cocos",
+        "before": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      }
+    ],
+    "drift": {
+      "x": 0.0,
+      "z": 0.0
+    },
+    "anchor": [
+      187,
+      650
+    ],
+    "radius": 60,
+    "pulse_ms": 650,
+    "return_ms": 320,
+    "settle_ms": 250,
+    "timestamp": "2026-07-20T06:03:18"
+  },
+  {
+    "game_id": "SSD_00532P01",
+    "valid": false,
+    "reasons": [
+      "right did not move (dist=0.000)",
+      "down did not move (dist=0.000)",
+      "left did not move (dist=0.000)",
+      "up did not move (dist=0.000)",
+      "right or down did not produce measurable movement"
+    ],
+    "basis": null,
+    "samples": [
+      {
+        "name": "right",
+        "dx": 1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "down",
+        "dx": 0,
+        "dz": 1,
+        "method": "cocos",
+        "before": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "left",
+        "dx": -1,
+        "dz": 0,
+        "method": "cocos",
+        "before": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      },
+      {
+        "name": "up",
+        "dx": 0,
+        "dz": -1,
+        "method": "cocos",
+        "before": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "after": {
+          "x": -1.7999999523162842,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "delta_x": 0.0,
+        "delta_z": 0.0,
+        "distance": 0.0,
+        "moved": false
+      }
+    ],
+    "drift": {
+      "x": 0.0,
+      "z": 0.0
+    },
+    "anchor": [
+      187,
+      650
+    ],
+    "radius": 60,
+    "pulse_ms": 650,
+    "return_ms": 320,
+    "settle_ms": 250,
+    "timestamp": "2026-07-20T06:03:41"
+  }
+]

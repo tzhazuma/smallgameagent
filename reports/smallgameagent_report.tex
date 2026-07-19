@@ -238,6 +238,26 @@ VLM 训练 & 10,336 样本 7 任务 QLoRA & 15,083 样本 7 任务（processed-r
 3. 00482/00342/00532 的 activity=0 是\_\_BOLD\_0000\_\_：未校准基线→方向全错→需该游戏的 profile 校准。\\
 4. 10 个轨迹 JSONL 已采集（\_\_CODE\_0000\_\_），可直接用于 VLM 微调。\\
 
+\subsubsection{5.4 自动校准（auto\_calibrate.py）}
+
+新建自动校准脚本：4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退。\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+游戏 & 结果 & 说明 \\
+\hline
+00736 & \_\_BOLD\_0000\_\_ & basis=(1.44,-2.90)/(1.49,2.90)，已写入 profile \\
+\hline
+00482/00342/00532 & INVALID & joystick + cocos move 均 0 位移——非 joystick 驱动游戏 \\
+\hline
+\end{tabular}
+\end{table}
+
+自动校准正确区分了 joystick 驱动 vs tap-to-move/自动移动游戏。\\
+
 \subsection{6. 后续建议}
 
 1. \_\_BOLD\_0001\_\_：用 probe 的 \_\_CODE\_0000\_\_ 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。\\

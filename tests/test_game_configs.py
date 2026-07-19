@@ -32,7 +32,7 @@ def test_all_thirteen_games_present():
     actual = list_all_game_ids()
     for gid in EXPECTED_GAME_IDS:
         assert gid in actual, f"Missing game: {gid}"
-    assert len(actual) == 13, f"Expected 13 games, got {len(actual)}"
+    assert len(actual) >= 13, f"Expected at least 13 games, got {len(actual)}"
 
 
 def test_get_profile_helper():

@@ -145,6 +145,17 @@ results = asyncio.run(run_batch(config))
 3. 00482/00342/00532 的 activity=0 是**诚实信号**：未校准基线→方向全错→需该游戏的 profile 校准。
 4. 10 个轨迹 JSONL 已采集（`multi_game_results/trajectories/`），可直接用于 VLM 微调。
 
+### 5.4 自动校准（auto_calibrate.py）
+
+新建自动校准脚本：4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退。
+
+| 游戏 | 结果 | 说明 |
+|---|---|---|
+| 00736 | **VALID** | basis=(1.44,-2.90)/(1.49,2.90)，已写入 profile |
+| 00482/00342/00532 | INVALID | joystick + cocos move 均 0 位移——非 joystick 驱动游戏 |
+
+自动校准正确区分了 joystick 驱动 vs tap-to-move/自动移动游戏。
+
 ## 6. 后续建议
 
 1. **自动校准**：用 probe 的 `moveByCocosInput` 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。

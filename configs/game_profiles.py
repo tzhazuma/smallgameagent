@@ -280,6 +280,28 @@ GAME_PROFILES = {
         "design_resolution": [720, 1560],
         "viewport": [375, 812],
     },
+    "SSD_00736P01": {
+        "game_id": "SSD_00736P01",
+        "label": "养蛙迭代捕鱼养龟",
+        "file_pattern": "SSD_00736P01_EN_LSS_20260402_DLCX_Applovin_养蛙迭代捕鱼养龟",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T06:02:54",
+            "basis": {
+                "screen_right": {"x": 1.4428, "z": -2.899},
+                "screen_down": {"x": 1.4858, "z": 2.8986},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
 }
 
 
