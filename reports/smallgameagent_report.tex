@@ -188,11 +188,61 @@ VLM 训练 & 10,336 样本 7 任务 QLoRA & 15,083 样本 7 任务（processed-r
 \end{tabular}
 \end{table}
 
-\subsection{5. 后续建议}
+\subsection{5. 多游戏泛化实验（第四轮）}
 
-1. \_\_BOLD\_0000\_\_：用 systemd/supervisor 保持 gemma-4-E4B llama-server 运行，让 hierarchical L1 可用。\\
-2. \_\_BOLD\_0001\_\_：kimi-k2.7-code 加 \_\_CODE\_0000\_\_ 系统提示，或切换到 non-thinking 模型。\\
-3. *\_\_ITALIC\_0000\_\_ routing 移植*\_\_ITALIC\_0001\_\_ + AirWall collider 检测。\\
-4. \_\_BOLD\_0001\_\_：为 \_\_CODE\_0000\_\_ 中的 22 游戏批量生成 profile（用 probe 自动校准）。\\
+\subsubsection{5.1 Generic fallback 让 22 游戏可驱动}
+
+\_\_CODE\_0000\_\_ 新增 \_\_CODE\_0001\_\_（floating joystick + 单位基线，未校准）+ \_\_CODE\_0002\_\_。\_\_CODE\_0003\_\_ 对无 profile 游戏不再抛错，改用 generic 驱动（移动方向不可靠但 tap 坐标有效）。\\
+
+\subsubsection{5.2 Probe 终止假阳性修复}
+
+\_\_BOLD\_0002\_\_：Cocos 引擎标志 \_\_CODE\_0000\_\_（含 "finish"）被 probe WIN 正则误命中，以及 Logo/火堆等常驻 UI 被标 "completion-like"——导致 00482/00342 在第一个动作后被误报 \_\_CODE\_0001\_\_，1 步假阳性、composite 虚高 0.700。\\
+
+\_\_BOLD\_0002\_\_：\_\_CODE\_0000\_\_ 改为佐证制——要求 win/victory 面板节点 / 胜利 analytics / 非 \_\_CODE\_0001\_\_ 管理器的强胜利标志之一，排除 lose/fail（保留 00461 失败重试）。\\
+
+\subsubsection{5.3 修正后多游戏结果（5 游戏 × 2 模式）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|l|}
+\hline
+游戏 & 校准? & 模式 & 步数 & composite & activity & tap & stall \\
+\hline
+00461 塔防 & cal & rule & 25 & 0.106 & 0.71 & 17 & 7 \\
+\hline
+00461 塔防 & cal & multi-bus-memory & 25 & \_\_BOLD\_0000\_\_ & 1.00 & 24 & 0 \\
+\hline
+00482 砍树 & GEN & rule & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+00482 砍树 & GEN & multi-bus-memory & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+00736 养蛙捕鱼 & GEN & rule & 25 & 0.269 & 0.79 & 20 & 5 \\
+\hline
+00736 养蛙捕鱼 & GEN & multi-bus-memory & 25 & \_\_BOLD\_0000\_\_ & 1.00 & 25 & 0 \\
+\hline
+00342 建造合并 & GEN & rule & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+00342 建造合并 & GEN & multi-bus-memory & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+00532 瀑布巨木 & GEN & rule & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+00532 瀑布巨木 & GEN & multi-bus-memory & 25 & 0.150 & 0.00 & 0 & 24 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0000\_\_——与已校准 00461 持平。记忆读回补偿了未校准基线：记住成功 tap 模式后 activity 0.79→1.00、stall 5→0。\\
+2. \_\_BOLD\_0000\_\_ 在所有 5 游戏上一致成立。\\
+3. 00482/00342/00532 的 activity=0 是\_\_BOLD\_0000\_\_：未校准基线→方向全错→需该游戏的 profile 校准。\\
+4. 10 个轨迹 JSONL 已采集（\_\_CODE\_0000\_\_），可直接用于 VLM 微调。\\
+
+\subsection{6. 后续建议}
+
+1. \_\_BOLD\_0001\_\_：用 probe 的 \_\_CODE\_0000\_\_ 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。\\
+2. \_\_BOLD\_0000\_\_：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。\\
+3. \_\_BOLD\_0000\_\_：kimi-k2.7-code 加 "只输出 JSON" 系统提示。\\
+4. *\_\_ITALIC\_0000\_\_ routing 移植**：从 00864/00867 驱动移植。\\
 5. \_\_BOLD\_0001\_\_：CI/CD 中跑 \_\_CODE\_0000\_\_，每次代码变更自动对比 composite。\\
 \end{document}

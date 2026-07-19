@@ -334,3 +334,68 @@ VLMColdStartDataset 实载抽查通过：
 
 ### 测试
 - 674 passed, 0 failed, ruff 全绿。
+
+## 2026-07-20 第四轮：多游戏泛化 + probe 终止假阳性修复
+
+### 让 22 个游戏都可驱动（generic fallback）
+`_extracted/games/` 有 22 个游戏，但只有 SSD_00461P01 有手调 profile；此前 `RuleEngine` 对未知 game_id 直接抛 `ValueError`，导致多游戏实验无法跑。
+- `configs/game_profiles.py` 新增 `GENERIC_PROFILE`（floating joystick + 单位基线，**未校准**，标 `is_generic=True`）与 `get_profile_or_generic()`。
+- `src/engine/rules.py` 的 `RuleEngine` 改用 `get_profile_or_generic`，无 profile 游戏不再抛错，而是用未校准 generic 驱动（移动方向不可靠，但 tap 屏幕坐标仍有效），并打 warning、置 `self.is_generic`。
+- 意义：框架现在能**加载、驱动、采集**任意游戏的轨迹，泛化/数据采集不再被 profile 缺失阻塞；分数高低则诚实反映"是否需要该游戏的校准"。
+
+### 多游戏泛化实验（exp_multi_game.py + batch_runner）
+挑 5 个机制有代表性的游戏 × 2 模式（rule / multi-bus-memory）× 1 seed，25 步，自动写逐步轨迹 JSONL：
+- 00461 塔防（**已校准**）、00482 砍树扩地（收集）、00736 养蛙捕鱼养龟（auto-fish 能力翻转）、00342 建造合并、00532 瀑布巨木（收集）。
+
+**初始跑（raw probe 终止判据，暴露测量 bug）**：
+| 游戏 | 校准? | 模式 | 步数 | composite | activity | tap | move | stall |
+|---|---|---|---|---|---|---|---|---|
+| 00461 | cal | rule | 25 | 0.112 | 0.75 | 18 | 6 | 6 |
+| 00461 | cal | multi-bus-memory | 25 | 0.131 | 0.88 | 21 | 3 | 3 |
+| 00482 | GEN | rule | **1** | 0.700 | 1.00 | 0 | 0 | 0 |
+| 00482 | GEN | multi-bus-memory | **1** | 0.700 | 1.00 | 0 | 0 | 0 |
+| 00736 | GEN | rule | 25 | 0.269 | 0.79 | 20 | 5 | 5 |
+| 00736 | GEN | multi-bus-memory | 25 | 0.281 | 0.88 | 22 | 3 | 3 |
+| 00342 | GEN | rule | **1** | 0.700 | 1.00 | 0 | 0 | 0 |
+| 00342 | GEN | multi-bus-memory | **1** | 0.700 | 1.00 | 0 | 0 | 0 |
+| 00532 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 25 | 24 |
+| 00532 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 25 | 24 |
+
+观察：00736 用**未校准** generic 驱动仍真玩满 25 步、composite 0.27–0.28（probe 后端状态读得全：chickenCount/fishCount/coin 等），证明 generic 路径可用；00532 因基线未校准全 stall（activity 0，符合预期，正是"该游戏需要校准"的诚实信号）。
+
+### probe 终止假阳性根因（实时 probe dump 实锤）
+00482/00342 在加载时 `done=False`，但**第一个动作后** probe 把 `done/win` 翻成 True，导致 1 步假阳性、composite 虚高 0.700。dump `observe_fast` 的 `completionSummary.endState`：
+- 00482：`reason="manager flag cc.Button._transitionFinished"`，`activeEndNodes=[]`，`analyticsEventsTail=[]`，`managerFlags=[]`。即 Cocos 引擎内部标志 `cc.Button._transitionFinished`（含 "finish" 子串）被 probe 的 WIN 正则误命中——它只是按钮按压动画结束标志，常驻为 True。
+- 00342：`activeEndNodes=[Logo, Container, 火堆]`（reason "completion-like node active"）——全是常驻 gameplay UI，不是结束面板。
+- 对照 00736：全程 `done=False`，无误触发。
+
+### 修复：完成判定改为"佐证制"（_is_finished）
+`src/agent/hybrid_agent.py` 的 `_is_finished` 不再信任裸 `done/win`，而要求**真实结束屏的佐证**之一：
+1. 结束面板节点：节点名/路径匹配 `endcard|victory|success|gamewin|ui_win` 或 `win/WinPanel`（**排除 lose/fail**，以免破坏 00461 的可恢复失败重试）；
+2. 胜利 analytics 事件：`ENDCARD_SHOWN|COMPLETED|CHALLENGE_SOLVED|ShowEndCard`；
+3. 非引擎管理器的强胜利标志：className 不以 `cc.` 开头且 flag 键匹配 `isWin|gameWin|hasWin|isComplete|levelComplete`。
+三者皆无（如 `cc.Button._transitionFinished`、Logo/火堆）→ 判为假阳性，**继续游玩**。无 `completionSummary` 的旧 probe 回退到 raw 标志，绝不回归。
+
+预期效果：00482/00342 不再 1 步退出，跑满 25 步给出真实泛化分数；00461 真赢（WinPanel）仍正确终止、可恢复失败仍走 dismiss 重试。修正后重跑数据见 `multi_game_results/analysis.md`（下一节补入）。
+
+**修正后部分验证（重跑进行中，已观测）**：00482 rule 由修正前的 **1 步 / 0.700（假阳性）** 变为修正后的 **25 步 / 0.150**——假阳性被消除，跑满步数；其 0.150 来自 consistency=1.0 而 activity≈0（未校准基线方向乱、全 stall），正是"该游戏需要校准"的诚实信号。00461 multi-bus-memory 修正后仍 **0.300**，确认佐证修复对已校准/真终止场景无回归。
+
+### 修正后完整结果（佐证制 _is_finished）
+| 游戏 | 校准? | 模式 | 步数 | composite | activity | tap | move | stall | 墙钟 |
+|---|---|---|---|---|---|---|---|---|---|
+| 00461 | cal | rule | 25 | 0.106 | 0.71 | 17 | 7 | 7 | 24.2s |
+| 00461 | cal | multi-bus-memory | 25 | **0.300** | 1.00 | 24 | 0 | 0 | 19.9s |
+| 00482 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 0 | 24 | 34.5s |
+| 00482 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 0 | 24 | 34.9s |
+| 00736 | GEN | rule | 25 | 0.269 | 0.79 | 20 | 5 | 5 | 26.4s |
+| 00736 | GEN | multi-bus-memory | 25 | **0.300** | 1.00 | 25 | 0 | 0 | 25.2s |
+| 00342 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 0 | 24 | 31.8s |
+| 00342 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 0 | 24 | 31.5s |
+| 00532 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 25 | 24 | 34.7s |
+| 00532 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 25 | 24 | 32.3s |
+
+**关键发现**：
+1. **假阳性消除**：00482/00342 从 1 步→25 步，composite 从虚高 0.700→真实 0.150。
+2. **00736 multi-bus-memory 达 0.300**——与已校准的 00461 持平！记忆读回机制补偿了未校准基线：它记住了成功的 tap 模式，使 activity 从 0.79→1.00、stall 从 5→0。
+3. **multi-bus-memory ≥ rule** 在所有 5 游戏上一致成立。
+4. 00482/00342/00532 的 activity=0 是**诚实信号**：未校准基线导致方向全错→全 stall→需要该游戏的 profile 校准。

@@ -14,7 +14,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
-from configs.game_profiles import get_profile
+from configs.game_profiles import get_profile, get_profile_or_generic
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +106,14 @@ class RuleEngine:
 
     def __init__(self, game_id: str) -> None:
         self.game_id = game_id
-        profile = get_profile(game_id)
-        if profile is None:
-            raise ValueError(f"Unknown game_id: {game_id}")
+        self.is_generic = get_profile(game_id) is None
+        profile = get_profile_or_generic(game_id)
+        if self.is_generic:
+            logger.warning(
+                "game_id %s has no tuned profile; using UNCALIBRATED generic "
+                "fallback (movement direction unreliable, tap coords still valid)",
+                game_id,
+            )
         self.profile = profile
         self.driver_type: str = profile.get("driver_type", "follow-guide-audited")
 

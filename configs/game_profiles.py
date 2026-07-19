@@ -283,9 +283,59 @@ GAME_PROFILES = {
 }
 
 
+#: Generic fallback profile used for games that have no hand-tuned profile.
+#: It assumes a floating joystick (touch drag anywhere) and a unit world↔screen
+#: basis.  The basis is *uncalibrated*, so movement direction will be wrong for
+#: most games — this profile exists so the framework can still load, drive and
+#: collect trajectories from unprofiled games (generalisation / data collection),
+#: not to score well on them.  ``is_generic`` lets callers tell the two apart.
+GENERIC_PROFILE = {
+    "game_id": "__generic__",
+    "label": "generic-fallback (uncalibrated)",
+    "file_pattern": "",
+    "joystick": {
+        "anchor": [187, 650],
+        "radius": 60,
+        "input_mode": "touch",
+    },
+    "calibration": {
+        "source": "generic fallback: unit basis, UNCALIBRATED — direction unreliable",
+        "basis": {
+            "screen_right": {"x": 1, "z": 0},
+            "screen_down": {"x": 0, "z": 1},
+        },
+    },
+    "ground_arrival_threshold": 55,
+    "target_dwell_ms": 4000,
+    "driver_type": "tap-guide",
+    "design_resolution": [720, 1560],
+    "viewport": [375, 812],
+    "is_generic": True,
+}
+
+
 def get_profile(game_id):
-    """Get a game profile by game_id string (e.g. 'SSD_00848P01')."""
+    """Get a game profile by game_id string (e.g. 'SSD_00848P01').
+
+    Returns ``None`` when the game has no hand-tuned profile.  Callers that
+    want a drivable fallback for any game should use :func:`get_profile_or_generic`.
+    """
     return GAME_PROFILES.get(game_id)
+
+
+def get_profile_or_generic(game_id):
+    """Return the tuned profile for *game_id*, or a generic fallback.
+
+    The generic fallback is uncalibrated (see :data:`GENERIC_PROFILE`); the
+    returned dict carries ``is_generic=True`` in that case so callers can
+    report calibrated vs uncalibrated runs separately.
+    """
+    profile = GAME_PROFILES.get(game_id)
+    if profile is not None:
+        return profile
+    generic = dict(GENERIC_PROFILE)
+    generic["game_id"] = game_id
+    return generic
 
 
 def list_all_game_ids():

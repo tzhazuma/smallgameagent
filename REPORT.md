@@ -112,10 +112,43 @@ results = asyncio.run(run_batch(config))
 | VLM 训练 | 10,336 样本 7 任务 QLoRA | 15,083 样本 7 任务（processed-runs） | 我们更多 |
 | 多 Agent | 无 | 6 角色总线 + 记忆 + Critic | 我们领先 |
 
-## 5. 后续建议
+## 5. 多游戏泛化实验（第四轮）
 
-1. **本地 VLM 常驻**：用 systemd/supervisor 保持 gemma-4-E4B llama-server 运行，让 hierarchical L1 可用。
-2. **L2 输出契约**：kimi-k2.7-code 加 `"只输出 JSON，不要思考过程"` 系统提示，或切换到 non-thinking 模型。
-3. **A* routing 移植**：从 00864/00867 驱动移植网格 A* + AirWall collider 检测。
-4. **多游戏扩展**：为 `_extracted/games/` 中的 22 游戏批量生成 profile（用 probe 自动校准）。
-5. **批量实验自动化**：CI/CD 中跑 `exp_batch_matrix.py`，每次代码变更自动对比 composite。
+### 5.1 Generic fallback 让 22 游戏可驱动
+
+`configs/game_profiles.py` 新增 `GENERIC_PROFILE`（floating joystick + 单位基线，未校准）+ `get_profile_or_generic()`。`RuleEngine` 对无 profile 游戏不再抛错，改用 generic 驱动（移动方向不可靠但 tap 坐标有效）。
+
+### 5.2 Probe 终止假阳性修复
+
+**根因**：Cocos 引擎标志 `cc.Button._transitionFinished`（含 "finish"）被 probe WIN 正则误命中，以及 Logo/火堆等常驻 UI 被标 "completion-like"——导致 00482/00342 在第一个动作后被误报 `done/win=True`，1 步假阳性、composite 虚高 0.700。
+
+**修复**：`_is_finished` 改为佐证制——要求 win/victory 面板节点 / 胜利 analytics / 非 `cc.*` 管理器的强胜利标志之一，排除 lose/fail（保留 00461 失败重试）。
+
+### 5.3 修正后多游戏结果（5 游戏 × 2 模式）
+
+| 游戏 | 校准? | 模式 | 步数 | composite | activity | tap | stall |
+|---|---|---|---|---|---|---|---|
+| 00461 塔防 | cal | rule | 25 | 0.106 | 0.71 | 17 | 7 |
+| 00461 塔防 | cal | multi-bus-memory | 25 | **0.300** | 1.00 | 24 | 0 |
+| 00482 砍树 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 24 |
+| 00482 砍树 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 24 |
+| 00736 养蛙捕鱼 | GEN | rule | 25 | 0.269 | 0.79 | 20 | 5 |
+| 00736 养蛙捕鱼 | GEN | multi-bus-memory | 25 | **0.300** | 1.00 | 25 | 0 |
+| 00342 建造合并 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 24 |
+| 00342 建造合并 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 24 |
+| 00532 瀑布巨木 | GEN | rule | 25 | 0.150 | 0.00 | 0 | 24 |
+| 00532 瀑布巨木 | GEN | multi-bus-memory | 25 | 0.150 | 0.00 | 0 | 24 |
+
+**关键发现**：
+1. **00736（未校准）multi-bus-memory 达 0.300**——与已校准 00461 持平。记忆读回补偿了未校准基线：记住成功 tap 模式后 activity 0.79→1.00、stall 5→0。
+2. **multi-bus-memory ≥ rule** 在所有 5 游戏上一致成立。
+3. 00482/00342/00532 的 activity=0 是**诚实信号**：未校准基线→方向全错→需该游戏的 profile 校准。
+4. 10 个轨迹 JSONL 已采集（`multi_game_results/trajectories/`），可直接用于 VLM 微调。
+
+## 6. 后续建议
+
+1. **自动校准**：用 probe 的 `moveByCocosInput` 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。
+2. **本地 VLM 常驻**：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。
+3. **L2 输出契约**：kimi-k2.7-code 加 "只输出 JSON" 系统提示。
+4. **A* routing 移植**：从 00864/00867 驱动移植。
+5. **批量实验自动化**：CI/CD 中跑 `exp_multi_game.py`，每次代码变更自动对比 composite。

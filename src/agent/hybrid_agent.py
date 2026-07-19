@@ -721,19 +721,80 @@ class HybridAgent:
                 await asyncio.sleep(1.0)
         return {"ready": False}
 
+    # ── Completion corroboration patterns ───────────────────────────────
+    # The probe's raw ``done``/``win`` over-fire on many playables: e.g. the
+    # Cocos engine flag ``cc.Button._transitionFinished`` contains "finish"
+    # and trips the probe's WIN regex, and persistent nodes (Logo / campfire)
+    # are tagged "completion-like".  A real end screen, by contrast, is
+    # corroborated by a win/victory panel node, a completion analytics event,
+    # or a strong win flag on a *game* (non-``cc.*``) manager.  Lose/fail
+    # panels are deliberately excluded so the fail-panel dismiss path can
+    # still recover (e.g. 00461 retry).
+    _ENDCARD_RE = re.compile(r"endcard|endCard|victory|success|gamewin|ui_win|game_win", re.I)
+    _WIN_NODE_RE = re.compile(r"(^|[^a-z])(win|wins|winpanel|gamewin)([^a-z]|$)", re.I)
+    _ANALYTICS_WIN_RE = re.compile(r"ENDCARD_SHOWN|COMPLETED|CHALLENGE_SOLVED|ShowEndCard", re.I)
+    _STRONG_WIN_KEY_RE = re.compile(r"(isWin|gameWin|hasWin|isComplete|levelComplete)$", re.I)
+
     @staticmethod
     def _is_finished(state: dict[str, Any], summary: dict[str, Any]) -> bool:
-        if state.get("win"):
-            summary["completed"] = True
-            summary["win"] = True
-            summary["reason"] = "Win condition detected"
-            return True
-        if state.get("done"):
-            summary["completed"] = True
-            summary["win"] = False
-            summary["reason"] = state.get("doneReason", "Game ended")
-            return True
-        return False
+        """Decide whether the game has *really* ended.
+
+        A bare ``done``/``win`` flag is not trusted: the probe over-fires it
+        on persistent CTA buttons and on engine-internal flags such as
+        ``cc.Button._transitionFinished``.  We require *corroboration* — a
+        win/victory panel node, a completion analytics event, or a strong win
+        flag on a non-engine manager.  Lose/fail panels are excluded so the
+        fail-panel dismiss path can still retry (see ``_maybe_dismiss_fail_panel``).
+        When the probe carries no ``completionSummary`` at all (older payload)
+        we fall back to the raw flags so we never regress.
+        """
+        cs = state.get("completionSummary")
+        if not isinstance(cs, dict):
+            # Legacy probe without completionSummary: trust raw flags.
+            if state.get("win"):
+                summary["completed"] = True
+                summary["win"] = True
+                summary["reason"] = "Win condition detected"
+                return True
+            if state.get("done"):
+                summary["completed"] = True
+                summary["win"] = False
+                summary["reason"] = state.get("doneReason", "Game ended")
+                return True
+            return False
+
+        aen = cs.get("activeEndNodes") or []
+        endcard = any(
+            HybridAgent._ENDCARD_RE.search(f"{n.get('name', '')} {n.get('path', '')}")
+            or HybridAgent._WIN_NODE_RE.search(f"{n.get('name', '')} {n.get('path', '')}")
+            for n in aen
+        )
+        analytics = any(
+            HybridAgent._ANALYTICS_WIN_RE.search(
+                str(e.get("name") or e.get("event") or e)
+            )
+            for e in (cs.get("analyticsEventsTail") or [])
+        )
+        strong_flag = any(
+            not str(m.get("className", "")).startswith("cc.")
+            and any(
+                HybridAgent._STRONG_WIN_KEY_RE.search(k)
+                for k, v in (m.get("flags") or {}).items()
+                if v
+            )
+            for m in (cs.get("managerFlags") or [])
+        )
+
+        if not (endcard or analytics or strong_flag):
+            # Probe says done/win but there is no real end screen → false
+            # positive (CTA / engine flag).  Keep playing.
+            return False
+
+        is_win = bool(state.get("win")) or endcard or analytics or strong_flag
+        summary["completed"] = True
+        summary["win"] = is_win
+        summary["reason"] = state.get("doneReason") or ("Win" if is_win else "Game ended")
+        return True
 
     @staticmethod
     async def _execute(decision: dict[str, Any], runner: GameRunner) -> None:
