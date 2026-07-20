@@ -16,6 +16,7 @@ Text-based tasks (no images required):
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import re
@@ -25,13 +26,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 DATASET_ROOT = ROOT / "vlm-training-data-processed-runs"
-TRAJ_DIRS = [
+DEFAULT_TRAJ_DIRS = [
     ROOT / "full_matrix_results" / "A_full" / "trajectories",
     ROOT / "full_matrix_results" / "B_tap" / "trajectories",
     ROOT / "multi_game_results" / "trajectories",
     ROOT / "batch_results" / "trajectories",
     ROOT / "rule_update_ab_results" / "trajectories",
 ]
+TRAJ_DIRS: list[Path] = list(DEFAULT_TRAJ_DIRS)
 
 STALL_DISPLACEMENT = 0.05
 MIN_GAIN_FIELDS = 3  # >=3 changed fields → "high" info gain
@@ -478,7 +480,28 @@ def _update_manifest(counts: dict[str, int]) -> None:
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Convert agent trajectory JSONL files into VLM training samples.")
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        action="append",
+        help="Directory containing trajectory .jsonl files (can be given multiple times). Defaults to built-in list.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output dataset directory (default: vlm-training-data-processed-runs)",
+    )
+    args = parser.parse_args(argv)
+
+    # Allow CLI to override the dataset root and trajectory dirs.
+    global DATASET_ROOT, TRAJ_DIRS
+    DATASET_ROOT = args.output_dir if args.output_dir else DATASET_ROOT
+    DATASET_ROOT.mkdir(parents=True, exist_ok=True)
+    TRAJ_DIRS = list(args.input_dir) if args.input_dir else list(DEFAULT_TRAJ_DIRS)
+
     # Collect all trajectory files
     traj_files = []
     for traj_dir in TRAJ_DIRS:

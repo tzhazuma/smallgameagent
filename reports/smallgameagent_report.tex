@@ -602,4 +602,66 @@ failure\_recovery & +9 & 32 \\
 
 数据覆盖 rule / multi-bus-memory / hierarchical 三种模式，可用于后续 QLoRA 微调。\\
 5. \_\_BOLD\_0001\_\_：CI/CD 中跑 \_\_CODE\_0000\_\_，每次代码变更自动对比 composite。\\
+
+\subsection{18. 代表性游戏子集批量跑测}
+
+\subsubsection{18.1 实验设计}
+
+为验证浏览器修复后的多游戏自动跑测能力，挑选 6 个有代表性的游戏：\\
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：SSD\_00461P01 塔防、SSD\_00483P01 吸沙抽水、SSD\_00522P02 地下炸矿
+  \item \_\_BOLD\_0000\_\_：SSD\_00382P01 低坑杀鲨鱼、SSD\_00594P02 破石收水、SSD\_00742P01 加油小镇
+\end{itemize}
+
+模式：A 类跑 rule / multi-bus / multi-bus-memory；B 类跑 rule / multi-bus-memory。seed=42，25 步。\\
+
+\subsubsection{18.2 结果}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+game\_id & mode & composite & activity & stall & wall \\
+\hline
+SSD\_00382P01 & rule & 0.300 & 1.000 & 0 & 13.4s \\
+\hline
+SSD\_00382P01 & multi-bus-memory & 0.300 & 1.000 & 0 & 12.8s \\
+\hline
+SSD\_00461P01 & rule & 0.106 & 0.708 & 7 & 14.6s \\
+\hline
+SSD\_00461P01 & multi-bus & 0.161 & 0.875 & 3 & 13.0s \\
+\hline
+SSD\_00461P01 & multi-bus-memory & 0.300 & 1.000 & 0 & 11.7s \\
+\hline
+SSD\_00483P01 & rule & 0.244 & 0.625 & 9 & 20.4s \\
+\hline
+SSD\_00483P01 & multi-bus & 0.150 & 0.000 & 24 & 20.6s \\
+\hline
+SSD\_00483P01 & multi-bus-memory & 0.150 & 0.000 & 24 & 19.7s \\
+\hline
+SSD\_00522P02 & rule & 0.215 & 0.833 & 4 & 15.7s \\
+\hline
+SSD\_00522P02 & multi-bus & 0.227 & 0.917 & 2 & 16.1s \\
+\hline
+SSD\_00522P02 & multi-bus-memory & 0.240 & 1.000 & 0 & 15.0s \\
+\hline
+SSD\_00594P02 & rule & 0.300 & 1.000 & 0 & 17.0s \\
+\hline
+SSD\_00594P02 & multi-bus-memory & 0.300 & 1.000 & 0 & 17.4s \\
+\hline
+SSD\_00742P01 & rule & 0.300 & 1.000 & 0 & 15.3s \\
+\hline
+SSD\_00742P01 & multi-bus-memory & 0.300 & 1.000 & 0 & 15.8s \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{18.3 结论}
+
+1. \_\_BOLD\_0000\_\_：3/3 游戏达到 composite 0.300，multi-bus-memory 未带来额外收益，仅将 stall 归零。\\
+2. \_\_BOLD\_0000\_\_：00461 从 0.106 提升到 0.300，但 00483 的 multi-bus/multi-bus-memory 均 activity=0，说明 00483 的 profile/driver 需要调优。\\
+3. \_\_BOLD\_0001\_\_：使用 Playwright bundled Chromium + \_\_CODE\_0000\_\_ 后，headless 场景初始化成功率 100\%。\\
+4. \_\_BOLD\_0002\_\_：代表性子集轨迹经 \_\_CODE\_0000\_\_ 转换后新增 1,173 条样本，存入 \_\_CODE\_0001\_\_。\\
 \end{document}

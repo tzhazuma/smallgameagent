@@ -364,3 +364,41 @@ results = asyncio.run(run_batch(config))
 
 数据覆盖 rule / multi-bus-memory / hierarchical 三种模式，可用于后续 QLoRA 微调。
 5. **批量实验自动化**：CI/CD 中跑 `exp_multi_game.py`，每次代码变更自动对比 composite。
+
+## 18. 代表性游戏子集批量跑测
+
+### 18.1 实验设计
+
+为验证浏览器修复后的多游戏自动跑测能力，挑选 6 个有代表性的游戏：
+
+- **A 类（joystick）**：SSD_00461P01 塔防、SSD_00483P01 吸沙抽水、SSD_00522P02 地下炸矿
+- **B 类（tap-only）**：SSD_00382P01 低坑杀鲨鱼、SSD_00594P02 破石收水、SSD_00742P01 加油小镇
+
+模式：A 类跑 rule / multi-bus / multi-bus-memory；B 类跑 rule / multi-bus-memory。seed=42，25 步。
+
+### 18.2 结果
+
+| game_id      | mode             | composite | activity | stall | wall  |
+|--------------|------------------|-----------|----------|-------|-------|
+| SSD_00382P01 | rule             | 0.300     | 1.000    | 0     | 13.4s |
+| SSD_00382P01 | multi-bus-memory | 0.300     | 1.000    | 0     | 12.8s |
+| SSD_00461P01 | rule             | 0.106     | 0.708    | 7     | 14.6s |
+| SSD_00461P01 | multi-bus        | 0.161     | 0.875    | 3     | 13.0s |
+| SSD_00461P01 | multi-bus-memory | 0.300     | 1.000    | 0     | 11.7s |
+| SSD_00483P01 | rule             | 0.244     | 0.625    | 9     | 20.4s |
+| SSD_00483P01 | multi-bus        | 0.150     | 0.000    | 24    | 20.6s |
+| SSD_00483P01 | multi-bus-memory | 0.150     | 0.000    | 24    | 19.7s |
+| SSD_00522P02 | rule             | 0.215     | 0.833    | 4     | 15.7s |
+| SSD_00522P02 | multi-bus        | 0.227     | 0.917    | 2     | 16.1s |
+| SSD_00522P02 | multi-bus-memory | 0.240     | 1.000    | 0     | 15.0s |
+| SSD_00594P02 | rule             | 0.300     | 1.000    | 0     | 17.0s |
+| SSD_00594P02 | multi-bus-memory | 0.300     | 1.000    | 0     | 17.4s |
+| SSD_00742P01 | rule             | 0.300     | 1.000    | 0     | 15.3s |
+| SSD_00742P01 | multi-bus-memory | 0.300     | 1.000    | 0     | 15.8s |
+
+### 18.3 结论
+
+1. **B 类 tap-only 游戏 rule 模式已足够**：3/3 游戏达到 composite 0.300，multi-bus-memory 未带来额外收益，仅将 stall 归零。
+2. **multi-bus-memory 对 A 类 joystick 游戏有选择性收益**：00461 从 0.106 提升到 0.300，但 00483 的 multi-bus/multi-bus-memory 均 activity=0，说明 00483 的 profile/driver 需要调优。
+3. **浏览器修复是前置条件**：使用 Playwright bundled Chromium + `--enable-unsafe-swiftshader --in-process-gpu` 后，headless 场景初始化成功率 100%。
+4. **训练数据扩充**：代表性子集轨迹经 `trajectory_converter.py` 转换后新增 1,173 条样本，存入 `vlm-training-data-representative/`。

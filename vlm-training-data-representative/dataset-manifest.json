@@ -1,0 +1,42 @@
+{
+  "tasks": {
+    "next_probe_action": {
+      "train": 0,
+      "val": 0,
+      "all": 0
+    },
+    "probe_action_effect": {
+      "train": 360,
+      "val": 0,
+      "all": 360
+    },
+    "field_grounding": {
+      "train": 0,
+      "val": 0,
+      "all": 0
+    },
+    "information_gain_judgment": {
+      "train": 360,
+      "val": 0,
+      "all": 360
+    },
+    "pulse_response_grounding": {
+      "train": 75,
+      "val": 0,
+      "all": 75
+    },
+    "progression_grounding": {
+      "train": 375,
+      "val": 0,
+      "all": 375
+    },
+    "failure_recovery": {
+      "train": 3,
+      "val": 0,
+      "all": 3
+    }
+  },
+  "total_samples": 1173,
+  "updated_by": "trajectory_converter",
+  "updated_at": "2026-07-21T03:07:38"
+}

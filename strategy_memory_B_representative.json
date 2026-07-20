@@ -1,0 +1,68 @@
+{
+  "unknown": {
+    "play_N:Generate._rowCount": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 5.3,
+            "y": 811.8,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 6,
+        "successes": 6,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:GameUI.timecount": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": -6.5,
+            "y": 801.0,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 44,
+        "successes": 44,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_F:MainGame.isGameOver_N:Actor.moneyThickness": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 469.7,
+            "y": 755.6,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 50,
+        "successes": 50,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_F:PGameManager.isGameOver": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": -1054.1,
+            "y": 1701.7,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 28,
+        "successes": 28,
+        "failures": 0,
+        "notes": ""
+      }
+    ]
+  }
+}

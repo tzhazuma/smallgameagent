@@ -80,9 +80,49 @@
 
 已添加 `.env.example` 记录上述配置；`.env` 已本地更新并 gitignored。
 
+### 代表性游戏子集跑测（representative_results/）
+
+6 个游戏 × 关键模式 × seed=42，25 步：
+
+| game_id      | mode             | steps | composite | activity | stall | wall  |
+|--------------|------------------|-------|-----------|----------|-------|-------|
+| SSD_00382P01 | multi-bus-memory | 25    | 0.300     | 1.000    | 0     | 12.8s |
+| SSD_00382P01 | rule             | 25    | 0.300     | 1.000    | 0     | 13.4s |
+| SSD_00461P01 | multi-bus        | 25    | 0.161     | 0.875    | 3     | 13.0s |
+| SSD_00461P01 | multi-bus-memory | 25    | 0.300     | 1.000    | 0     | 11.7s |
+| SSD_00461P01 | rule             | 25    | 0.106     | 0.708    | 7     | 14.6s |
+| SSD_00483P01 | multi-bus        | 25    | 0.150     | 0.000    | 24    | 20.6s |
+| SSD_00483P01 | multi-bus-memory | 25    | 0.150     | 0.000    | 24    | 19.7s |
+| SSD_00483P01 | rule             | 25    | 0.244     | 0.625    | 9     | 20.4s |
+| SSD_00522P02 | multi-bus        | 25    | 0.227     | 0.917    | 2     | 16.1s |
+| SSD_00522P02 | multi-bus-memory | 25    | 0.240     | 1.000    | 0     | 15.0s |
+| SSD_00522P02 | rule             | 25    | 0.215     | 0.833    | 4     | 15.7s |
+| SSD_00594P02 | multi-bus-memory | 25    | 0.300     | 1.000    | 0     | 17.4s |
+| SSD_00594P02 | rule             | 25    | 0.300     | 1.000    | 0     | 17.0s |
+| SSD_00742P01 | multi-bus-memory | 25    | 0.300     | 1.000    | 0     | 15.8s |
+| SSD_00742P01 | rule             | 25    | 0.300     | 1.000    | 0     | 15.3s |
+
+关键发现：
+- **B 类 tap-only 游戏**（00382、00594、00742）rule 模式即可达到 composite 0.300，multi-bus-memory 无额外增益但 stall 归零。
+- **A 类 joystick 游戏**中，multi-bus-memory 对 00461 提升显著（0.106 → 0.300），但对 00483 无帮助（multi-bus/multi-bus-memory 均 activity=0）。00483 的 multi-bus 模式陷入持续 move + stall，需要进一步诊断 driver/profile。
+- 平均墙钟：A 类 ~15–20s/25 步，B 类 ~13–17s/25 步。
+
+### 训练数据扩充
+
+新增代表性子集轨迹转换：`trajectory_converter.py` 已支持 `--input-dir` / `--output-dir` 参数。
+
+```bash
+.venv/bin/python src/training/trajectory_converter.py \
+  --input-dir representative_results/A_representative/trajectories \
+  --input-dir representative_results/B_representative/trajectories \
+  --output-dir vlm-training-data-representative
+```
+
+产出 `vlm-training-data-representative/dataset-manifest.json`：`total_samples = 1,173`，覆盖 6 个游戏、5 个任务。
+
 ### 测试与质量
 
-- `pytest -q`：**697 passed, 58 skipped, 1 warning**。
+- `pytest -q`：**703 passed, 58 skipped, 1 warning**。
 - `ruff check .`：全绿。
 
 ---
