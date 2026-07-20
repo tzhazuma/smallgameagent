@@ -30,14 +30,14 @@ logger = logging.getLogger(__name__)
 
 _L2_SYSTEM = (
     "You are a game strategy planner. Given the current game state JSON, "
-    "output a JSON object with an 'instructions' array of directly executable actions "
-    "and a 'reason' string. Each instruction must be one of:\n"
-    '{"action": "tap", "x": <int>, "y": <int>} — tap at screen coordinates\n'
-    '{"action": "move", "dx": <float>, "dy": <float>, "duration_ms": <int>} — joystick drag\n'
-    '{"action": "wait", "duration_ms": <int>}\n'
-    "Output 3-8 instructions. Use screen coordinates from the probe state's "
-    "guide_or_target_candidates screenPosition fields (design resolution 720x1560, "
-    "bottom-left origin). No markdown fences, no explanation outside JSON."
+    "output a JSON object with a 'plan' array of directly executable intentions "
+    "and a 'reason' string. Each intention must be one of:\n"
+    '{"action_hint": "tap", "target_name": "<candidate name or path substring>"} — tap the named target\n'
+    '{"action_hint": "move", "target_name": "<candidate name or path substring>"} — move toward the named target\n'
+    '{"action_hint": "wait", "duration_ms": <int>} — wait\n'
+    "Output 3-8 intentions. Use target_name values that appear in the probe state's "
+    "guide_or_target_candidates list (name or path fields). If no target is available, output wait. "
+    "No markdown fences, no explanation outside JSON."
 )
 
 _L2_UPDATE_SYSTEM = (
@@ -168,22 +168,11 @@ class HierarchicalPlanner:
         # First: consume L2 executable instructions if available
         if self._l2_queue:
             instruction = self._l2_queue.pop(0)
-            action = dict(instruction)
-            action["reason"] = f"L2_queue:{action.get('action', 'wait')}"
-            # Ensure params dict exists
-            if "params" not in action:
-                action["params"] = {k: v for k, v in action.items()
-                                    if k not in ("action", "reason")}
-            # Convert design-resolution coords → CSS viewport coords
-            # Design: 720x1560, bottom-left origin. CSS: 375x812, top-left origin.
-            params = action["params"]
-            if action.get("action") == "tap" and "x" in params and "y" in params:
-                dx, dy = params["x"], params["y"]
-                # Check if coords look like design resolution (>375 wide or >812 tall)
-                if dx > 375 or dy > 812:
-                    params["x"] = round(dx / 720 * 375, 1)
-                    params["y"] = round((1.0 - dy / 1560) * 812, 1)
-            return action
+            resolved = self._resolve_instruction(instruction, state)
+            if resolved:
+                return resolved
+            # If resolution fails, drop this instruction and continue to rule engine
+            # (the next instruction remains queued for the next step).
 
         if self._rule_engine is not None:
             action = self._rule_engine.step(state, ctx.visual_struct)
@@ -205,12 +194,103 @@ class HierarchicalPlanner:
 
         return action
 
+    def _resolve_instruction(
+        self,
+        instruction: dict[str, Any],
+        state: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Convert an L2 intention into a concrete action.
+
+        Supports:
+        - Named targets: {action_hint: tap/move, target_name: "..."}
+        - Legacy coordinates: {action: tap, x, y} / {action: move, dx, dy, duration_ms}
+        - Wait: {action: wait, duration_ms}
+        """
+        action_type = instruction.get("action") or instruction.get("action_hint")
+        reason = instruction.get("reason", "")
+
+        if action_type == "wait":
+            return {
+                "action": "wait",
+                "params": {"duration_ms": int(instruction.get("duration_ms", 500))},
+                "reason": f"L2_queue:wait:{reason[:40]}",
+            }
+
+        # Legacy coordinate format
+        if action_type == "tap" and "x" in instruction and "y" in instruction:
+            x, y = self._design_to_css(instruction["x"], instruction["y"])
+            return {
+                "action": "tap",
+                "params": {"x": x, "y": y},
+                "reason": f"L2_queue:tap:{reason[:40]}",
+            }
+        if action_type == "move" and ("dx" in instruction or "dy" in instruction):
+            return {
+                "action": "move",
+                "params": {
+                    "dx": float(instruction.get("dx", 0)),
+                    "dy": float(instruction.get("dy", 0)),
+                    "duration_ms": int(instruction.get("duration_ms", 320)),
+                },
+                "reason": f"L2_queue:move:{reason[:40]}",
+            }
+
+        # Named-target format
+        target_name = instruction.get("target_name")
+        if target_name and action_type in ("tap", "move"):
+            candidate = self._resolve_named_target(target_name, state)
+            if candidate is None:
+                logger.warning("L2 target not found: %s", target_name)
+                return None
+            x, y = self._design_to_css(candidate["screenPosition"]["x"], candidate["screenPosition"]["y"])
+            if action_type == "tap":
+                return {
+                    "action": "tap",
+                    "params": {"x": x, "y": y},
+                    "reason": f"L2_queue:tap:{target_name}:{reason[:40]}",
+                }
+            return {
+                "action": "move",
+                "params": {
+                    "dx": x,
+                    "dy": y,
+                    "duration_ms": int(instruction.get("duration_ms", 320)),
+                },
+                "reason": f"L2_queue:move:{target_name}:{reason[:40]}",
+            }
+
+        logger.warning("Unsupported L2 instruction: %s", instruction)
+        return None
+
+    @staticmethod
+    def _resolve_named_target(target_name: str, state: dict[str, Any]) -> dict[str, Any] | None:
+        """Find a guide_or_target_candidates entry whose name/path matches target_name."""
+        candidates = state.get("guide_or_target_candidates") or []
+        if not isinstance(candidates, list):
+            return None
+        target_lower = str(target_name).lower()
+        for cand in candidates:
+            name = str(cand.get("name", "")).lower()
+            path = str(cand.get("path", "")).lower()
+            if target_lower in name or target_lower in path or name in target_lower:
+                return cand
+        return None
+
+    @staticmethod
+    def _design_to_css(dx: float, dy: float) -> tuple[float, float]:
+        """Convert design-resolution coords (720x1560, bottom-left origin) to CSS viewport (375x812, top-left)."""
+        if dx <= 375 and dy <= 812:
+            return float(dx), float(dy)
+        x = round(dx / 720 * 375, 1)
+        y = round((1.0 - dy / 1560) * 812, 1)
+        return x, y
+
     # ------------------------------------------------------------------
     # L2: Cloud API strategic planning
     # ------------------------------------------------------------------
 
     def _run_l2(self, state: dict[str, Any]) -> None:
-        """Call cloud API for executable instructions."""
+        """Call cloud API for a plan of named-target intentions."""
         self.l2_calls += 1
         state_snippet = json.dumps(
             {k: state.get(k) for k in
@@ -222,17 +302,27 @@ class HierarchicalPlanner:
             resp = self._api_client.chat(
                 [
                     {"role": "system", "content": _L2_SYSTEM},
-                    {"role": "user", "content": f"Game state:\n{state_snippet}\n\nInstructions?"},
+                    {"role": "user", "content": f"Game state:\n{state_snippet}\n\nPlan?"},
                 ],
                 max_tokens=1024,
                 temperature=0.0,
             )
             text = resp.choices[0].message.content or ""
             parsed = _parse_json(text)
-            if parsed and "instructions" in parsed:
-                instructions = parsed.get("instructions", [])
-                # Validate and normalize instructions
-                valid = []
+            plan = parsed.get("plan") if isinstance(parsed, dict) else None
+            instructions = parsed.get("instructions") if isinstance(parsed, dict) else None
+
+            valid: list[dict[str, Any]] = []
+            if isinstance(plan, list):
+                for item in plan:
+                    hint = item.get("action_hint")
+                    target = item.get("target_name")
+                    if hint in ("tap", "move") and target:
+                        valid.append({"action": hint, "target_name": str(target), "reason": item.get("reason", "")})
+                    elif hint == "wait":
+                        valid.append({"action": "wait", "duration_ms": int(item.get("duration_ms", 500))})
+            elif isinstance(instructions, list):
+                # Backward compatibility: old coordinate-based format.
                 for inst in instructions:
                     action = inst.get("action")
                     if action == "tap" and "x" in inst and "y" in inst:
@@ -246,14 +336,12 @@ class HierarchicalPlanner:
                         })
                     elif action == "wait":
                         valid.append({"action": "wait", "duration_ms": int(inst.get("duration_ms", 500))})
-                if valid:
-                    self._l2_queue = valid
-                    self._macro_plan = {"instructions": valid, "reason": parsed.get("reason", "")}
-                    logger.info("L2 instructions: %d items, first=%s", len(valid), valid[0])
-                else:
-                    logger.warning("L2 no valid instructions: %s", text[:120])
-            elif parsed and "macro_plan" in parsed:
-                # Legacy format — keep as context but don't queue
+
+            if valid:
+                self._l2_queue = valid
+                self._macro_plan = {"plan": valid, "reason": parsed.get("reason", "") if isinstance(parsed, dict) else ""}
+                logger.info("L2 plan: %d items, first=%s", len(valid), valid[0])
+            elif isinstance(parsed, dict) and "macro_plan" in parsed:
                 self._macro_plan = parsed
                 logger.info("L2 macro_plan (legacy): %s", parsed.get("macro_plan", "")[:80])
             else:

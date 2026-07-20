@@ -69,6 +69,17 @@
 - PPT 视觉检查：标题页深蓝背景 + 青色色块、架构图三色卡片、表格标题栏均正常。
 - 报告 `REPORT.md` 已更新第 12–17 章，覆盖多 Provider、规则在线更新、A/B 实验、训练数据管线。
 
+### 浏览器环境修复（P7 前置）
+
+批量跑测时所有游戏返回 `steps=0`、`reason="Probe never reported ready"`。根因：WSL2 headless Chromium 默认无 WebGL，Cocos 场景无法初始化；系统 chromium 搭配 swiftshader 直接 SIGTRAP 崩溃。
+
+修复：
+- 使用 Playwright  bundled Chromium：`PLAYWRIGHT_CHROMIUM_PATH=/home/azuma/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome`。
+- 启动参数启用软件渲染：`--enable-unsafe-swiftshader --in-process-gpu`。
+- 验证：`WebKit WebGL / WebKit`，`cc.director.getScene().name == "main"`。
+
+已添加 `.env.example` 记录上述配置；`.env` 已本地更新并 gitignored。
+
 ### 测试与质量
 
 - `pytest -q`：**697 passed, 58 skipped, 1 warning**。

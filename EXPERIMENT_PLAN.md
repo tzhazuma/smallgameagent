@@ -1,111 +1,135 @@
-# smallgameagent 下一步实验方案
+# smallgameagent 实验方案（P7 修订版）
 
-> 2026-07-17 制定。目标：围绕合作同学提出的四个问题（空间一致性、时间一致性、策略优化探索、效率），
-> 在「云端 LLM（kimi-k2.7-code / mimo-v2.5）+ 本地 VLM（LM Studio / Vulkan / Intel 核显）+ 纯规则」
-> 三条决策路线上逐步实验、修正、沉淀报告。
+> 2026-07-21 修订。在已完成 P0–P6 的基础上，进入「多游戏自动跑测 + 多 Provider 混合 + 规则在线更新调优」阶段。
 
-## 0. 现状结论（侦察摘要）
+## 已完成摘要
 
-### 环境
-- 本机为 WSL2（Ubuntu 26.04，16 核 / 15GB RAM）。Vulkan 1.4 可用，GPU0 = Mesa Dozen
-  桥接的 Intel Graphics（vendorID 0x8086）——即核显 Vulkan 路径成立，无 NVIDIA GPU。
-- LM Studio 已安装（`/usr/bin/lm-studio`，`~/.lmstudio` 5.9GB），**尚无已下载模型**；
-  `lms` CLI 需 LM Studio 守护进程运行才能认证。
-- 云端 API 已打通：`https://opencode.ai/zen/go/v1`（OpenAI 兼容），凭据位于
-  `~/.local/share/opencode/auth.json` 的 `opencode-go.key`。可用模型含
-  `kimi-k2.7-code`（思考型，已实测对话成功）、`mimo-v2.5`（视觉）、`deepseek-v4-flash` 等 20 个。
-- 仓库 `OpenCodeGoClient` 与该端点天然兼容，仅需 `OPENCODE_API_KEY` 环境变量。
+- **多 Provider 云端 API**：`.env` 配置 + `MultiProviderClient` 支持 OpenCodeGo / Kimi / DeepSeek / MiMo / Qwen。
+- **三层架构**：L0 规则引擎、L1 本地小 VLM、L2 云端多模态 API；规则在线更新（保守方案 A）已落地。
+- **Agent 通信与记忆**：`AgentBus` + `StrategyMemory` + Critic/Verifier 循环；记忆读回 A/B 验证 composite 0.150 → 0.300。
+- **训练数据管线**：`trajectory_converter.py` 已产出 34,150 条样本，覆盖 22 游戏、7 任务。
+- **报告/PPT**：`scripts/generate_deliverables.py` 已修复 LibreOffice 颜色渲染，报告已推送 GitHub 并复制到 Windows 下载目录。
 
-### 资产
-- 游戏本体：根目录 `SSD_00461P01_EN_WNK_...塔防...html`（老师给的网站同源游戏）+
-  `_extracted/games/` 22 个 tiles-survive 游戏（含 merged.json 标注 + 玩法说明 md + 术语表）。
-- 训练数据：`processed-runs.rar`（790MB，22 游戏各 1 run，共 3054 步，截图/state/action/delta/answer
-  五件套，schema `dataset_workflow.*`，2026-07-07/08 生成）——最新的 stage2 VLM 数据集。
-- 旧冷启动数据目录（20260608）本地不存在；训练脚本 `train_qwen35.py` / `train_gemma4.py` 在位。
-- Qwen3.5-4B QLoRA 已在 ssh5090 训过（eval loss 1.549，LoRA r=8）；Gemma-4 受 transformers bug 阻塞。
+## P7 目标
 
-### 代码关键空白（侦察发现，须修）
-1. `probe_adapter.py:23` `DEFAULT_PROBE_PATH` 硬编码 `/home/azuma/delivery/delivery/...` 绝对路径。
-2. `visual_analyzer.analyze()` 是 async 且收文件路径，但 `hybrid_agent.py:509` /
-   `decision_makers/rule_maker.py:50` 同步调用并传 PIL Image —— rule 模式视觉输入恒为 None。
-3. `inference/server.py:978` `kwargs.pop(device_map, None)` 缺引号 → NameError。
-4. `engine/strategies/` 空目录；`taskguide/target-arrow/guide-follow` 三种 driver 无专属策略。
-5. Mode 4/5/7 提取的 `RuleSet.rules` 不进执行路径（仅 driver_type 生效）。
-6. 无空间/时间一致性机制；`ProceduralMemory._archive_low_performance` 无调用点。
+1. **多游戏自动跑测**：用 `src/experiments/batch_runner.py` 在 22 游戏上跑出代表性/完整矩阵。
+2. **多 Provider 对比**：对同一视觉/文本决策任务，比较 Kimi / MiMo / DeepSeek / Qwen 的延迟、成本、结构化输出准确率。
+3. **规则在线更新调优**：解决 hierarchical 模式 activity=0、multi-bus-memory 记忆未预热问题；引入触发阈值、Verifier 可行性检查、L2 输出目标名称契约。
+4. **数据资产沉淀**：每次批量跑测自动转换 trajectory → VLM 训练数据，持续扩充数据集。
 
-## 1. 四个问题 → 机制映射
+## 1. 批量跑测快速开始
 
-| 问题 | 根因（来自汇报与复盘材料） | 实验机制 |
+### 1.1 跑代表性子集（约 20–30 分钟）
+
+```bash
+.venv/bin/python src/experiments/exp_representative_subset.py
+```
+
+默认 6 个游戏：
+- A 类（joystick）：SSD_00461P01（塔防）、SSD_00483P01（吸沙抽水）、SSD_00522P02（地下炸矿）
+- B 类（tap-only）：SSD_00382P01（低坑杀鲨鱼）、SSD_00594P02（破石收水）、SSD_00742P01（加油小镇）
+
+模式：
+- A 类：rule / multi-bus / multi-bus-memory / hierarchical
+- B 类：rule / multi-bus-memory
+
+产物：
+- `representative_results/A_representative/batch_results.json`
+- `representative_results/B_representative/batch_results.json`
+- `representative_results/batch_results_all.json`
+- `representative_results/*/analysis.md`
+- `representative_results/*/trajectories/*.jsonl`
+
+### 1.2 跑完整矩阵（约 1–3 小时，取决于 API 调用量）
+
+```bash
+.venv/bin/python src/experiments/exp_full_matrix.py
+```
+
+22 游戏 × A 类 4 模式 / B 类 2 模式 × 2 seeds = 116 runs。
+
+产物：
+- `full_matrix_results/*/batch_results.json`
+- `full_matrix_results/batch_results_all.json`
+- `full_matrix_results/analysis_all.md`
+
+### 1.3 自定义 batch
+
+```python
+from src.experiments.batch_runner import BatchConfig, run_batch
+import asyncio
+
+cfg = BatchConfig(
+    games={"SSD_00461P01": "_extracted/games/.../SSD_00461P01.html"},
+    modes=["rule", "multi-bus-memory", "hierarchical"],
+    seeds=[42, 123],
+    max_steps=25,
+    headed=False,
+    collect_dataset=True,
+    output_dir="my_exp",
+    memory_config={"strategy_memory_path": "my_memory.json"},
+)
+results = asyncio.run(run_batch(cfg))
+```
+
+### 1.4 轨迹 → 训练数据
+
+```bash
+.venv/bin/python src/training/trajectory_converter.py \
+  --input representative_results \
+  --output vlm-training-data-representative \
+  --format chatml
+```
+
+转换后检查 `vlm-training-data-representative/dataset-manifest.json` 的 `total_samples`。
+
+## 2. 多 Provider 对比实验
+
+### 2.1 文本决策对比
+
+用 `src/experiments/exp_cloud_api_matrix.py` 或自定义脚本，对同一 probe state 让不同 provider 输出 action JSON，比较：
+- 首 token 延迟 / 总延迟
+- JSON 合法率
+- action 类型分布（move/tap/wait）
+- 世界模型违例数
+
+### 2.2 视觉 struct 对比
+
+用 `src/experiments/exp_cloud_api_struct.py` 或 `src/experiments/exp_local_vlm_matrix.py`，对同一帧截图输出 19 字段 struct，比较字段准确率。
+
+### 2.3 推荐配置
+
+| 场景 | 推荐 provider | 原因 |
 |---|---|---|
-| ① 空间一致性 | 旧版本事实驱动计划（autoFishing 266 步翻转 12 次）；场景变化后旧路径/旧交互仍被使用 | **版本化世界模型**：每个实体/能力记录 `entity_version`、场景 `scene_epoch`、能力 `capability_epoch`；观测写入时比对版本，失配则把依赖旧版本的路径与交互方式标 stale，仅局部重规划 |
-| ② 时间一致性 | 观测/结算/验证三时刻未对齐（相邻帧温度 73%→36%；68.9% 步骤 decision 与 delta 字段偏差>0.05）；后续策略改写先前策略功能 | **三层时间对齐**（event_time / observed_at / settled_at + source/unit 比较键）+ **阶段契约**（precondition + allowed_actions + success_predicate + timeout）+ 受保护前缀 hash 锁定，commit gate 验收；失败按副作用分级 rollback / compensation / stop+replan |
-| ③ 策略优化探索 | 按部就班、拿到钱就升级、来回折腾；约束紧（温度）时暴露 | **机制发现先行**：先定位机制（如返程触发器），再优化阈值；失败保留多个竞争假设，每轮只做区分假设的最小实验（单变量）；经济类抽象：**攒钱批量升级**（batch-upgrade），约束类抽象：动态安全边界 `T_now + r·ETA + margin ≥ T_limit → RETURN` |
-| ④ 效率 | 截图 P50 397ms 且占日志 88.7%；探针全量读取浪费；日志时延 | **动态探针预算**：默认低成本状态探针，仅在触发器（phase_change / confidence<τ / action_no_effect / collision_hint / semantic_flip）命中时升级截图/深读；**动态日志分级**（DEBUG 环形内存，INFO 落盘，触发器命中时临时提升级别）；**回退分级**：行为级→状态级→策略级 |
+| 长程规划 / 规则更新 | kimi-k2.7-code | 代码/结构能力强，延迟 2–3s |
+| 视觉单帧理解 | mimo-v2.5 / kimi-k2.6 | 多模态稳定，mimo 视觉 17–22s/帧 |
+| 低成本文本 fallback | DeepSeek / Qwen | 按量计费，延迟低 |
+| 本地实时感知 | gemma-4-e4b / qwen3.5-4b | 离线标注 + QLoRA 后可行 |
 
-RL 参考：借鉴 verifiers-v1 的 Environment+Rubric 抽象，把游戏 run 封装为
-`env(step) → (obs, rubric_scores)`，rubric 覆盖通关/步数效率/资源效率/一致性违例计数，
-为后续在线 RL 微调打底。
+## 3. 规则在线更新下一阶段
 
-## 2. 实验阶段
+### 3.1 已知问题
 
-### P0 工程修复与基线（本机，1–2 天）
-- 修复 §0 代码空白 1–3（probe 路径改为包内 vendored / 环境变量；rule 视觉调用改 async 路径；
-  server.py:978 补引号）。补对应单测。
-- 基线 A：rule 模式跑 SSD_00461 塔防（本地 HTML），100 步，记录成功率/步数/时延。
-- 基线 B：api 模式接入 kimi-k2.7-code（文本决策）+ mimo-v2.5（视觉），跑同一游戏 30 步。
-  对照旧 deepseek-v4-flash 基线（29s/步）。
-- 验收：pytest 全绿；两条基线产出 `experiment_baseline_*.json`。
+- **hierarchical activity=0**：L2 规划器倾向于输出 `wait`；需要 L2 输出目标名称（而非坐标），并由 Verifier 检查可行性。
+- **multi-bus-memory 未预热**：冷记忆反而降低 composite；应先跑 phase1_write 再跑 phase2_read。
+- **触发阈值固定**：应改为基于历史滑动窗口 + 游戏类型自适应。
 
-### P1 一致性机制（核心，2–4 天）
-- 在 `src/agent/` 新增 `world_model.py`：版本化世界模型（实体表 + epoch 计数 + stale 传播 +
-  局部重规划接口），写单测覆盖「能力翻转→旧交互 stale→只局部重规划」场景。
-- 新增 `phase_contract.py`：阶段契约数据结构 + 三层时间戳对齐 + commit gate + 回退分级执行器。
-- 接入 HybridAgent 决策层（先 rule 与 api 两模式），在 00594（温度限制）与 00496（自动化翻转）
-  类游戏上 A/B：基线 vs 一致性机制。指标：步数、墙钟、stale 引导次数、阶段违例回退成功率。
-- 预期对照汇报数据：小场景 71/72/71 步 vs 81 步基线（−11.9% 步数、−36.4% 墙钟）。
+### 3.2 下一步实验
 
-### P2 策略优化探索（2–3 天）
-- 实现 `strategy_optimizer.py`：机制发现（从轨迹聚类资源/升级事件）→ 竞争假设集 →
-  单变量最小实验生成器 → 策略参数更新（如升级批量阈值、返程 margin）。
-- 在经济循环类游戏（00853 2D 经济 + 1 个 follow-guide 游戏）上对照：
-  朴素「够钱就升」 vs 「攒钱批量升」。指标：单位时间进度、往返步数、温度类游戏的存活率。
-- prompt 侧：为 kimi-k2.7-code 写引导式 system prompt（先抽象机制再决策），验证
-  「加以引导后探索最优解能力强」的观察。
+1. **预热 memory 再测 multi-bus-memory**：先跑 1 轮 rule 或 api，把成功 tap 模式写入 strategy memory，再跑 multi-bus-memory。
+2. **L2 输出契约**：强制 L2 输出 `target_name` + `action_hint`（tap/move/wait），坐标由 L1/L0 解析。
+3. **Verifier 可行性检查**：Verifier 检查 L2 计划中的目标是否在当前观测中存在，不存在则触发 re-plan。
+4. **触发阈值自适应**：`RuleUpdateTrigger` 加入滑动窗口，窗口长度按游戏类型（A/B）和当前阶段动态调整。
+5. **代码级规则更新（激进方案 B）**：在沙盒中让 L2 生成 Python 代码补丁，经类型检查 + 单测通过后由人工确认写入 `src/engine/rules.py`。
 
-### P3 效率机制（1–2 天，与 P1 部分并行）
-- `probe_budget.py`：探针分级（L0 状态摘要 / L1 组件快照 / L2 截图+VLM），触发器状态机，
-  预算计数与统计。动态日志分级并入同一触发器。
-- 在 3 个不同后端复杂度游戏上测：平均步时延、截图占比、日志体积、决策质量回归（不降为限）。
+## 4. 训练准备（等 ssh5090 可访问）
 
-### P4 本地 VLM（1–2 天，等模型下载）
-- LM Studio 下载 qwen3.5-4b / qwen3.5-9b / gemma4-e4b 的 4bit（GGUF Q4 或 MLX 等效）；
-  确认 Vulkan(Dozen) 后端加载，`lms server` 起 OpenAI 兼容端点 `http://127.0.0.1:1234/v1`。
-- 新增 `src/agent/lmstudio_client.py`（OpenAI 兼容、多模态），接入 vlm-struct 模式：
-  用 processed-runs 的截图+answer 做离线 struct 提取准确率评测（对照 19 字段 schema）。
-- 基准：单帧推理时延（4b/9b/e4b × Vulkan）、显存/内存占用、字段准确率。**不训练**。
+- 数据：已准备 `vlm-training-data-processed-runs/`（34,150 条）。继续用批量跑测补充轨迹后转换。
+- 脚本：`train_qwen35.py` / `train_gemma4.py` 已在位；QLoRA 4-bit，优先 qwen3.5-4b。
+- 连接：`~/ssh5090.sh` 可用后执行数据同步与训练。
 
-### P5 verifiers 风格环境原型（1–2 天）
-- `src/experiments/game_env.py`：GameEnv（reset/step/seed）+ Rubric 集
-  （completion / step_efficiency / resource_efficiency / consistency_violations），
-  输出 verifiers 兼容的 trajectory JSON。
-- 用 rule 模式在 2 个游戏上跑出评分曲线，验证 rubric 区分度。
+## 5. 风险
 
-### P6 训练准备（等 ssh5090 可访问后执行）
-- 解包 `processed-runs.rar` 到数据盘，写 `src/training/processed_runs_converter.py`
-  转成 `VLMColdStartDataset` 的 7 任务 JSONL 格式（重点补 failure_recovery，旧数据仅 83 条）。
-- 本地做数据集 smoke（converter + data_loader 单测通过），确认 `train_qwen35.py --4bit`
-  参数组合；ssh5090 可用后：`bash scripts/scp_to_ssh5090.sh` + 同步数据 + QLoRA 开训
-  （qwen3.5-4b 优先，9b 视 VRAM；gemma4-e4b 需先确认 transformers 补丁）。
-
-### P7 报告
-- 每阶段结果追加到 `EXPERIMENT_RESULTS.md`；最终汇总四大问题的对照数据、
-  三路线（云端/本地VLM/规则）的效率-质量前沿、下一步建议。
-
-## 3. 风险与依赖
-
-- LM Studio 模型下载体积大（4bit 4B≈2.5GB、9B≈5GB、e4b≈4GB），依赖网络；Dozen 驱动
-  对 llama.cpp Vulkan 的兼容性未验证（fallback：CPU 推理，时延变差但可用）。
-- `kimi-k2.7-code` 为思考型模型，单步时延可能高于 deepseek-v4-flash；需在 P0 基线实测。
-- ssh5090 当前不可达，训练全部阻塞在 P6，之前只做准备。
-- processed-runs 每游戏仅 1 run，做训练集够、做统计显著的 benchmark 不够；
-  benchmark 需自己跑多 run（P5 环境支持 seed 复跑）。
+- hierarchical / api 模式调用云端 API，费用与时延随步数线性增长；跑完整矩阵前建议先跑代表性子集。
+- 浏览器实例（Playwright）在 WSL2 中串行运行，批量跑测无法并行；如需并行需多 WSL 实例或容器。
+- 本地 VLM 在线推理仍慢，优先作为离线标注/上下文生成器。
