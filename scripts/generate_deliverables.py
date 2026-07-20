@@ -414,12 +414,12 @@ def write_pptx() -> None:
 
     # ---- Slide 2: 一页结论 ----
     s = _add_bullet_slide(prs, "核心结论", [
-        "最佳配置仍是 multi-bus + StrategyMemory 读回，稳定达到 composite 0.300（多 seed 一致）。",
-        "记忆读回把 composite 从 0.150 提升到 0.300，关键在于世界模型违规从 3 降到 0。",
-        "22 个游戏已自动分类：7 个 joystick 驱动 + 15 个 tap-to-move；8/15 的 B 类游戏用 tap-only 驱动即可达 0.300。",
+        "代表性子集（6 游戏 × 15 runs）已跑通：B 类 tap-only 游戏 rule 模式即达 composite 0.300；A 类 joystick 游戏中 multi-bus-memory 对 00461 提升最大（0.106 → 0.300）。",
+        "浏览器环境修复是前置条件：WSL2 headless 需 Playwright bundled Chromium + --enable-unsafe-swiftshader --in-process-gpu。",
+        "记忆读回效果因游戏而异：对 00461 显著，但对 00483 无帮助，说明需要按游戏类型调优 driver/profile。",
         "云端 API 适合做长程规划与规则更新，但必须在 L2 输出目标名称而非坐标；本地 VLM 更适合离线视觉标注。",
         "多 Provider API 已统一接入：OpenCodeGo、Kimi、DeepSeek、MiMo（xiaomi）、Qwen 均可通过环境变量切换。",
-        "训练数据已达 23,596 条 7 任务样本，为后续 QLoRA 微调做好了准备。",
+        "训练数据：processed-runs 34,150 条 + representative 1,173 条，为后续 QLoRA 微调做好准备。",
     ])
     register(s, "summary")
 
@@ -429,15 +429,14 @@ def write_pptx() -> None:
 
     # ---- Slide 4: 全游戏矩阵 ----
     s = _add_table_slide(prs, "全游戏 × 多模式批量矩阵（节选）", 
-        ["游戏", "类型", "rule", "multi-bus-memory", "multi-bus", "hierarchical"],
+        ["游戏", "类型", "rule", "multi-bus", "multi-bus-memory", "hierarchical"],
         [
-            ["00461 塔防", "joystick", "0.113", "0.300", "0.297", "0.150"],
-            ["00483 吸沙抽水", "joystick", "0.139", "0.300", "0.300", "0.150"],
-            ["00496 电网抓丧尸", "joystick", "0.275", "0.150", "0.150", "0.150"],
-            ["00522 地下炸矿", "joystick", "0.215", "0.240", "0.300", "—"],
-            ["00382 低坑杀鲨鱼", "tap-only", "0.300", "0.300", "—", "—"],
-            ["00594 破石收水", "tap-only", "0.300", "0.300", "—", "—"],
-            ["00742 加油小镇", "tap-only", "0.300", "0.300", "—", "—"],
+            ["00461 塔防", "joystick", "0.106", "0.161", "0.300", "未跑"],
+            ["00483 吸沙抽水", "joystick", "0.244", "0.150", "0.150", "未跑"],
+            ["00522 地下炸矿", "joystick", "0.215", "0.227", "0.240", "未跑"],
+            ["00382 低坑杀鲨鱼", "tap-only", "0.300", "—", "0.300", "—"],
+            ["00594 破石收水", "tap-only", "0.300", "—", "0.300", "—"],
+            ["00742 加油小镇", "tap-only", "0.300", "—", "0.300", "—"],
         ])
     register(s, "matrix")
 
