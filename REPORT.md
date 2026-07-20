@@ -218,7 +218,40 @@ results = asyncio.run(run_batch(config))
 - **PIL 视觉对 00461 有提升**（0.044→0.087，tap 7→14，stall 17→10）。
 - **VLM gemma 全部 0.150**（activity=0, tap=0）——本地小模型输出太慢且无法解析为有效动作。
 
-## 9. 后续建议
+## 9. 训练数据生成
+
+从 125 条批量实验轨迹（7 joystick + 15 tap-only 游戏 × 4 模式 × 2 seeds）离线转换为同事 7 任务训练格式：
+
+| 任务 | 新增样本 | 合并后总计 |
+|---|---|---|
+| probe_action_effect | +3040 | 5531 |
+| information_gain_judgment | +3040 | 6094 |
+| progression_grounding | +3165 | 5806 |
+| pulse_response_grounding | +159 | 1594 |
+| failure_recovery | +9 | 23 |
+| **总计** | **+9413** | **23,596** |
+
+转换器：`src/training/trajectory_converter.py`，纯离线计算（相邻步 diff → changed_fields / information_gain / displacement / stall diagnosis）。
+
+## 10. L2 输出契约修复
+
+**问题**：云端 API 的 L2 macro-plan 是抽象文本，L0 无法执行 → hierarchical 全部 activity=0。
+
+**修复**：L2 prompt 改为要求输出可执行指令列表（tap/move 带坐标），存入 `_l2_queue` 动作队列，L0 逐步弹出执行。
+
+**验证结果**：
+
+| 模式 | composite | L2 calls | latency/step |
+|---|---|---|---|
+| hierarchical (v3, 指令队列) | 0.055 | 1 | 18.1s |
+| rule_baseline | 0.114 | 0 | 0.84s |
+| multi_bus_memory | 0.134 | 0 | 0.88s |
+
+**结论**：L2 指令队列架构正确（24/25 步来自 L2 指令），但**纯文本云端 API 无法准确输出 tap 坐标**——没有视觉，坐标全是幻觉。composite 反而更差（0.055 vs rule 0.114）。
+
+**修正方向**：L2 改为输出目标名称（`{"target": "UnlockItem_1"}`），L0 用 probe 的 screenPosition 自行映射坐标。这样 L2 不需要视觉，L0 保留几何准确性。
+
+## 11. 后续建议
 
 1. **自动校准**：用 probe 的 `moveByCocosInput` 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。
 2. **本地 VLM 常驻**：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。

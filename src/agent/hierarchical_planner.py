@@ -23,8 +23,14 @@ logger = logging.getLogger(__name__)
 
 _L2_SYSTEM = (
     "You are a game strategy planner. Given the current game state JSON, "
-    "output a JSON object with keys: macro_plan (string), sub_goals (list of strings), "
-    "priority (string). Keep it concise. No markdown fences."
+    "output a JSON object with an 'instructions' array of directly executable actions "
+    "and a 'reason' string. Each instruction must be one of:\n"
+    '{"action": "tap", "x": <int>, "y": <int>} — tap at screen coordinates\n'
+    '{"action": "move", "dx": <float>, "dy": <float>, "duration_ms": <int>} — joystick drag\n'
+    '{"action": "wait", "duration_ms": <int>}\n'
+    "Output 3-8 instructions. Use screen coordinates from the probe state's "
+    "guide_or_target_candidates screenPosition fields (design resolution 720x1560, "
+    "bottom-left origin). No markdown fences, no explanation outside JSON."
 )
 
 _L1_SYSTEM = (
@@ -88,6 +94,7 @@ class HierarchicalPlanner:
         self._macro_plan: dict[str, Any] | None = None
         self._tactical_override: dict[str, Any] | None = None
         self._last_phase: str = ""
+        self._l2_queue: list[dict[str, Any]] = []  # executable instruction queue from L2
 
         # Call counters for metrics
         self.l0_calls: int = 0
@@ -122,6 +129,27 @@ class HierarchicalPlanner:
 
         # --- L0: Rule engine execution ---
         self.l0_calls += 1
+
+        # First: consume L2 executable instructions if available
+        if self._l2_queue:
+            instruction = self._l2_queue.pop(0)
+            action = dict(instruction)
+            action["reason"] = f"L2_queue:{action.get('action', 'wait')}"
+            # Ensure params dict exists
+            if "params" not in action:
+                action["params"] = {k: v for k, v in action.items()
+                                    if k not in ("action", "reason")}
+            # Convert design-resolution coords → CSS viewport coords
+            # Design: 720x1560, bottom-left origin. CSS: 375x812, top-left origin.
+            params = action["params"]
+            if action.get("action") == "tap" and "x" in params and "y" in params:
+                dx, dy = params["x"], params["y"]
+                # Check if coords look like design resolution (>375 wide or >812 tall)
+                if dx > 375 or dy > 812:
+                    params["x"] = round(dx / 720 * 375, 1)
+                    params["y"] = round((1.0 - dy / 1560) * 812, 1)
+            return action
+
         if self._rule_engine is not None:
             action = self._rule_engine.step(state, ctx.visual_struct)
         else:
@@ -132,10 +160,13 @@ class HierarchicalPlanner:
             action = self._tactical_override
             self._tactical_override = None  # one-shot
 
-        # Inject macro-plan context into reason for logging
-        if self._macro_plan:
+        # Inject L2 context into reason for logging
+        if self._l2_queue:
             action = dict(action)
-            action["reason"] = f"{action.get('reason', '')}|L2:{self._macro_plan.get('macro_plan', '')[:40]}"
+            action["reason"] = f"{action.get('reason', '')}|L2q:{len(self._l2_queue)}left"
+        elif self._macro_plan:
+            action = dict(action)
+            action["reason"] = f"{action.get('reason', '')}|L2:{self._macro_plan.get('reason', '')[:40]}"
 
         return action
 
@@ -144,7 +175,7 @@ class HierarchicalPlanner:
     # ------------------------------------------------------------------
 
     def _run_l2(self, state: dict[str, Any]) -> None:
-        """Call cloud API for macro-plan."""
+        """Call cloud API for executable instructions."""
         self.l2_calls += 1
         state_snippet = json.dumps(
             {k: state.get(k) for k in
@@ -156,16 +187,40 @@ class HierarchicalPlanner:
             resp = self._api_client.chat(
                 [
                     {"role": "system", "content": _L2_SYSTEM},
-                    {"role": "user", "content": f"Game state:\n{state_snippet}\n\nPlan?"},
+                    {"role": "user", "content": f"Game state:\n{state_snippet}\n\nInstructions?"},
                 ],
-                max_tokens=512,
+                max_tokens=1024,
                 temperature=0.0,
             )
             text = resp.choices[0].message.content or ""
             parsed = _parse_json(text)
-            if parsed and "macro_plan" in parsed:
+            if parsed and "instructions" in parsed:
+                instructions = parsed.get("instructions", [])
+                # Validate and normalize instructions
+                valid = []
+                for inst in instructions:
+                    action = inst.get("action")
+                    if action == "tap" and "x" in inst and "y" in inst:
+                        valid.append({"action": "tap", "x": int(inst["x"]), "y": int(inst["y"])})
+                    elif action == "move":
+                        valid.append({
+                            "action": "move",
+                            "dx": float(inst.get("dx", 0)),
+                            "dy": float(inst.get("dy", 0)),
+                            "duration_ms": int(inst.get("duration_ms", 320)),
+                        })
+                    elif action == "wait":
+                        valid.append({"action": "wait", "duration_ms": int(inst.get("duration_ms", 500))})
+                if valid:
+                    self._l2_queue = valid
+                    self._macro_plan = {"instructions": valid, "reason": parsed.get("reason", "")}
+                    logger.info("L2 instructions: %d items, first=%s", len(valid), valid[0])
+                else:
+                    logger.warning("L2 no valid instructions: %s", text[:120])
+            elif parsed and "macro_plan" in parsed:
+                # Legacy format — keep as context but don't queue
                 self._macro_plan = parsed
-                logger.info("L2 macro_plan: %s", parsed.get("macro_plan", "")[:80])
+                logger.info("L2 macro_plan (legacy): %s", parsed.get("macro_plan", "")[:80])
             else:
                 logger.warning("L2 unparseable: %s", text[:120])
         except Exception as exc:
@@ -238,5 +293,6 @@ class HierarchicalPlanner:
             "l0_calls": self.l0_calls,
             "l1_calls": self.l1_calls,
             "l2_calls": self.l2_calls,
+            "l2_queue_remaining": len(self._l2_queue),
             "macro_plan": self._macro_plan,
         }

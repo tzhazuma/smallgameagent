@@ -28,7 +28,7 @@ GAME_PATH = ROOT / "SSD_00461P01_EN_WNK_20260116_RBN_Applovin_塔防来着^有�
 MAX_STEPS = 30
 
 
-async def run_one(name: str, mode: str, api_client=None) -> dict:
+async def run_one(name: str, mode: str, api_client=None, memory_config: dict | None = None) -> dict:
     print(f"  [{name}] mode={mode} starting...", flush=True)
     t0 = time.time()
     try:
@@ -37,6 +37,7 @@ async def run_one(name: str, mode: str, api_client=None) -> dict:
             game_id="SSD_00461P01",
             api_client=api_client,
             config={"max_steps": MAX_STEPS, "probe_timeout_ms": 18_000},
+            memory_config=memory_config,
         )
         result = await agent.run_game(GAME_PATH, max_steps=MAX_STEPS, headed=False)
     except Exception as exc:

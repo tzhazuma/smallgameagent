@@ -1,0 +1,65 @@
+[
+  {
+    "name": "hierarchical",
+    "mode": "hierarchical",
+    "elapsed_s": 542.7,
+    "steps": 30,
+    "composite": 0.05517241379310345,
+    "activity": 0.03448275862068961,
+    "details": {
+      "steps": 30,
+      "move_steps": 12,
+      "tap_steps": 1,
+      "transitions": 0,
+      "stall_steps": 28,
+      "fail_flips": 2,
+      "wm_violations": 0
+    },
+    "l0_calls": 1,
+    "l1_calls": 0,
+    "l2_calls": 1,
+    "latency_per_step": 18.09
+  },
+  {
+    "name": "rule_baseline",
+    "mode": "rule",
+    "elapsed_s": 25.3,
+    "steps": 30,
+    "composite": 0.11379310344827585,
+    "activity": 0.7586206896551724,
+    "details": {
+      "steps": 30,
+      "move_steps": 7,
+      "tap_steps": 22,
+      "transitions": 0,
+      "stall_steps": 7,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "l0_calls": 0,
+    "l1_calls": 0,
+    "l2_calls": 0,
+    "latency_per_step": 0.84
+  },
+  {
+    "name": "multi_bus_memory",
+    "mode": "multi-bus-memory",
+    "elapsed_s": 26.5,
+    "steps": 30,
+    "composite": 0.13448275862068965,
+    "activity": 0.896551724137931,
+    "details": {
+      "steps": 30,
+      "move_steps": 3,
+      "tap_steps": 26,
+      "transitions": 0,
+      "stall_steps": 3,
+      "fail_flips": 0,
+      "wm_violations": 3
+    },
+    "l0_calls": 0,
+    "l1_calls": 0,
+    "l2_calls": 0,
+    "latency_per_step": 0.88
+  }
+]

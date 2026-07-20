@@ -510,3 +510,51 @@ VLMColdStartDataset 实载抽查通过：
 - **PIL 视觉对 00461 有提升**（0.044→0.087，tap 7→14，stall 17→10）——本地青色箭头检测帮助 target 选择。
 - **VLM gemma 全部 0.150**（activity=0, tap=0, stall=24）——本地小模型输出太慢且无法解析为有效动作，在线闭环不实用。
 - **PIL 视觉对 00736 无提升**（0.269→0.269）——该游戏的 guide 目标已通过 probe 提供，不需要视觉补充。
+
+## 2026-07-20 第六轮：训练数据生成 + L2 输出契约修复
+
+### 训练数据生成（trajectory_converter.py）
+
+新建 `src/training/trajectory_converter.py`：把批量实验产出的 125 条轨迹 JSONL（格式：player/action/keyNumbers/reason per step）离线转换为同事 7 任务训练格式，与 processed-runs 的 15,083 样本合并。
+
+| 任务 | 新增样本 | 说明 |
+|---|---|---|
+| probe_action_effect | +3040 | 相邻步 diff：player_moved, changed_fields, information_gain, completed |
+| information_gain_judgment | +3040 | keyNumbers 变化数→high/medium/low_or_unknown |
+| progression_grounding | +3165 | 每步 economy 值→starting/early_game/mid_game/completed |
+| pulse_response_grounding | +159 | move 步的 pulse→displacement 映射 |
+| failure_recovery | +9 | 连续 stall 窗口的诊断 + recovery action |
+| **总计新增** | **+9413** | |
+| **合并后总计** | **23,596** | （原 15,083 + 新 9,413） |
+
+数据特点：
+- 覆盖 7 个 joystick 游戏 + 15 个 tap-only 游戏 × 4 模式 × 2 seeds。
+- 包含 calibrated（基线已知）和 uncalibrated（generic fallback）两种驱动的对比数据。
+- multi-bus 模式轨迹含决策来源标签（strategy_memory / rule_engine），可用于研究记忆 vs 规则的差异。
+
+### L2 输出契约修复（hierarchical_planner.py）
+
+**问题**：云端 API 的 L2 macro-plan 是抽象文本（"Navigate to UnlockItem_1 and collect it"），L0 规则引擎不知道如何翻译成具体动作，导致 hierarchical 全部 activity=0。
+
+**修复**：L2 prompt 改为要求输出 `{"instructions": [{"action": "tap", "x": int, "y": int}, {"action": "move", "dx": float, "dy": float, "duration_ms": int}, ...], "reason": "..."}`。L2 输出存入 `_l2_queue`（动作队列），L0 `step()` 先弹出队列中的指令直接执行，队列耗尽后回退到 rule_engine。
+
+**效果**：（重跑验证数据见下方）
+
+**L2 契约修复验证（experiment_hierarchical.json v3）**：
+
+| 模式 | composite | L0 calls | L2 calls | latency/step |
+|---|---|---|---|---|
+| hierarchical (v3, 指令队列) | 0.055 | 1 | 1 | 18.1s |
+| rule_baseline | 0.114 | 0 | 0 | 0.84s |
+| multi_bus_memory | 0.134 | 0 | 0 | 0.88s |
+
+**结论**：L2 指令队列架构正确（24/25 步来自 L2 指令），但**纯文本云端 API 无法准确输出 tap 坐标**——它没有视觉，只能根据 JSON 状态推测坐标，结果全是幻觉。composite 从修复前的 0.150（全部 wait）降到 0.055（错误的 tap/move），反而更差。
+
+**根因**：L2 需要视觉输入（截图）才能输出准确的 tap 坐标，或者改为输出"目标名称"让 L0 用 probe 的 screenPosition 自行映射坐标。后者更可行：L2 只选 target 名，L0 负责几何。
+
+**当前最佳架构修正**：
+- **L2 云端 API**：输出 `{"target": "UnlockItem_1", "priority": "high"}`（选目标，不选坐标）
+- **L0 规则引擎**：用 `_select_target` + `_target_screen_to_css` 把 target 名转成 tap 坐标
+- **L1 本地 VLM**：看截图做战术修正（stall 时换方向）
+
+这样 L2 不需要视觉也能工作，L0 保留了几何准确性。

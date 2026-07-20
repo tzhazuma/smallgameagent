@@ -378,7 +378,63 @@ C 类（probe 失败） & 0 & — & 全部 22 游戏 probe 均能 ready \\
   \item \_\_BOLD\_0000\_\_（activity=0, tap=0）——本地小模型输出太慢且无法解析为有效动作。
 \end{itemize}
 
-\subsection{9. 后续建议}
+\subsection{9. 训练数据生成}
+
+从 125 条批量实验轨迹（7 joystick + 15 tap-only 游戏 × 4 模式 × 2 seeds）离线转换为同事 7 任务训练格式：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+任务 & 新增样本 & 合并后总计 \\
+\hline
+probe\_action\_effect & +3040 & 5531 \\
+\hline
+information\_gain\_judgment & +3040 & 6094 \\
+\hline
+progression\_grounding & +3165 & 5806 \\
+\hline
+pulse\_response\_grounding & +159 & 1594 \\
+\hline
+failure\_recovery & +9 & 23 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+\hline
+\end{tabular}
+\end{table}
+
+转换器：\_\_CODE\_0000\_\_，纯离线计算（相邻步 diff → changed\_fields / information\_gain / displacement / stall diagnosis）。\\
+
+\subsection{10. L2 输出契约修复}
+
+\_\_BOLD\_0000\_\_：云端 API 的 L2 macro-plan 是抽象文本，L0 无法执行 → hierarchical 全部 activity=0。\\
+
+\_\_BOLD\_0001\_\_：L2 prompt 改为要求输出可执行指令列表（tap/move 带坐标），存入 \_\_CODE\_0000\_\_ 动作队列，L0 逐步弹出执行。\\
+
+\_\_BOLD\_0000\_\_：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+模式 & composite & L2 calls & latency/step \\
+\hline
+hierarchical (v3, 指令队列) & 0.055 & 1 & 18.1s \\
+\hline
+rule\_baseline & 0.114 & 0 & 0.84s \\
+\hline
+multi\_bus\_memory & 0.134 & 0 & 0.88s \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：L2 指令队列架构正确（24/25 步来自 L2 指令），但\_\_BOLD\_0001\_\_——没有视觉，坐标全是幻觉。composite 反而更差（0.055 vs rule 0.114）。\\
+
+\_\_BOLD\_0001\_\_：L2 改为输出目标名称（\_\_CODE\_0000\_\_），L0 用 probe 的 screenPosition 自行映射坐标。这样 L2 不需要视觉，L0 保留几何准确性。\\
+
+\subsection{11. 后续建议}
 
 1. \_\_BOLD\_0001\_\_：用 probe 的 \_\_CODE\_0000\_\_ 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。\\
 2. \_\_BOLD\_0000\_\_：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。\\
