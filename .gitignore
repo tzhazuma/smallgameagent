@@ -36,6 +36,8 @@ experiment_results.json
 experiment_report.md
 experiment_*.json
 experiment_*.md
+strategy_memory_*.json
+*_20??????_??????.jsonl
 
 # Assets (large binary files)
 *.png
