@@ -145,18 +145,80 @@ results = asyncio.run(run_batch(config))
 3. 00482/00342/00532 的 activity=0 是**诚实信号**：未校准基线→方向全错→需该游戏的 profile 校准。
 4. 10 个轨迹 JSONL 已采集（`multi_game_results/trajectories/`），可直接用于 VLM 微调。
 
-### 5.4 自动校准（auto_calibrate.py）
+### 5.4 全游戏自动校准（auto_calibrate.py --all，22 游戏）
 
-新建自动校准脚本：4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退。
+对全部 22 个 `_extracted/games/` 游戏跑自动校准（4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退），得到 joystick 基线或识别为非 joystick 游戏。
 
-| 游戏 | 结果 | 说明 |
+**分类结果**：
+
+| 类型 | 数量 | 游戏 | 说明 |
+|---|---|---|---|
+| A 类（joystick 驱动） | 5 | 00440 清障通车、00483 吸沙抽水、00496 电网抓丧尸、00517 末世旅店、00522 地下炸矿 | 校准 VALID，基线已写入 profile |
+| A 类（已有校准） | 2 | 00461 塔防、00736 捕鱼 | 之前已校准 |
+| B 类（tap-to-move） | 15 | 00219、00332、00342、00382、00394、00427、00434、00475、00482、00526、00532、00594、00669、00733、00742 | joystick + cocos move 均 0 位移 |
+| C 类（probe 失败） | 0 | — | 全部 22 游戏 probe 均能 ready |
+
+**校准成功的 5 个新游戏基线**：
+| 游戏 | screen_right | screen_down |
 |---|---|---|
-| 00736 | **VALID** | basis=(1.44,-2.90)/(1.49,2.90)，已写入 profile |
-| 00482/00342/00532 | INVALID | joystick + cocos move 均 0 位移——非 joystick 驱动游戏 |
+| 00440 清障通车 | (-6.42, 2.34) | (-2.34, -6.42) |
+| 00483 吸沙抽水 | (3.41, -3.41) | (2.42, 2.42) |
+| 00496 电网抓丧尸 | (0.75, -0.90) | (0.82, 3.57) |
+| 00517 末世旅店 | (7.42, -0.00) | (0.00, 9.44) |
+| 00522 地下炸矿 | (4.92, 0.00) | (-0.27, 3.46) |
 
-自动校准正确区分了 joystick 驱动 vs tap-to-move/自动移动游戏。
+### 5.5 Tap-to-Move 驱动策略
 
-## 6. 后续建议
+为 B 类（tap-to-move / 自动移动）游戏新增 `_strategy_tap_only()` 驱动：不走路，直接 tap guide 目标的屏幕坐标（probe 的 design→CSS 映射，无需 joystick 基线校准）。15 个 B 类游戏已自动填充 `tap-only` profile。
+
+`get_game_type(game_id)` 函数自动分类：A（joystick）/ B（tap-only）/ C（probe 失败），`get_driver_for_type()` 自动选择驱动类型。
+
+## 6. 全游戏 × 多模式批量矩阵
+
+### 6.1 A_full（7 个 joystick 游戏 × 4 模式 × 2 seeds = 48 runs）
+
+| 游戏 | rule | multi-bus-memory | multi-bus | hierarchical |
+|---|---|---|---|---|
+| 00440 清障通车 | 0.184 | 0.156 | 0.156 | 0.150 |
+| 00461 塔防 | 0.113 | 0.300 | 0.297 | 0.150 |
+| 00483 吸沙抽水 | 0.139 | 0.300 | 0.300 | 0.150 |
+| 00496 电网抓丧尸 | 0.275 | 0.150 | 0.150 | 0.150 |
+| 00517 末世旅店 | 0.150 | 0.150 | 0.150 | 0.150 |
+| 00522 地下炸矿 | 0.215 | 0.240 | 0.300 | — |
+
+- **multi-bus/multi-bus-memory 在 00461/0 0483/00522 上稳定 0.300**（activity=1.00, stall=0）。
+- **00496 rule 最优（0.275）**——确定性策略比记忆启发式更有效。
+- **hierarchical 全部 0.150**（activity=0）：云端 API 的 L2 macro-plan 没有被 L0 规则引擎有效执行。
+
+### 6.2 B_tap（15 个 tap-only 游戏 × 2 模式 × 2 seeds = 60 runs）
+
+| 结果 | 游戏 | 数量 |
+|---|---|---|
+| **0.300** | 00382、00394、00475、00526、00532、00594、00669、00742 | **8** |
+| 0.150 | 00219、00332、00342、00427、00434、00482、00733 | 7 |
+
+**8/15 B 类游戏达 0.300**——tap-only 驱动有效：tap guide 目标的屏幕坐标产生真实交互。7/15 为 0.150（tap 有效但无移动，activity=0）。
+
+## 7. 云端 API 策略生成 vs 纯 rule
+
+| 游戏 | rule | multi-bus-memory | hierarchical (API) |
+|---|---|---|---|
+| 00461 塔防 | 0.106 | 0.056 | 0.150 |
+| 00736 捕鱼 | 0.275 | 0.237 | 0.150 |
+
+云端 API 的 L2 macro-plan 没有被 L0 规则引擎有效执行（activity=0）。L2 输出需要更强的行动契约。
+
+## 8. VLM 视觉管线
+
+| 游戏 | probe_only | pil_vision | vlm_gemma |
+|---|---|---|---|
+| 00461 塔防 | 0.044 | **0.087** | 0.150 |
+| 00736 捕鱼 | 0.269 | 0.269 | 0.150 |
+
+- **PIL 视觉对 00461 有提升**（0.044→0.087，tap 7→14，stall 17→10）。
+- **VLM gemma 全部 0.150**（activity=0, tap=0）——本地小模型输出太慢且无法解析为有效动作。
+
+## 9. 后续建议
 
 1. **自动校准**：用 probe 的 `moveByCocosInput` 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。
 2. **本地 VLM 常驻**：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。

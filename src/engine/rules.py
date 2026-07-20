@@ -204,6 +204,8 @@ class RuleEngine:
             return self._strategy_follow_guide(state, visual)
         elif dt == "tap-guide":
             return self._strategy_tap_guide(state, visual)
+        elif dt == "tap-only":
+            return self._strategy_tap_only(state, visual)
         elif dt == "2d-audited":
             return self._strategy_2d(state, visual)
         elif dt == "learned":
@@ -794,6 +796,76 @@ class RuleEngine:
                     }
                     return self._coin_override["target"]
         return None
+
+    # ------------------------------------------------------------------
+    # Strategy: Tap-Only (tap-to-move / auto-movement games)
+    # ------------------------------------------------------------------
+
+    def _strategy_tap_only(
+        self, state: dict[str, Any], visual: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Tap guide targets directly — no joystick movement.
+
+        For games where the player doesn't use a joystick (tap-to-move or
+        auto-movement).  We tap the screenPosition of the closest guide
+        target candidate directly.  No basis calibration is needed because
+        the probe already provides design→CSS mapped screen coordinates.
+        """
+        guide_candidates = state.get("guide_or_target_candidates", [])
+        design_res = self.profile.get("design_resolution", [720, 1560])
+        viewport = self.profile.get("viewport", [375, 812])
+
+        # --- Completion check ---
+        if self._is_completion_state(state, guide_candidates, visual):
+            return {"action": "wait", "params": {"duration_ms": 1000},
+                    "reason": "completion_detected"}
+
+        # --- Find the best tap target ---
+        best_sp = None
+        best_priority = -1.0
+        for c in guide_candidates:
+            sp = c.get("screenPosition")
+            if not sp or not c.get("active", True):
+                continue
+            # Prefer targets with "target" or "guide" in path
+            path = (c.get("path") or "").lower()
+            priority = 0.0
+            if "target" in path:
+                priority += 0.3
+            if "guide" in path:
+                priority += 0.2
+            if "unlock" in path:
+                priority += 0.1
+            if priority > best_priority:
+                best_priority = priority
+                best_sp = sp
+
+        if best_sp is None:
+            # No guide target — try interesting nodes from probe
+            interesting = state.get("interestingNodes") or state.get("interesting_nodes") or []
+            for node in interesting[:5]:
+                sp = node.get("screenPosition")
+                if sp and node.get("active", True):
+                    best_sp = sp
+                    break
+
+        if best_sp is None:
+            return {"action": "wait", "params": {"duration_ms": 500},
+                    "reason": "tap_only_no_target"}
+
+        # Design resolution → CSS pixels
+        dw, dh = design_res
+        vw, vh = viewport
+        sx = best_sp.get("x", 0)
+        sy = best_sp.get("y", 0)
+        css_x = sx / dw * vw
+        css_y = (1.0 - sy / dh) * vh
+
+        return {
+            "action": "tap",
+            "params": {"x": round(css_x, 1), "y": round(css_y, 1), "duration_ms": 120},
+            "reason": f"tap_only_priority={best_priority:.2f}",
+        }
 
     # ------------------------------------------------------------------
     # Strategy: 2D (Family B — 00853)

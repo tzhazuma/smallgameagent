@@ -15,6 +15,8 @@ reconnaissance of the local HTML (floating joystick; screen->world basis
 measured via probe worldPosition deltas).
 """
 
+from pathlib import Path
+
 GAME_PROFILES = {
     "SSD_00848P01": {
         "game_id": "SSD_00848P01",
@@ -302,6 +304,466 @@ GAME_PROFILES = {
         "design_resolution": [720, 1560],
         "viewport": [375, 812],
     },
+    "SSD_00440P01": {
+        "game_id": "SSD_00440P01",
+        "label": "auto-calibrated",
+        "file_pattern": "SSD_00440P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T18:25:02",
+            "basis": {
+                "screen_right": {"x": -6.4212, "z": 2.3371},
+                "screen_down": {"x": -2.3371, "z": -6.4212},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00483P01": {
+        "game_id": "SSD_00483P01",
+        "label": "auto-calibrated",
+        "file_pattern": "SSD_00483P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T18:26:18",
+            "basis": {
+                "screen_right": {"x": 3.4093, "z": -3.4093},
+                "screen_down": {"x": 2.4155, "z": 2.4155},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00496P01": {
+        "game_id": "SSD_00496P01",
+        "label": "auto-calibrated",
+        "file_pattern": "SSD_00496P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T18:26:40",
+            "basis": {
+                "screen_right": {"x": 0.7508, "z": -0.9005},
+                "screen_down": {"x": 0.8193, "z": 3.5725},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00517P01": {
+        "game_id": "SSD_00517P01",
+        "label": "auto-calibrated",
+        "file_pattern": "SSD_00517P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T18:27:03",
+            "basis": {
+                "screen_right": {"x": 7.4241, "z": -0.0},
+                "screen_down": {"x": 0.0, "z": 9.4355},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00522P02": {
+        "game_id": "SSD_00522P02",
+        "label": "auto-calibrated",
+        "file_pattern": "SSD_00522P02",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto_calibrate.py 2026-07-20T18:27:25",
+            "basis": {
+                "screen_right": {"x": 4.9198, "z": 0.0},
+                "screen_down": {"x": -0.267, "z": 3.4628},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-guide",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00219P01": {
+        "game_id": "SSD_00219P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00219P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00332P01": {
+        "game_id": "SSD_00332P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00332P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00342P01": {
+        "game_id": "SSD_00342P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00342P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00382P01": {
+        "game_id": "SSD_00382P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00382P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00394P01": {
+        "game_id": "SSD_00394P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00394P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00427P01": {
+        "game_id": "SSD_00427P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00427P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00434P01": {
+        "game_id": "SSD_00434P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00434P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00475P01": {
+        "game_id": "SSD_00475P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00475P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00482P01": {
+        "game_id": "SSD_00482P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00482P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00526P01": {
+        "game_id": "SSD_00526P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00526P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00532P01": {
+        "game_id": "SSD_00532P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00532P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00594P02": {
+        "game_id": "SSD_00594P02",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00594P02",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00669P01": {
+        "game_id": "SSD_00669P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00669P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00733P01": {
+        "game_id": "SSD_00733P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00733P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
+    "SSD_00742P01": {
+        "game_id": "SSD_00742P01",
+        "label": "auto-tap-only",
+        "file_pattern": "SSD_00742P01",
+        "joystick": {
+            "anchor": [187, 650],
+            "radius": 60,
+            "input_mode": "touch",
+        },
+        "calibration": {
+            "source": "auto-fill-tap-only (joystick calibration failed)",
+            "basis": {
+                "screen_right": {"x": 1, "z": 0},
+                "screen_down": {"x": 0, "z": 1},
+            },
+        },
+        "ground_arrival_threshold": 55,
+        "target_dwell_ms": 4000,
+        "driver_type": "tap-only",
+        "design_resolution": [720, 1560],
+        "viewport": [375, 812],
+    },
+
 }
 
 
@@ -363,3 +825,51 @@ def get_profile_or_generic(game_id):
 def list_all_game_ids():
     """Return sorted list of all game IDs."""
     return sorted(GAME_PROFILES.keys())
+
+
+# ---------------------------------------------------------------------------
+# Game-type classification from auto-calibration results
+# ---------------------------------------------------------------------------
+
+_AUTO_CAL_PATH = Path(__file__).resolve().parent / "auto_calibrated_profiles.json"
+
+
+def get_game_type(game_id: str) -> str:
+    """Return the game type for *game_id* based on auto-calibration results.
+
+    Returns:
+        "A" — joystick-driven (calibration VALID or has tuned profile with real basis)
+        "B" — tap-to-move / auto-movement (calibration INVALID or tap-only profile)
+        "C" — probe cannot load / unknown
+    """
+    # Tap-only profiles are B class (auto-filled after failed calibration)
+    profile = GAME_PROFILES.get(game_id)
+    if profile is not None:
+        if profile.get("driver_type") == "tap-only":
+            return "B"
+        # Real calibrated profiles (tap-guide / follow-guide / etc.)
+        return "A"
+
+    # Check auto-calibration results
+    if _AUTO_CAL_PATH.is_file():
+        import json as _json
+        try:
+            data = _json.loads(_AUTO_CAL_PATH.read_text(encoding="utf-8"))
+            for r in data:
+                if r.get("game_id") == game_id:
+                    if r.get("valid") and r.get("basis"):
+                        return "A"
+                    if "probe_not_ready" in str(r.get("reasons", [])):
+                        return "C"
+                    return "B"
+        except (OSError, _json.JSONDecodeError):
+            pass
+    return "C"
+
+
+def get_driver_for_type(game_id: str) -> str:
+    """Return the recommended driver_type for *game_id* based on its type."""
+    gtype = get_game_type(game_id)
+    if gtype == "B":
+        return "tap-only"
+    return "tap-guide"

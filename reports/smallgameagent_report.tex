@@ -238,27 +238,147 @@ VLM 训练 & 10,336 样本 7 任务 QLoRA & 15,083 样本 7 任务（processed-r
 3. 00482/00342/00532 的 activity=0 是\_\_BOLD\_0000\_\_：未校准基线→方向全错→需该游戏的 profile 校准。\\
 4. 10 个轨迹 JSONL 已采集（\_\_CODE\_0000\_\_），可直接用于 VLM 微调。\\
 
-\subsubsection{5.4 自动校准（auto\_calibrate.py）}
+\subsubsection{5.4 全游戏自动校准（auto\_calibrate.py --all，22 游戏）}
 
-新建自动校准脚本：4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退。\\
+对全部 22 个 \_\_CODE\_0000\_\_ 游戏跑自动校准（4 方向 joystick 脉冲 + 返回脉冲 + warmup + 重试 + moveByCocosInput 回退），得到 joystick 基线或识别为非 joystick 游戏。\\
+
+\_\_BOLD\_0000\_\_：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+类型 & 数量 & 游戏 & 说明 \\
+\hline
+A 类（joystick 驱动） & 5 & 00440 清障通车、00483 吸沙抽水、00496 电网抓丧尸、00517 末世旅店、00522 地下炸矿 & 校准 VALID，基线已写入 profile \\
+\hline
+A 类（已有校准） & 2 & 00461 塔防、00736 捕鱼 & 之前已校准 \\
+\hline
+B 类（tap-to-move） & 15 & 00219、00332、00342、00382、00394、00427、00434、00475、00482、00526、00532、00594、00669、00733、00742 & joystick + cocos move 均 0 位移 \\
+\hline
+C 类（probe 失败） & 0 & — & 全部 22 游戏 probe 均能 ready \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+游戏 & screen\_right & screen\_down \\
+\hline
+00440 清障通车 & (-6.42, 2.34) & (-2.34, -6.42) \\
+\hline
+00483 吸沙抽水 & (3.41, -3.41) & (2.42, 2.42) \\
+\hline
+00496 电网抓丧尸 & (0.75, -0.90) & (0.82, 3.57) \\
+\hline
+00517 末世旅店 & (7.42, -0.00) & (0.00, 9.44) \\
+\hline
+00522 地下炸矿 & (4.92, 0.00) & (-0.27, 3.46) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{5.5 Tap-to-Move 驱动策略}
+
+为 B 类（tap-to-move / 自动移动）游戏新增 \_\_CODE\_0000\_\_ 驱动：不走路，直接 tap guide 目标的屏幕坐标（probe 的 design→CSS 映射，无需 joystick 基线校准）。15 个 B 类游戏已自动填充 \_\_CODE\_0001\_\_ profile。\\
+
+\_\_CODE\_0000\_\_ 函数自动分类：A（joystick）/ B（tap-only）/ C（probe 失败），\_\_CODE\_0001\_\_ 自动选择驱动类型。\\
+
+\subsection{6. 全游戏 × 多模式批量矩阵}
+
+\subsubsection{6.1 A\_full（7 个 joystick 游戏 × 4 模式 × 2 seeds = 48 runs）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+游戏 & rule & multi-bus-memory & multi-bus & hierarchical \\
+\hline
+00440 清障通车 & 0.184 & 0.156 & 0.156 & 0.150 \\
+\hline
+00461 塔防 & 0.113 & 0.300 & 0.297 & 0.150 \\
+\hline
+00483 吸沙抽水 & 0.139 & 0.300 & 0.300 & 0.150 \\
+\hline
+00496 电网抓丧尸 & 0.275 & 0.150 & 0.150 & 0.150 \\
+\hline
+00517 末世旅店 & 0.150 & 0.150 & 0.150 & 0.150 \\
+\hline
+00522 地下炸矿 & 0.215 & 0.240 & 0.300 & — \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_（activity=1.00, stall=0）。
+  \item \_\_BOLD\_0000\_\_——确定性策略比记忆启发式更有效。
+  \item \_\_BOLD\_0000\_\_（activity=0）：云端 API 的 L2 macro-plan 没有被 L0 规则引擎有效执行。
+\end{itemize}
+
+\subsubsection{6.2 B\_tap（15 个 tap-only 游戏 × 2 模式 × 2 seeds = 60 runs）}
 
 \begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{|l|l|l|}
 \hline
-游戏 & 结果 & 说明 \\
+结果 & 游戏 & 数量 \\
 \hline
-00736 & \_\_BOLD\_0000\_\_ & basis=(1.44,-2.90)/(1.49,2.90)，已写入 profile \\
+\_\_BOLD\_0000\_\_ & 00382、00394、00475、00526、00532、00594、00669、00742 & \_\_BOLD\_0000\_\_ \\
 \hline
-00482/00342/00532 & INVALID & joystick + cocos move 均 0 位移——非 joystick 驱动游戏 \\
+0.150 & 00219、00332、00342、00427、00434、00482、00733 & 7 \\
 \hline
 \end{tabular}
 \end{table}
 
-自动校准正确区分了 joystick 驱动 vs tap-to-move/自动移动游戏。\\
+\_\_BOLD\_0000\_\_——tap-only 驱动有效：tap guide 目标的屏幕坐标产生真实交互。7/15 为 0.150（tap 有效但无移动，activity=0）。\\
 
-\subsection{6. 后续建议}
+\subsection{7. 云端 API 策略生成 vs 纯 rule}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+游戏 & rule & multi-bus-memory & hierarchical (API) \\
+\hline
+00461 塔防 & 0.106 & 0.056 & 0.150 \\
+\hline
+00736 捕鱼 & 0.275 & 0.237 & 0.150 \\
+\hline
+\end{tabular}
+\end{table}
+
+云端 API 的 L2 macro-plan 没有被 L0 规则引擎有效执行（activity=0）。L2 输出需要更强的行动契约。\\
+
+\subsection{8. VLM 视觉管线}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+游戏 & probe\_only & pil\_vision & vlm\_gemma \\
+\hline
+00461 塔防 & 0.044 & \_\_BOLD\_0000\_\_ & 0.150 \\
+\hline
+00736 捕鱼 & 0.269 & 0.269 & 0.150 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_（0.044→0.087，tap 7→14，stall 17→10）。
+  \item \_\_BOLD\_0000\_\_（activity=0, tap=0）——本地小模型输出太慢且无法解析为有效动作。
+\end{itemize}
+
+\subsection{9. 后续建议}
 
 1. \_\_BOLD\_0001\_\_：用 probe 的 \_\_CODE\_0000\_\_ 脉冲自动测量每游戏的 screen→world 基线，批量生成 profile。\\
 2. \_\_BOLD\_0000\_\_：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。\\

@@ -1,0 +1,80 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "name": "probe_only",
+    "mode": "rule",
+    "elapsed_s": 229.1,
+    "steps": 25,
+    "composite": 0.04374999999999999,
+    "activity": 0.29166666666666663,
+    "tap_steps": 7,
+    "move_steps": 15,
+    "stall_steps": 17,
+    "latency_per_step": 9.16
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "name": "pil_vision",
+    "mode": "rule",
+    "elapsed_s": 49.0,
+    "steps": 25,
+    "composite": 0.08749999999999998,
+    "activity": 0.5833333333333333,
+    "tap_steps": 14,
+    "move_steps": 9,
+    "stall_steps": 10,
+    "latency_per_step": 1.96
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "name": "vlm_gemma",
+    "mode": "vlm-local",
+    "elapsed_s": 95.6,
+    "steps": 25,
+    "composite": 0.15,
+    "activity": 0.0,
+    "tap_steps": 0,
+    "move_steps": 0,
+    "stall_steps": 24,
+    "latency_per_step": 3.83
+  },
+  {
+    "game_id": "SSD_00736P01",
+    "name": "probe_only",
+    "mode": "rule",
+    "elapsed_s": 29.0,
+    "steps": 25,
+    "composite": 0.26875,
+    "activity": 0.7916666666666666,
+    "tap_steps": 20,
+    "move_steps": 5,
+    "stall_steps": 5,
+    "latency_per_step": 1.16
+  },
+  {
+    "game_id": "SSD_00736P01",
+    "name": "pil_vision",
+    "mode": "rule",
+    "elapsed_s": 29.3,
+    "steps": 25,
+    "composite": 0.26875,
+    "activity": 0.7916666666666666,
+    "tap_steps": 20,
+    "move_steps": 5,
+    "stall_steps": 5,
+    "latency_per_step": 1.17
+  },
+  {
+    "game_id": "SSD_00736P01",
+    "name": "vlm_gemma",
+    "mode": "vlm-local",
+    "elapsed_s": 102.0,
+    "steps": 25,
+    "composite": 0.15,
+    "activity": 0.0,
+    "tap_steps": 0,
+    "move_steps": 0,
+    "stall_steps": 24,
+    "latency_per_step": 4.08
+  }
+]

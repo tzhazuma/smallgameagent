@@ -1,0 +1,294 @@
+{
+  "unknown": {
+    "play": [
+      {
+        "pattern": {
+          "action": "wait",
+          "params": {
+            "duration_ms": 1000
+          }
+        },
+        "attempts": 109,
+        "successes": 109,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:GameManager.money": [
+      {
+        "pattern": {
+          "action": "wait",
+          "params": {
+            "duration_ms": 500
+          }
+        },
+        "attempts": 91,
+        "successes": 91,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:Train._droppedCount": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 4.611458333333334,
+            "y": 811.9453461538461,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.026970385621277522,
+            "dy": 0.14383565884426433,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 4.611458333333334,
+            "y": 811.6876923076923,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 3,
+        "successes": 3,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:GameManager._failCount": [
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.07180419429254101,
+            "dy": 0.9974187474085291,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 0.0,
+            "y": 812.0,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 91,
+        "successes": 91,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -1.0,
+            "dy": 1.2246467991473532e-16,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7767034637835329,
+            "dy": -0.6298664377045836,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.7767026506499355,
+            "dy": 0.6298674403978699,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:TweenManager.flyToBagTime": [
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.09740211744588013,
+            "dy": 0.9952451092655814,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.3299712622339797,
+            "dy": -0.9439909777639373,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.3299712622339798,
+            "dy": -0.9439909777639371,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8072125044350994,
+            "dy": -0.5902609360982771,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.8946110090131214,
+            "dy": -0.4468457704315043,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7793403652452995,
+            "dy": -0.6266008259644438,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 301.09736868759546,
+            "y": 331.736419168127,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 94,
+        "successes": 94,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "win_N:SellMgr.generate_money_max_number": [
+      {
+        "pattern": {
+          "action": "wait",
+          "params": {
+            "duration_ms": 500
+          }
+        },
+        "attempts": 100,
+        "successes": 100,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_F:MainGame.isGameOver_N:cc.ParticleSystem._emitRateTimeCounter": [
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.09664767282614396,
+            "dy": 0.9953186561786586,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 4,
+        "successes": 4,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_F:MainGame.isGameOver_N:Worker.oldCount": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 208.90402787886424,
+            "y": 412.08472666659645,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 96,
+        "successes": 96,
+        "failures": 0,
+        "notes": ""
+      }
+    ]
+  }
+}
