@@ -257,78 +257,141 @@ def write_pptx() -> None:
             p.font.name = "Microsoft YaHei"
             p.space_after = Pt(10)
 
-    add_title_slide("smallgameagent 实验报告", "LLM/VLM + 规则驱动的小游戏 Agent")
+    def add_table_slide(title: str, headers: list[str], rows: list[list[str]]) -> None:
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        tb = slide.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.3), Inches(0.9))
+        p = tb.text_frame.paragraphs[0]
+        p.text = title
+        p.font.size = Pt(32)
+        p.font.bold = True
+        p.font.name = "Microsoft YaHei"
+        n_rows = len(rows) + 1
+        n_cols = len(headers)
+        table = slide.shapes.add_table(n_rows, n_cols, Inches(0.5), Inches(1.5),
+                                        Inches(12.3), Inches(5.5)).table
+        for j, h in enumerate(headers):
+            cell = table.cell(0, j)
+            cell.text = h
+            for paragraph in cell.text_frame.paragraphs:
+                paragraph.font.size = Pt(16)
+                paragraph.font.bold = True
+                paragraph.font.name = "Microsoft YaHei"
+        for i, row in enumerate(rows):
+            for j, val in enumerate(row):
+                cell = table.cell(i + 1, j)
+                cell.text = str(val)
+                for paragraph in cell.text_frame.paragraphs:
+                    paragraph.font.size = Pt(14)
+                    paragraph.font.name = "Microsoft YaHei"
 
-    add_bullet_slide("背景与四个核心问题", [
-        "空间一致性：场景深入后交互方式/障碍物变化导致错位",
-        "时间一致性：场景与策略随时间演化，后续策略破坏前期功能",
-        "策略优化：Codex 按部就班、缺乏经济循环与机会成本抽象",
-        "效率：需要动态探针、灵活回退、动态日志，降低时延与观测成本"
+    # ---- Slide 1: Title ----
+    add_title_slide("smallgameagent 实验报告", "LLM/VLM + 规则驱动的小游戏 Agent\n2026-07-20")
+
+    # ---- Slide 2: 一页结论 ----
+    add_bullet_slide("一页结论", [
+        "最佳配置：multi-bus + StrategyMemory 读回 = composite 0.300（稳定多 seed）",
+        "记忆读回将 composite 从 0.150 翻倍到 0.300——世界模型违规从 3 降到 0",
+        "22 个游戏自动分类：7 个 joystick 驱动（A 类）+ 15 个 tap-to-move（B 类）",
+        "8/15 B 类游戏 tap-only 驱动达 0.300——tap 目标屏幕坐标即有效交互",
+        "云端 API 和本地 VLM 在线闭环均不实用，定位：离线策略生成 + 数据标注",
+        "训练数据：24,496 条 7 任务样本（processed-runs 15,083 + 轨迹转换 9,413）"
     ])
 
-    add_bullet_slide("空间一致性方案与效果", [
-        "根因：failCount 翻转 → LosePanel 激活 → 输入被面板阻断",
-        "VersionedWorldModel：entity/scene/capability 三版本 + stale 检测",
-        "探针新增 findPanelButtons：按节点名匹配、设计坐标→CSS 像素映射",
-        "A/B（00461，300 步）：composite 0.425→0.473，activity 0.54→0.92，墙钟 −42%"
+    # ---- Slide 3: 架构 ----
+    add_bullet_slide("Agent 架构", [
+        "L0 执行层：RuleEngine（tap-guide / tap-only），每步 ~0ms",
+        "消息总线 AgentBus：OBSERVE / PERCEIVE / DECIDE / VERIFY / CRITIC / MEMORY",
+        "6 角色流水线：Observer→StateMapper→DecisionAnalyst→Verifier→Critic→MemoryCurator",
+        "StrategyMemory：文件型策略记忆，按 (game_id, phase_id) 索引成功/失败记录",
+        "分层规划器 HierarchicalPlanner：L2 云端 API + L1 本地 VLM + L0 规则",
+        "10 种注册模式：rule / multi / multi-bus / multi-bus-memory / hierarchical / vlm-local 等"
     ])
 
-    add_bullet_slide("时间一致性方案", [
-        "阶段契约机制 phase_contract.py",
-        "三层时间戳：event / observed / settled",
-        "settle 复查、受保护前缀 hash、失败分级 rollback/compensation/stop+replan",
-        "29 单测覆盖 190 步真实温度偏差复刻"
+    # ---- Slide 4: 记忆读回 A/B ----
+    add_table_slide("记忆读回 A/B 验证", 
+        ["阶段", "composite", "memory_hits", "wm_violations", "主要决策来源"],
+        [
+            ["phase1_write", "0.150", "92", "3", "strategy_memory:23, rule_engine:7"],
+            ["phase2_read", "0.300", "116", "0", "strategy_memory:29, rule_engine:1"],
+            ["control_no_memory", "0.150", "0", "3", "rule_engine:30"],
+        ])
+
+    # ---- Slide 5: 全游戏矩阵 ----
+    add_table_slide("全游戏 × 多模式批量矩阵（108 runs）",
+        ["游戏", "rule", "multi-bus-memory", "multi-bus", "hierarchical"],
+        [
+            ["00440 清障通车", "0.184", "0.156", "0.156", "0.150"],
+            ["00461 塔防", "0.113", "0.300", "0.297", "0.150"],
+            ["00483 吸沙抽水", "0.139", "0.300", "0.300", "0.150"],
+            ["00496 电网抓丧尸", "0.275", "0.150", "0.150", "0.150"],
+            ["00522 地下炸矿", "0.215", "0.240", "0.300", "—"],
+        ])
+
+    # ---- Slide 6: 游戏类型分类 ----
+    add_bullet_slide("游戏类型自动分类（22 游戏）", [
+        "A 类 joystick 驱动（7 个）：00440/00461/00483/00496/00517/00522/00736",
+        "  → 校准成功，multi-bus/multi-bus-memory 稳定 0.300",
+        "B 类 tap-to-move（15 个）：00219/00332/00342/.../00742",
+        "  → joystick + Cocos Actor.move 均 0 位移，需 tap-only 驱动",
+        "8/15 B 类达 0.300（00382/00394/00475/00526/00532/00594/00669/00742）",
+        "  → tap-only：直接 tap guide 目标屏幕坐标，无需 joystick 校准",
+        "7/15 B 类 0.150：tap 有效但无移动，activity=0",
+        "自动校准脚本 auto_calibrate.py：4 方向脉冲 + warmup + retry + moveByCocosInput 回退"
     ])
 
-    add_bullet_slide("策略优化方案", [
-        "经济决策模拟器穷举真值，kimi-k2.7-code 三迭代",
-        "关键：先保证输出契约（16K tokens、末行 JSON）再谈最优性",
-        "决定性 batch 场景：朴素 0.711 → 引导 1.000",
-        "结论：显式给出经济循环+往返/机会成本抽象，可充分发挥 Codex 探索能力"
+    # ---- Slide 7: 云端 API vs 本地 VLM ----
+    add_table_slide("云端 API vs 本地 VLM",
+        ["模型", "模态", "struct 解析", "延迟", "结论"],
+        [
+            ["kimi-k2.7-code", "文本", "—", "2.2s", "最快文本，但无法推断 tap 坐标"],
+            ["mimo-v2.5", "视觉", "3/3", "22-38s", "视觉准确但太慢，适合离线"],
+            ["kimi-k2.6", "视觉", "0/3", "8-10s", "思考链截断，需更强输出契约"],
+            ["gemma-4-E4B", "本地视觉", "3/3", "4.8s/帧", "本地最佳，离线可用"],
+            ["Qwen3.5-9B", "本地视觉", "2/3", "16.9s/帧", "边缘可用"],
+        ])
+
+    # ---- Slide 8: 关键修复 ----
+    add_bullet_slide("关键修复（影响结论可信度）", [
+        "probe 终止假阳性：cc.Button._transitionFinished（含 'finish'）被 WIN 正则误命中",
+        "  → _is_finished 改为佐证制：win 面板节点 / 胜利 analytics / 非 cc.* 强胜利标志",
+        "  → 修复后 00482/00342 从 1 步假阳性（0.700）→ 25 步真实运行（0.150）",
+        "rubric 动作盲区：tap 全被当 stall → 修复后 tap 算有效交互",
+        "  → multi-bus 的 24 tap/30 步才得到 activity=1.0 的合理评价",
+        "generic fallback：22 个无 profile 游戏不再抛错，用未校准基线驱动+采集数据",
+        "write_profile 坐标系：设计分辨率（720x1560 左下）→ CSS 视口（375x812 顶左）"
     ])
 
-    add_bullet_slide("效率优化方案", [
-        "动态探针预算 probe_budget.py：L0/L1/L2 五级，五类触发器",
-        "L2 截图窗口上限 20%，高优先可挤占，冷却防抖",
-        "AdaptiveLogger：DEBUG 环形内存 + 触发窗口落盘",
-        "50 步无变化场景节省观测成本 ~82%"
+    # ---- Slide 9: L2 契约修复 ----
+    add_bullet_slide("L2 输出契约修复（hierarchical）", [
+        "问题：云端 API 的 macro-plan 是抽象文本，L0 无法执行 → hierarchical 全部 activity=0",
+        "修复：L2 输出可执行指令队列（tap/move 带坐标 + 设计→CSS 坐标转换）",
+        "验证：L2 队列架构正确（24/25 步来自 L2），但纯文本 API 无视觉 → 坐标全是幻觉",
+        "  → composite 反而更差（0.055 vs rule 0.114）",
+        "修正方向：L2 改为输出目标名称（'UnlockItem_1'），L0 用 probe screenPosition 自行映射坐标",
+        "  → L2 不需要视觉也能工作，L0 保留几何准确性"
     ])
 
-    add_bullet_slide("本地 VLM：Intel 核显 Vulkan（旧基线）", [
-        "Qwen3.5-4B 2.75 tok/s，9B 0.72 tok/s，E4B 0.67 tok/s",
-        "视觉编码必须 --no-mmproj-offload 回 CPU",
-        "4 帧 struct 解析率 0/4，平均 534 s/帧",
-        "结论：仅适合作离线数据标注"
-    ])
+    # ---- Slide 10: 训练数据 ----
+    add_table_slide("训练数据（24,496 条 7 任务样本）",
+        ["任务", "processed-runs", "轨迹转换", "总计"],
+        [
+            ["next_probe_action", "2,645", "—", "2,645"],
+            ["probe_action_effect", "2,645", "+3,040", "5,685"],
+            ["field_grounding", "2,645", "—", "2,645"],
+            ["information_gain_judgment", "3,054", "+3,040", "6,094"],
+            ["pulse_response_grounding", "1,435", "+159", "1,594"],
+            ["progression_grounding", "2,645", "+3,165", "5,810"],
+            ["failure_recovery", "14", "+9", "23"],
+            ["总计", "15,083", "+9,413", "24,496"],
+        ])
 
-    add_bullet_slide("本地 VLM：RTX 5060 CUDA + KV-cache 量化（新基线）", [
-        "后端：llama.cpp CUDA12，-ngl 99 --flash-attn，K/V cache q4_0",
-        "Qwen3.5-4B：文本 82.6 tok/s，视觉 8 帧解析率 0.75，target_acc 0.83，平均 24.8 s/帧",
-        "gemma-4-E4B：文本 39.9 tok/s，单帧视觉 14.6 s",
-        "8 GB 显存跑 4B 宽裕，E4B 接近上限（7082 MB）",
-        "Qwen3.5 思考模型需 max_tokens=2048 才能输出 content JSON"
-    ])
-
-    add_bullet_slide("Agent 通信与记忆（P8）", [
-        "新增显式消息总线 AgentBus：OBSERVE / PERCEIVE / DECIDE / VERIFY / CRITIC / MEMORY",
-        "MultiAgentOrchestrator：循环流水线，Verifier 可触发 re-decide",
-        "StrategyMemory：文件型策略记忆，不依赖 sqlite-vec",
-        "新增 multi-bus / multi-bus-memory 模式与 Critic 角色",
-        "19 单测覆盖；在线 gameplay 矩阵脚本已就绪"
-    ])
-
-    add_bullet_slide("云端 API 与在线 gameplay 状态", [
-        "OpenCodeGo 认证通过但余额不足（CreditsError）",
-        "mimo-v2.5 / kimi-k2.7-code / kimi-k2.6 混合实验待充值后跑",
-        "WSL2 headless Chromium 无法初始化 Cocos 场景（cc.director.getScene() 为 null）",
-        "在线矩阵当前被环境阻塞，已记录并准备复跑"
-    ])
-
-    add_bullet_slide("训练准备与后续工作", [
-        "processed-runs → 15,083 样本 / 7 任务，VLMColdStartDataset 已验证",
-        "train_qwen35.py（QLoRA 4bit NF4 + ZeRO-2）就绪",
-        "ssh5090 可访问后：bash scripts/scp_to_ssh5090.sh 并开训",
-        "下一步：面板泛化、9B/E4B 调优、22 游戏 benchmark、verifiers 对抗数据"
+    # ---- Slide 11: 后续工作 ----
+    add_bullet_slide("后续工作", [
+        "L2 契约 v2：云端 API 输出目标名称，L0 用 probe 映射坐标（已验证方向正确）",
+        "7 个 tap-only 0.150 游戏：用 VLM 视觉定位可交互元素，补充 probe 坐标精度",
+        "00496 类确定性游戏：记忆读回帮倒忙，加「rule 连续成功时跳过记忆」开关",
+        "ssh5090 QLoRA：24,496 条训练数据已就绪，等可访问后开训",
+        "批量实验自动化：CI/CD 中跑 exp_full_matrix.py，每次代码变更自动对比 composite"
     ])
 
     PPTX_PATH.parent.mkdir(parents=True, exist_ok=True)
