@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from src.agent.api_client import OpenCodeGoClient
+from src.agent.api_client import MultiProviderClient, OpenCodeGoClient
 
 
 # ---------------------------------------------------------------------------
@@ -304,3 +304,82 @@ class TestRetryLogic:
             with pytest.raises(Exception, match="bad request"):
                 client.chat(messages=[{"role": "user", "content": "hi"}])
         assert call_count == 1
+
+
+class TestMultiProviderClient:
+    """Multi-provider cloud client routing."""
+
+    def test_default_provider_is_opencodego(self, monkeypatch) -> None:
+        monkeypatch.delenv("CLOUD_PROVIDER", raising=False)
+        monkeypatch.setenv("OPENCODEGO_API_KEY", "sk-test")
+        client = MultiProviderClient()
+        assert client.provider == "opencodego"
+        assert client._text_model == "deepseek-v4-flash"
+
+    def test_kimi_provider_reads_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("CLOUD_PROVIDER", "kimi")
+        monkeypatch.setenv("KIMI_API_KEY", "sk-kimi")
+        client = MultiProviderClient()
+        assert client.provider == "kimi"
+        assert client._api_key == "sk-kimi"
+        assert client._base_url == "https://api.kimi.com/coding"
+        assert client._text_model == "kimi-k2.7-code"
+        assert client._vision_model == "kimi-k2.6"
+
+    def test_xiaomi_provider_defaults_to_mimo(self, monkeypatch) -> None:
+        monkeypatch.setenv("CLOUD_PROVIDER", "xiaomi")
+        monkeypatch.setenv("XIAOMI_API_KEY", "sk-mimo")
+        client = MultiProviderClient()
+        assert client.provider == "xiaomi"
+        assert client._vision_model == "mimo-v2.5"
+
+    def test_unknown_provider_raises(self, monkeypatch) -> None:
+        monkeypatch.delenv("CLOUD_PROVIDER", raising=False)
+        with pytest.raises(ValueError, match="Unknown provider"):
+            MultiProviderClient(provider="not-a-provider")
+
+    def test_explicit_args_override_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("CLOUD_PROVIDER", "deepseek")
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-ds-env")
+        client = MultiProviderClient(
+            provider="qwen",
+            api_key="sk-qwen-explicit",
+            text_model="qwen-vl-plus",
+        )
+        assert client.provider == "qwen"
+        assert client._api_key == "sk-qwen-explicit"
+        assert client._text_model == "qwen-vl-plus"
+
+    def test_chat_routes_to_provider_model(self, monkeypatch) -> None:
+        monkeypatch.setenv("CLOUD_PROVIDER", "kimi")
+        monkeypatch.setenv("KIMI_API_KEY", "sk-kimi")
+        client = MultiProviderClient()
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat(messages=[{"role": "user", "content": "hi"}])
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "kimi-k2.7-code"
+            assert "temperature" not in kwargs
+
+    def test_vision_routes_to_provider_vision_model(self, monkeypatch) -> None:
+        monkeypatch.setenv("CLOUD_PROVIDER", "xiaomi")
+        monkeypatch.setenv("XIAOMI_API_KEY", "sk-mimo")
+        client = MultiProviderClient()
+        with mock.patch.object(client._client.chat.completions, "create") as m:
+            m.return_value = mock.Mock()
+            client.chat_with_vision(messages=[{"role": "user", "content": "describe"}])
+            _, kwargs = m.call_args
+            assert kwargs["model"] == "mimo-v2.5"
+
+    def test_missing_key_raises_with_provider_prefix(self, monkeypatch) -> None:
+        monkeypatch.delenv("QWEN_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="QWEN_API_KEY"):
+            MultiProviderClient(provider="qwen")
+
+    def test_opencodego_missing_key_uses_auth_file(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.delenv("OPENCODEGO_API_KEY", raising=False)
+        auth_file = tmp_path / "auth.json"
+        auth_file.write_text('{"opencode-go": {"key": "sk-auth"}}', encoding="utf-8")
+        monkeypatch.setattr(OpenCodeGoClient, "AUTH_FILE", auth_file)
+        client = MultiProviderClient(provider="opencodego")
+        assert client._api_key == "sk-auth"

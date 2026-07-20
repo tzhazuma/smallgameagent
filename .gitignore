@@ -66,10 +66,13 @@ outputs/
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment / API keys
 .env
 .env.local
 *.env
+configs/api_keys.yaml
+configs/api_keys.json
+secrets/
 
 # Logs
 logs/

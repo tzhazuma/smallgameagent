@@ -28,6 +28,7 @@ class MessageType(Enum):
     CRITIC = "critic"
     MEMORY = "memory"
     NEGOTIATE = "negotiate"
+    RULE_UPDATE = "rule_update"
 
 
 @dataclass

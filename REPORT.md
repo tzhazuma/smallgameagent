@@ -257,4 +257,110 @@ results = asyncio.run(run_batch(config))
 2. **本地 VLM 常驻**：systemd 保持 gemma-4-E4B 运行，让 hierarchical L1 可用。
 3. **L2 输出契约**：kimi-k2.7-code 加 "只输出 JSON" 系统提示。
 4. **A* routing 移植**：从 00864/00867 驱动移植。
+
+## 12. 多 Provider 云端 API 配置
+
+为支持同学在实验中使用不同云端 LLM/VLM，我们扩展了 `src/agent/api_client.py`：
+
+- 新增 `MultiProviderClient`，统一接入 OpenCodeGo、Kimi、DeepSeek、MiMo（provider 名 `xiaomi`）、Qwen；
+- 通过 `.env` 文件配置各 provider 的 `api_key` / `base_url` / 默认模型，`.env` 已加入 `.gitignore`，绝不会被提交；
+- 切换 provider 只需设置 `CLOUD_PROVIDER` 环境变量，模型名随 provider 自动默认；
+- 保留 `OpenCodeGoClient` 完全兼容，现有调用无需修改；
+- Kimi 系列自动省略 `temperature` 参数，避免 Console Go 代理返回 400。
+
+| Provider | 默认文本模型 | 默认视觉模型 | base_url |
+|---|---|---|---|
+| opencodego | deepseek-v4-flash | mimo-v2.5 | `https://opencode.ai/zen/go/v1` |
+| kimi | kimi-k2.7-code | kimi-k2.6 | `https://api.kimi.com/coding` |
+| deepseek | deepseek-chat | deepseek-chat | `https://api.deepseek.com` |
+| xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` |
+| qwen | qwen-coder-plus | qwen-vl-plus | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+
+新增 `tests/test_api_client.py` 单测覆盖 provider 路由、env 读取、参数覆盖、认证文件 fallback。
+
+## 13. 规则在线更新架构（保守方案 A）
+
+针对同学提出的「规则作为底层，需要修改时让上两层更新」的需求，我们设计并实现了在线规则更新机制：
+
+### 13.1 三层结构
+
+- **L0 规则引擎**：零延迟执行，读取内存参数；
+- **L1 本地 VLM**：看截图输出结构化视觉上下文，辅助云端 API 理解画面；
+- **L2 云端 API**：根据触发条件和视觉上下文，输出结构化规则更新 JSON。
+
+### 13.2 触发条件
+
+- `composite` 连续 N 步低于阈值（默认 0.15）；
+- `stall` 停滞计数超过阈值（默认 5 步）；
+- L0 与 L2 决策冲突持续 K 步；
+- 世界模型检测到空间/时间一致性违例（`world_model.py` stale 传播）。
+
+### 13.3 更新产物 schema
+
+```json
+{
+  "update_type": "param|memory_entry|phase_contract",
+  "target": "rules.upgrade_threshold",
+  "reason": "金币未攒够就升级导致往返",
+  "payload": {"upgrade_threshold": 500},
+  "confidence": 0.82
+}
+```
+
+### 13.4 实现
+
+- 新增 `src/agent/rule_update.py`：`RuleUpdateTrigger`、`RuleUpdateApplier`、`RuleParameters`、`RuleUpdateRequest`；
+- 扩展 `HierarchicalPlanner`：在 `step()` 中检查触发条件，满足时调用 L2 请求规则更新，解析并应用；
+- 规则更新只修改内存参数和 `StrategyMemory`，不修改源码文件（保守方案 A）；
+- 新增 `tests/test_rule_update.py` 14 个单测。
+
+## 14. 本地 VLM 基准实验（RTX 5060 Laptop 8 GB）
+
+使用 LM Studio 的 CUDA12 llama.cpp 后端，4-bit 量化 + q4_0 KV-cache，在 `_frame_0/1/2.png` 上跑结构化视觉提取：
+
+| 模型 | 解析成功 | 平均延迟 | 生成 tok/s | 说明 |
+|---|---|---|---|---|
+| gemma-4-E4B-it-Q4_K_M | 3/3 | 4.42 s | 58.8 | 本地最佳，输出可直接解析 |
+| Qwen3.5-9B-Q4_K_M | 1/3 | 14.67 s | 47.9 | 仅一帧成功，其余输出被 markdown fence 截断 |
+| Qwen3.5-4B-Q4_K_M | 0/3 | ~10.6 s | ~67 | 速度够快但格式控制不稳 |
+
+结论：**gemma-4-E4B 是当前本地 VLM 的首选**，延迟已接近在线逐步控制的可接受范围；Qwen 系列需要更强的 "no markdown fences" prompt 约束。
+
+## 15. Agent 通信扩展
+
+- 在 `src/agent/multi_agent/bus.py` 的 `MessageType` 中新增 `RULE_UPDATE`；
+- 为后续多 Agent 协作中「规则更新提议 → Critic 评估 → MemoryCurator 落地」的流水线预留消息类型；
+- 相关单测通过。
+
+## 16. 规则在线更新 A/B 消融实验
+
+在 00461 塔防上对比 rule / multi-bus-memory / hierarchical（规则更新触发开启）：
+
+| 模式 | composite | activity | move | tap | stall | 墙钟 |
+|---|---|---|---|---|---|---|
+| rule | 0.112 | 0.750 | 6 | 18 | 6 | 29.6 s |
+| multi-bus-memory | 0.038 | 0.250 | 18 | 6 | 18 | 32.1 s |
+| hierarchical（规则更新开启） | 0.150 | 0.000 | 0 | 0 | 24 | 367.9 s |
+
+**关键发现**：
+1. **hierarchical 目前还不实用**：L2 输出被 kimi 思考链截断，L1 本地 VLM 未启动，导致 activity=0（全部 wait）。但 consistency 得分高，所以 composite 反而比 rule 高——这是「不动作就不会错」的假象。
+2. **multi-bus-memory 需要预热的 strategy_memory**：本次使用独立内存文件，无历史记录，表现反而不如 rule。
+3. **规则更新触发器工作正常**：当 stall streak 达到阈值时确实调用了 L2，但 L2 返回的是抽象 planning JSON 而非规则更新 JSON，说明需要把 planning 和 rule-update 的 prompt 彻底分离。
+
+**下一步**：为 hierarchical 模式禁用默认 L2 planning，只保留规则更新触发；或者让 L2 planning 输出目标名称而非坐标。
+
+## 17. 训练数据增量
+
+新增 rule_update_ab_results 轨迹后，运行 `src/training/trajectory_converter.py` 生成新的 7 任务样本：
+
+| 任务 | 本次新增 | 合并后总计 |
+|---|---|---|
+| probe_action_effect | +3,112 | 8,643 |
+| information_gain_judgment | +3,112 | 9,206 |
+| progression_grounding | +3,240 | 9,046 |
+| pulse_response_grounding | +181 | 1,775 |
+| failure_recovery | +9 | 32 |
+| **总计** | **+9,654** | **33,250** |
+
+数据覆盖 rule / multi-bus-memory / hierarchical 三种模式，可用于后续 QLoRA 微调。
 5. **批量实验自动化**：CI/CD 中跑 `exp_multi_game.py`，每次代码变更自动对比 composite。

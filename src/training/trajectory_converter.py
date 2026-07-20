@@ -30,6 +30,7 @@ TRAJ_DIRS = [
     ROOT / "full_matrix_results" / "B_tap" / "trajectories",
     ROOT / "multi_game_results" / "trajectories",
     ROOT / "batch_results" / "trajectories",
+    ROOT / "rule_update_ab_results" / "trajectories",
 ]
 
 STALL_DISPLACEMENT = 0.05

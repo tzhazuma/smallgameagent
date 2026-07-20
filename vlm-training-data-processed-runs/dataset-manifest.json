@@ -47,9 +47,9 @@
       "all": 2645
     },
     "probe_action_effect": {
-      "train": 5531,
+      "train": 8643,
       "val": 154,
-      "all": 5685
+      "all": 8797
     },
     "field_grounding": {
       "train": 2491,
@@ -57,28 +57,28 @@
       "all": 2645
     },
     "information_gain_judgment": {
-      "train": 5903,
+      "train": 9015,
       "val": 191,
-      "all": 6094
+      "all": 9206
     },
     "pulse_response_grounding": {
-      "train": 1501,
+      "train": 1682,
       "val": 93,
-      "all": 1594
+      "all": 1775
     },
     "progression_grounding": {
-      "train": 5656,
+      "train": 8896,
       "val": 154,
-      "all": 5810
+      "all": 9050
     },
     "failure_recovery": {
-      "train": 23,
+      "train": 32,
       "val": 0,
-      "all": 23
+      "all": 32
     }
   },
   "sample_total": 15083,
-  "total_samples": 24496,
+  "total_samples": 34150,
   "updated_by": "trajectory_converter",
-  "updated_at": "2026-07-20T21:39:06"
+  "updated_at": "2026-07-21T02:17:42"
 }

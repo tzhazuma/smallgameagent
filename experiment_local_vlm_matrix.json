@@ -5,46 +5,46 @@
       {
         "frame": "_frame_0.png",
         "result": {
-          "elapsed_s": 11.565,
+          "elapsed_s": 11.028,
           "prompt_tokens": 2918,
           "completion_tokens": 512,
           "total_tokens": 3430,
-          "prompt_ms": 2952.793,
-          "predicted_ms": 8442.783,
-          "prompt_per_second": 988.2169186935894,
-          "predicted_per_second": 60.64351055807072,
+          "prompt_ms": 3046.376,
+          "predicted_ms": 7744.033,
+          "prompt_per_second": 957.8594369178328,
+          "predicted_per_second": 66.1154207374891,
           "parsed": false,
-          "raw_preview": "",
+          "raw_preview": "```json\n{\n    \"has_arrow\": false,\n    \"arrow_screen_x\": null,\n    \"arrow_screen_y\": null,\n    \"arrow_world_dx\": null,\n    \"arrow_world_dz\": null,\n    \"has_target\": false,\n    \"target_screen_x\": null,\n    \"target_screen_y\": null,\n    \"has_obstacle\": true,\n    \"obstacle_screen_x\": 500.0,\n    \"obstacle",
           "extracted": null
         }
       },
       {
         "frame": "_frame_1.png",
         "result": {
-          "elapsed_s": 11.053,
+          "elapsed_s": 10.361,
           "prompt_tokens": 2918,
           "completion_tokens": 512,
           "total_tokens": 3430,
-          "prompt_ms": 2634.847,
-          "predicted_ms": 8139.94,
-          "prompt_per_second": 1107.4646839076424,
-          "predicted_per_second": 62.89972653361082,
+          "prompt_ms": 2431.38,
+          "predicted_ms": 7618.472,
+          "prompt_per_second": 1200.1414834373893,
+          "predicted_per_second": 67.20507734359332,
           "parsed": false,
-          "raw_preview": "```json\n{\n    \"has_arrow\": true,\n    \"arrow_screen_x\": 589.0,\n    \"arrow_screen_y\": 685.0,\n    \"arrow_world_dx\": 0.0,\n    \"arrow_world_dz\": 0.0,\n    \"has_target\": false,\n    \"target_screen_x\": null,\n    \"target_screen_y\": null,\n    \"has_obstacle\": true,\n    \"obstacle_screen_x\": 500.0,\n",
+          "raw_preview": "",
           "extracted": null
         }
       },
       {
         "frame": "_frame_2.png",
         "result": {
-          "elapsed_s": 11.286,
+          "elapsed_s": 10.531,
           "prompt_tokens": 2918,
           "completion_tokens": 512,
           "total_tokens": 3430,
-          "prompt_ms": 2664.548,
-          "predicted_ms": 8308.741,
-          "prompt_per_second": 1095.1200728979175,
-          "predicted_per_second": 61.62185101208474,
+          "prompt_ms": 2487.058,
+          "predicted_ms": 7647.454,
+          "prompt_per_second": 1173.273803827655,
+          "predicted_per_second": 66.95038636388006,
           "parsed": false,
           "raw_preview": "",
           "extracted": null
@@ -65,14 +65,46 @@
       {
         "frame": "_frame_0.png",
         "result": {
-          "elapsed_s": 17.024,
+          "elapsed_s": 16.383,
           "prompt_tokens": 2918,
-          "completion_tokens": 485,
-          "total_tokens": 3403,
-          "prompt_ms": 6089.336,
-          "predicted_ms": 10745.261,
-          "prompt_per_second": 479.198388789845,
-          "predicted_per_second": 45.13617677597593,
+          "completion_tokens": 512,
+          "total_tokens": 3430,
+          "prompt_ms": 5526.241,
+          "predicted_ms": 10561.932,
+          "prompt_per_second": 528.026193573534,
+          "predicted_per_second": 48.47597958403822,
+          "parsed": false,
+          "raw_preview": "",
+          "extracted": null
+        }
+      },
+      {
+        "frame": "_frame_1.png",
+        "result": {
+          "elapsed_s": 15.67,
+          "prompt_tokens": 2918,
+          "completion_tokens": 512,
+          "total_tokens": 3430,
+          "prompt_ms": 4911.789,
+          "predicted_ms": 10359.443,
+          "prompt_per_second": 594.0808939471952,
+          "predicted_per_second": 49.42350664992317,
+          "parsed": false,
+          "raw_preview": "",
+          "extracted": null
+        }
+      },
+      {
+        "frame": "_frame_2.png",
+        "result": {
+          "elapsed_s": 14.673,
+          "prompt_tokens": 2918,
+          "completion_tokens": 449,
+          "total_tokens": 3367,
+          "prompt_ms": 4891.59,
+          "predicted_ms": 9378.495,
+          "prompt_per_second": 596.5340513002928,
+          "predicted_per_second": 47.87548535239396,
           "parsed": true,
           "raw_preview": "```json\n{\n    \"has_arrow\": false,\n    \"arrow_screen_x\": null,\n    \"arrow_screen_y\": null,\n    \"arrow_world_dx\": null,\n    \"arrow_world_dz\": null,\n    \"has_target\": false,\n    \"target_screen_x\": null,\n    \"target_screen_y\": null,\n    \"has_obstacle\": false,\n    \"obstacle_screen_x\": null,\n    \"obstacle",
           "extracted": {
@@ -92,201 +124,21 @@
             "ui_buttons": [
               "PLAY NOW"
             ],
-            "player_screen_x": 0.5,
-            "player_screen_y": 0.5,
-            "has_guide_indicator": false,
-            "guide_direction": null,
-            "extra_notes": "Game is 'TILES SURVIVE!'. Player character is visible in blue shirt. Base is under attack by enemies with chainsaws. Joystick control is visible at the bottom."
-          }
-        }
-      },
-      {
-        "frame": "_frame_1.png",
-        "result": {
-          "elapsed_s": 16.944,
-          "prompt_tokens": 2918,
-          "completion_tokens": 512,
-          "total_tokens": 3430,
-          "prompt_ms": 5368.962,
-          "predicted_ms": 11128.448,
-          "prompt_per_second": 543.4942545691327,
-          "predicted_per_second": 46.00821246592517,
-          "parsed": false,
-          "raw_preview": "{\n    \"has_arrow\": true,\n    \"arrow_screen_x\": 565.0,\n    \"arrow_screen_y\": 650.0,\n    \"arrow_world_dx\": 0.0,\n    \"arrow_world_dz\": 1.0,\n    \"has_target\": false,\n    \"target_screen_x\": null,\n",
-          "extracted": null
-        }
-      },
-      {
-        "frame": "_frame_2.png",
-        "result": {
-          "elapsed_s": 16.716,
-          "prompt_tokens": 2918,
-          "completion_tokens": 478,
-          "total_tokens": 3396,
-          "prompt_ms": 5404.277,
-          "predicted_ms": 10729.926,
-          "prompt_per_second": 539.9427157416246,
-          "predicted_per_second": 44.54830350181353,
-          "parsed": true,
-          "raw_preview": "```json\n{\n  \"has_arrow\": false,\n  \"arrow_screen_x\": null,\n  \"arrow_screen_y\": null,\n  \"arrow_world_dx\": null,\n  \"arrow_world_dz\": null,\n  \"has_target\": false,\n  \"target_screen_x\": null,\n  \"target_screen_y\": null,\n  \"has_obstacle\": true,\n  \"obstacle_screen_x\": 619.0,\n  \"obstacle_screen_y\": 896.0,\n  \"",
-          "extracted": {
-            "has_arrow": false,
-            "arrow_screen_x": null,
-            "arrow_screen_y": null,
-            "arrow_world_dx": null,
-            "arrow_world_dz": null,
-            "has_target": false,
-            "target_screen_x": null,
-            "target_screen_y": null,
-            "has_obstacle": true,
-            "obstacle_screen_x": 619.0,
-            "obstacle_screen_y": 896.0,
-            "is_end_screen": false,
-            "end_screen_type": null,
-            "ui_buttons": [
-              "PLAY NOW"
-            ],
-            "player_screen_x": 513.0,
+            "player_screen_x": 510.0,
             "player_screen_y": 550.0,
             "has_guide_indicator": false,
             "guide_direction": null,
-            "extra_notes": "Obstacle at [619, 896] is a haystack."
+            "extra_notes": "Game title 'TILES SURVIVE!' visible at top. Coins and enemies present."
           }
         }
       }
     ],
     "summary": {
       "n_frames": 3,
-      "n_success": 2,
-      "mean_latency_s": 16.87,
-      "max_latency_s": 17.024,
-      "mean_gen_tok_s": 44.8
-    }
-  },
-  {
-    "model": "gemma-4-E4B-it-Q4KM",
-    "frames": [
-      {
-        "frame": "_frame_0.png",
-        "result": {
-          "elapsed_s": 4.965,
-          "prompt_tokens": 552,
-          "completion_tokens": 213,
-          "total_tokens": 765,
-          "prompt_ms": 1001.011,
-          "predicted_ms": 3881.671,
-          "prompt_per_second": 551.4424916409511,
-          "predicted_per_second": 54.87327493752047,
-          "parsed": true,
-          "raw_preview": "{\"has_arrow\": false, \"arrow_screen_x\": null, \"arrow_screen_y\": null, \"arrow_world_dx\": null, \"arrow_world_dz\": null, \"has_target\": false, \"target_screen_x\": null, \"target_screen_y\": null, \"has_obstacle\": false, \"obstacle_screen_x\": null, \"obstacle_screen_y\": null, \"is_end_screen\": false, \"end_screen",
-          "extracted": {
-            "has_arrow": false,
-            "arrow_screen_x": null,
-            "arrow_screen_y": null,
-            "arrow_world_dx": null,
-            "arrow_world_dz": null,
-            "has_target": false,
-            "target_screen_x": null,
-            "target_screen_y": null,
-            "has_obstacle": false,
-            "obstacle_screen_x": null,
-            "obstacle_screen_y": null,
-            "is_end_screen": false,
-            "end_screen_type": null,
-            "ui_buttons": [
-              "PLAY NOW"
-            ],
-            "player_screen_x": 0.5,
-            "player_screen_y": 0.6,
-            "has_guide_indicator": false,
-            "guide_direction": null,
-            "extra_notes": "The player is in a sandbox/survival game environment. There is a central structure (a tower/platform) and several enemies (small figures) in the foreground. The UI shows a score/resource count of 0."
-          }
-        }
-      },
-      {
-        "frame": "_frame_1.png",
-        "result": {
-          "elapsed_s": 4.936,
-          "prompt_tokens": 552,
-          "completion_tokens": 232,
-          "total_tokens": 784,
-          "prompt_ms": 590.127,
-          "predicted_ms": 4233.623,
-          "prompt_per_second": 935.3918732747359,
-          "predicted_per_second": 54.799399946570595,
-          "parsed": true,
-          "raw_preview": "{\"has_arrow\": true, \"arrow_screen_x\": 0.51, \"arrow_screen_y\": 0.62, \"arrow_world_dx\": 0.0, \"arrow_world_dz\": 0.0, \"has_target\": true, \"target_screen_x\": 0.5, \"target_screen_y\": 0.74, \"has_obstacle\": false, \"obstacle_screen_x\": null, \"obstacle_screen_y\": null, \"is_end_screen\": false, \"end_screen_type",
-          "extracted": {
-            "has_arrow": true,
-            "arrow_screen_x": 0.51,
-            "arrow_screen_y": 0.62,
-            "arrow_world_dx": 0.0,
-            "arrow_world_dz": 0.0,
-            "has_target": true,
-            "target_screen_x": 0.5,
-            "target_screen_y": 0.74,
-            "has_obstacle": false,
-            "obstacle_screen_x": null,
-            "obstacle_screen_y": null,
-            "is_end_screen": false,
-            "end_screen_type": null,
-            "ui_buttons": [
-              "PLAY NOW"
-            ],
-            "player_screen_x": 0.45,
-            "player_screen_y": 0.6,
-            "has_guide_indicator": true,
-            "guide_direction": "down",
-            "extra_notes": "The player is guiding a character (likely a builder or worker) towards a green target area. There are multiple small red/grey characters (enemies or workers) scattered in the lower half of the screen."
-          }
-        }
-      },
-      {
-        "frame": "_frame_2.png",
-        "result": {
-          "elapsed_s": 4.442,
-          "prompt_tokens": 552,
-          "completion_tokens": 206,
-          "total_tokens": 758,
-          "prompt_ms": 596.38,
-          "predicted_ms": 3737.447,
-          "prompt_per_second": 925.5843589657601,
-          "predicted_per_second": 55.11783846031797,
-          "parsed": true,
-          "raw_preview": "{\"has_arrow\": false, \"arrow_screen_x\": null, \"arrow_screen_y\": null, \"arrow_world_dx\": null, \"arrow_world_dz\": null, \"has_target\": false, \"target_screen_x\": null, \"target_screen_y\": null, \"has_obstacle\": false, \"obstacle_screen_x\": null, \"obstacle_screen_y\": null, \"is_end_screen\": false, \"end_screen",
-          "extracted": {
-            "has_arrow": false,
-            "arrow_screen_x": null,
-            "arrow_screen_y": null,
-            "arrow_world_dx": null,
-            "arrow_world_dz": null,
-            "has_target": false,
-            "target_screen_x": null,
-            "target_screen_y": null,
-            "has_obstacle": false,
-            "obstacle_screen_x": null,
-            "obstacle_screen_y": null,
-            "is_end_screen": false,
-            "end_screen_type": null,
-            "ui_buttons": [
-              "PLAY NOW"
-            ],
-            "player_screen_x": 0.5,
-            "player_screen_y": 0.6,
-            "has_guide_indicator": false,
-            "guide_direction": null,
-            "extra_notes": "The player character is visible in the center-right area, moving towards the right. There is a large circular structure on the left and a wooden bridge crossing a blue river on the right."
-          }
-        }
-      }
-    ],
-    "summary": {
-      "n_frames": 3,
-      "n_success": 3,
-      "mean_latency_s": 4.781,
-      "max_latency_s": 4.965,
-      "mean_gen_tok_s": 54.9
+      "n_success": 1,
+      "mean_latency_s": 14.673,
+      "max_latency_s": 14.673,
+      "mean_gen_tok_s": 47.9
     }
   }
 ]

@@ -27,6 +27,8 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
         rule_engine: Any = None,
         api_client: Any = None,
         lmstudio_client: Any = None,
+        rule_params: Any = None,
+        strategy_memory: Any = None,
         **kwargs: Any,
     ) -> None:
         # If no lmstudio_client provided, try to create one
@@ -44,6 +46,8 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
             l1_interval=kwargs.get("l1_interval", 5),
             l2_interval=kwargs.get("l2_interval", 15),
             stuck_threshold=kwargs.get("stuck_threshold", 3),
+            rule_params=rule_params,
+            strategy_memory=strategy_memory,
         )
 
     async def decide(self, ctx: "AgentContext") -> dict[str, Any]:

@@ -16,6 +16,13 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from src.agent.rule_update import (
+    RuleParameters,
+    RuleUpdateApplier,
+    RuleUpdateTrigger,
+    parse_update_response,
+)
+
 if TYPE_CHECKING:
     from src.agent.context import AgentContext
 
@@ -31,6 +38,21 @@ _L2_SYSTEM = (
     "Output 3-8 instructions. Use screen coordinates from the probe state's "
     "guide_or_target_candidates screenPosition fields (design resolution 720x1560, "
     "bottom-left origin). No markdown fences, no explanation outside JSON."
+)
+
+_L2_UPDATE_SYSTEM = (
+    "You are a strategy optimizer for a small-game-playing agent. "
+    "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
+    "L2 cloud API for long-range planning and rule updates.\n\n"
+    "Output a single JSON object (no markdown fences) with this schema:\n"
+    '{"update_type": "param|memory_entry|phase_contract", '
+    '"target": "rule_name_or_game_id", '
+    '"reason": "why this update helps", '
+    '"payload": {...}, '
+    '"confidence": 0.0-1.0}\n\n'
+    "For update_type=param, payload is {\"param_name\": value}.\n"
+    "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
+    "Prefer small, verifiable parameter changes."
 )
 
 _L1_SYSTEM = (
@@ -82,6 +104,8 @@ class HierarchicalPlanner:
         l1_interval: int = 5,
         l2_interval: int = 15,
         stuck_threshold: int = 3,
+        rule_params: RuleParameters | None = None,
+        strategy_memory: Any | None = None,
     ) -> None:
         self._rule_engine = rule_engine
         self._api_client = api_client
@@ -96,10 +120,16 @@ class HierarchicalPlanner:
         self._last_phase: str = ""
         self._l2_queue: list[dict[str, Any]] = []  # executable instruction queue from L2
 
+        # Rule update machinery
+        self._rule_params = rule_params or RuleParameters()
+        self._rule_applier = RuleUpdateApplier(self._rule_params, strategy_memory)
+        self._rule_trigger = RuleUpdateTrigger()
+
         # Call counters for metrics
         self.l0_calls: int = 0
         self.l1_calls: int = 0
         self.l2_calls: int = 0
+        self.l2_update_calls: int = 0
 
     def step(self, ctx: "AgentContext") -> dict[str, Any]:
         """Produce one action using the three-layer hierarchy."""
@@ -116,6 +146,11 @@ class HierarchicalPlanner:
         if need_l2 and self._api_client is not None:
             self._last_phase = phase
             self._run_l2(state)
+
+        # --- Rule update trigger (conservative scheme A) ---
+        trigger_reason = self._rule_trigger.check(ctx, getattr(ctx.working_memory, "world_model", None))
+        if trigger_reason and self._api_client is not None:
+            self._run_l2_rule_update(trigger_reason, state, ctx)
 
         # --- L1: Tactical correction (local VLM) ---
         need_l1 = (
@@ -227,6 +262,59 @@ class HierarchicalPlanner:
             logger.warning("L2 API call failed: %s", exc)
 
     # ------------------------------------------------------------------
+    # L2: Rule update (conservative scheme A)
+    # ------------------------------------------------------------------
+
+    def _run_l2_rule_update(
+        self,
+        trigger_reason: str,
+        state: dict[str, Any],
+        ctx: "AgentContext",
+    ) -> None:
+        """Ask cloud API for a structured rule update and apply it."""
+        self.l2_update_calls += 1
+        state_snippet = json.dumps(
+            {k: state.get(k) for k in
+             ("player", "keyNumbers", "keyFlags", "guide_or_target_candidates")
+             if k in state},
+            default=str, ensure_ascii=False,
+        )[:1500]
+        visual_context = getattr(ctx, "visual_struct", None) or {}
+        try:
+            resp = self._api_client.chat(
+                [
+                    {"role": "system", "content": _L2_UPDATE_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "trigger_reason": trigger_reason,
+                                "state": state_snippet,
+                                "current_params": self._rule_params.to_dict(),
+                                "visual_context": visual_context,
+                            },
+                            ensure_ascii=False,
+                            default=str,
+                        ),
+                    },
+                ],
+                max_tokens=512,
+                temperature=0.0,
+            )
+            text = resp.choices[0].message.content or ""
+            request = parse_update_response(text)
+            if request is not None:
+                applied = self._rule_applier.apply(request)
+                if applied:
+                    logger.info("Applied rule update: %s", request.to_dict())
+                else:
+                    logger.warning("Rule update not applied: %s", request.to_dict())
+            else:
+                logger.warning("L2 rule update unparseable: %s", text[:120])
+        except Exception as exc:
+            logger.warning("L2 rule update call failed: %s", exc)
+
+    # ------------------------------------------------------------------
     # L1: Local VLM tactical correction
     # ------------------------------------------------------------------
 
@@ -293,6 +381,9 @@ class HierarchicalPlanner:
             "l0_calls": self.l0_calls,
             "l1_calls": self.l1_calls,
             "l2_calls": self.l2_calls,
+            "l2_update_calls": self.l2_update_calls,
             "l2_queue_remaining": len(self._l2_queue),
             "macro_plan": self._macro_plan,
+            "rule_params": self._rule_params.to_dict(),
+            "rule_update_history": self._rule_applier.history(),
         }

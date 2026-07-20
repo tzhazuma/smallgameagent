@@ -16,6 +16,39 @@ from typing import Any
 from openai import OpenAI
 
 
+#: Default provider-specific settings.  ``api_key`` and ``base_url`` can be
+#: overridden via environment variables following the pattern ``{NAME}_API_KEY``
+#: and ``{NAME}_BASE_URL``.  Model names follow ``{NAME}_TEXT_MODEL`` and
+#: ``{NAME}_VISION_MODEL``.
+PROVIDER_CONFIGS: dict[str, dict[str, str]] = {
+    "opencodego": {
+        "base_url": "https://opencode.ai/zen/go/v1",
+        "text_model": "deepseek-v4-flash",
+        "vision_model": "mimo-v2.5",
+    },
+    "kimi": {
+        "base_url": "https://api.kimi.com/coding",
+        "text_model": "kimi-k2.7-code",
+        "vision_model": "kimi-k2.6",
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com",
+        "text_model": "deepseek-chat",
+        "vision_model": "deepseek-chat",
+    },
+    "xiaomi": {
+        "base_url": "https://api.xiaomimimo.com/v1",
+        "text_model": "mimo-v2.5",
+        "vision_model": "mimo-v2.5",
+    },
+    "qwen": {
+        "base_url": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        "text_model": "qwen-coder-plus",
+        "vision_model": "qwen-vl-plus",
+    },
+}
+
+
 class OpenCodeGoClient:
     """OpenAI-compatible client targeting the OpenCodeGo API.
 
@@ -30,9 +63,9 @@ class OpenCodeGoClient:
         print(response.choices[0].message.content)
     """
 
-    DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1"
-    DEFAULT_TEXT_MODEL = "deepseek-v4-flash"
-    DEFAULT_VISION_MODEL = "mimo-v2.5"
+    DEFAULT_BASE_URL = PROVIDER_CONFIGS["opencodego"]["base_url"]
+    DEFAULT_TEXT_MODEL = PROVIDER_CONFIGS["opencodego"]["text_model"]
+    DEFAULT_VISION_MODEL = PROVIDER_CONFIGS["opencodego"]["vision_model"]
     AUTH_FILE = Path.home() / ".local" / "share" / "opencode" / "auth.json"
     MAX_RETRIES = 3
     RETRY_STATUSES = {429, 503}
@@ -213,3 +246,93 @@ class OpenCodeGoClient:
         if hasattr(exc, "response") and hasattr(exc.response, "status_code"):
             return exc.response.status_code  # type: ignore[no-any-return]
         return None
+
+
+class MultiProviderClient(OpenCodeGoClient):
+    """Unified cloud client that switches between configured providers.
+
+    Provider selection order:
+
+    1. ``provider`` constructor argument
+    2. ``CLOUD_PROVIDER`` environment variable
+    3. ``opencodego`` default
+
+    API keys are read from ``{PROVIDER}_API_KEY`` environment variables.
+    If a key is missing, the client falls back to the OpenCodeGo auth file
+    only for the ``opencodego`` provider.
+
+    Usage::
+
+        client = MultiProviderClient(provider="kimi")
+        resp = client.chat([{"role": "user", "content": "Hi"}])
+    """
+
+    def __init__(
+        self,
+        provider: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        text_model: str | None = None,
+        vision_model: str | None = None,
+    ) -> None:
+        self._provider = (
+            provider or os.environ.get("CLOUD_PROVIDER", "opencodego")
+        ).lower()
+        if self._provider not in PROVIDER_CONFIGS:
+            raise ValueError(
+                f"Unknown provider '{self._provider}'. "
+                f"Supported: {list(PROVIDER_CONFIGS)}"
+            )
+
+        cfg = PROVIDER_CONFIGS[self._provider]
+        prefix = self._provider.upper()
+
+        resolved_api_key = api_key or os.environ.get(f"{prefix}_API_KEY", "")
+        resolved_base_url = base_url or os.environ.get(
+            f"{prefix}_BASE_URL", cfg["base_url"]
+        )
+        resolved_text_model = text_model or os.environ.get(
+            f"{prefix}_TEXT_MODEL", cfg["text_model"]
+        )
+        resolved_vision_model = vision_model or os.environ.get(
+            f"{prefix}_VISION_MODEL", cfg["vision_model"]
+        )
+
+        if not resolved_api_key and self._provider == "opencodego":
+            resolved_api_key = OpenCodeGoClient._read_auth_file_key()
+
+        if not resolved_api_key:
+            raise ValueError(
+                f"API key required for provider '{self._provider}'. "
+                f"Set {prefix}_API_KEY or provide it explicitly."
+            )
+
+        self._api_key = resolved_api_key
+        self._base_url = resolved_base_url
+        self._text_model = resolved_text_model
+        self._vision_model = resolved_vision_model
+        self._client = OpenAI(api_key=resolved_api_key, base_url=resolved_base_url)
+
+    @property
+    def provider(self) -> str:
+        """Current provider name."""
+        return self._provider
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.0,
+    ) -> Any:
+        """Send a text-only chat completion request through the active provider."""
+        return super().chat(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+
+    def chat_with_vision(
+        self,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
+        max_tokens: int = 1024,
+    ) -> Any:
+        """Send a multimodal chat completion request through the active provider."""
+        return super().chat_with_vision(messages, model=model, max_tokens=max_tokens)

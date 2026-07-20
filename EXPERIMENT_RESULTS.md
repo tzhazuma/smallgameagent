@@ -2,6 +2,80 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P9 多 Provider 配置、规则在线更新、报告/PPT 修复与推送
+
+### 多 Provider 云端 API 统一接入
+
+新增 `.env` 配置（已加入 `.gitignore`，权限 600），统一支持：
+
+| provider | 模型 | base_url |
+|---|---|---|
+| opencodego | mimo-v2.5 | `https://opencode.ai/zen/go/v1` |
+| kimi | kimi-k2.7-code / kimi-k2.6 | `https://api.kimi.com/coding` |
+| deepseek | deepseek-chat | `https://api.deepseek.com` |
+| xiaomi | mimo-v2.5 | `https://api.xiaomimimo.com/v1` |
+| qwen | qwen-plus | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+
+实现：`src/agent/api_client.py` 新增 `MultiProviderClient`，通过环境变量 `LLM_PROVIDER` / `LLM_MODEL` 切换，保留旧 `OpenCodeGoClient` 兼容。测试 `tests/test_api_client.py`：覆盖 provider 路由、缺 key 失败、kimi 温度省略逻辑。
+
+### 规则在线更新架构（保守方案 A）
+
+目标：把规则作为 L0 执行层，需要更新时由 L2 云端 API / L1 本地 VLM 触发，通过结构化输出修改规则参数或 phase contract，而不是直接重写代码。
+
+新增模块：
+- `src/agent/rule_update.py`：`RuleUpdateTrigger`（触发条件评估）、`RuleUpdatePlanner`（生成结构化更新计划）、`apply_rule_patch`（内存 + 可选文件回写）。
+- 触发条件：`composite` 连续低于阈值、stall 超过 5 步、L0/L2 决策冲突、世界模型 stale 命中。
+- 更新产物：参数更新、phase contract、strategy memory 摘要、可选代码片段（人工审核后写入）。
+- `src/agent/multi_agent/bus.py`：新增 `RULE_UPDATE` 消息类型。
+- `src/agent/hierarchical_planner.py` + `src/agent/decision_makers/hierarchical_maker.py`：L2 规划器集成规则更新。
+
+### 规则更新 A/B（experiment_rule_update_ab.json / rule_update_ab_results/batch_results.json）
+
+游戏 SSD_00461P01，25 步，seed=42：
+
+| 模式 | composite | activity | move | tap | stall | wm_viol | 墙钟 | 说明 |
+|---|---|---|---|---|---|---|---|---|
+| rule | 0.112 | 0.75 | 6 | 18 | 6 | 5 | 29.6s | 规则基线 |
+| multi-bus-memory | 0.038 | 0.25 | 18 | 6 | 18 | 6 | 32.1s | 记忆文件未预热，策略记忆拖低表现 |
+| hierarchical | 0.150 | 0.00 | 0 | 0 | 24 | 0 | 367.9s | L2 规划全部输出 wait，activity 为 0 |
+
+关键发现：
+- 保守规则更新方案 A 已跑通，但 L2 云端 API 在本轮配置下倾向于输出 `wait`，导致 hierarchical 模式 activity=0。
+- multi-bus-memory 因记忆文件未预热，读回的低质量记忆反而降低 composite。
+- 下一步：预热 strategy memory（写入高质量 phase1 记忆）、调优 L2 prompt 强制输出具名目标而非坐标、引入 Verifier 对 L2 计划做可行性检查。
+
+### 本地 VLM struct 矩阵（experiment_local_vlm_matrix.json）
+
+后端：LM Studio  bundled llama.cpp Vulkan/CUDA，`-ngl 99 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 -c 4096 -n 512`，截图 720×1280。
+
+| 模型 | 解析成功 | 平均墙钟 | 平均生成 tok/s | 备注 |
+|---|---|---|---|---|
+| Qwen3.5-4B-Q4KM | 0/3 | 10.6s | ~65 | 输出被 markdown fence 包裹，提取失败 |
+| Qwen3.5-9B-Q4KM | 1/3 | 14.7s | 47.9 | 仅第三帧成功解析 |
+| gemma-4-E4B-it-Q4_K_M | （历史基准 3/3，见 experiment_vlm_pipeline.json） | 4.8s | 54.9 | Vulkan 下最稳定的小 VLM |
+
+结论：小尺寸 VLM 在线决策仍不稳定，最适合离线标注 + QLoRA 微调后作为视觉上下文生成器，而非实时 action 生成器。
+
+### 训练数据更新
+
+`src/training/trajectory_converter.py` 已接入 `rule_update_ab_results/trajectories`，重新跑完转换：
+
+- 更新后 `vlm-training-data-processed-runs/dataset-manifest.json`：`total_samples = 34,150`，覆盖 22 个游戏、7 个任务。
+- 主要新增：`next_probe_action` / `information_gain_judgment` / `progression_grounding` 等从规则更新轨迹中提取的 failure_recovery 与 transition 样本。
+
+### 报告/PPT 修复
+
+- `scripts/generate_deliverables.py`：删掉所有 `shape.line.fill.background()` 调用，改为在 `_set_fill` 中设置 `shape.line.width = Pt(0)`，LibreOffice 转换后颜色正常渲染。
+- PPT 视觉检查：标题页深蓝背景 + 青色色块、架构图三色卡片、表格标题栏均正常。
+- 报告 `REPORT.md` 已更新第 12–17 章，覆盖多 Provider、规则在线更新、A/B 实验、训练数据管线。
+
+### 测试与质量
+
+- `pytest -q`：**697 passed, 58 skipped, 1 warning**。
+- `ruff check .`：全绿。
+
+---
+
 ## 2026-07-18 第二轮实验：Tap 策略 + 记忆读回 + Critic A/B + VLM 闭环
 
 ### 实验 B：塔防 Tap 策略（experiment_multi_agent_matrix.json）

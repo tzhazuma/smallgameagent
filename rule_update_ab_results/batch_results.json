@@ -1,0 +1,62 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.11249999999999999,
+    "activity": 0.75,
+    "elapsed_s": 29.6,
+    "details": {
+      "steps": 25,
+      "move_steps": 6,
+      "tap_steps": 18,
+      "transitions": 0,
+      "stall_steps": 6,
+      "fail_flips": 0,
+      "wm_violations": 5
+    },
+    "trajectory_path": "rule_update_ab_results/trajectories/SSD_00461P01_rule_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.0375,
+    "activity": 0.25,
+    "elapsed_s": 32.1,
+    "details": {
+      "steps": 25,
+      "move_steps": 18,
+      "tap_steps": 6,
+      "transitions": 0,
+      "stall_steps": 18,
+      "fail_flips": 0,
+      "wm_violations": 6
+    },
+    "trajectory_path": "rule_update_ab_results/trajectories/SSD_00461P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "hierarchical",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.15,
+    "activity": 0.0,
+    "elapsed_s": 367.9,
+    "details": {
+      "steps": 25,
+      "move_steps": 0,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 24,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "rule_update_ab_results/trajectories/SSD_00461P01_hierarchical_seed42.jsonl",
+    "error": ""
+  }
+]
