@@ -8,8 +8,8 @@
             "duration_ms": 1000
           }
         },
-        "attempts": 109,
-        "successes": 109,
+        "attempts": 217,
+        "successes": 217,
         "failures": 0,
         "notes": ""
       }
@@ -22,8 +22,8 @@
             "duration_ms": 500
           }
         },
-        "attempts": 91,
-        "successes": 91,
+        "attempts": 172,
+        "successes": 172,
         "failures": 0,
         "notes": ""
       }
@@ -66,8 +66,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 3,
-        "successes": 3,
+        "attempts": 18,
+        "successes": 18,
         "failures": 0,
         "notes": ""
       }
@@ -96,8 +96,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 91,
-        "successes": 91,
+        "attempts": 187,
+        "successes": 187,
         "failures": 0,
         "notes": ""
       },
@@ -238,8 +238,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 94,
-        "successes": 94,
+        "attempts": 194,
+        "successes": 194,
         "failures": 0,
         "notes": ""
       }
@@ -252,8 +252,8 @@
             "duration_ms": 500
           }
         },
-        "attempts": 100,
-        "successes": 100,
+        "attempts": 200,
+        "successes": 200,
         "failures": 0,
         "notes": ""
       }
@@ -268,8 +268,8 @@
             "duration_ms": 400
           }
         },
-        "attempts": 4,
-        "successes": 4,
+        "attempts": 8,
+        "successes": 8,
         "failures": 0,
         "notes": ""
       }
@@ -284,8 +284,94 @@
             "duration_ms": 120
           }
         },
-        "attempts": 96,
-        "successes": 96,
+        "attempts": 192,
+        "successes": 192,
+        "failures": 0,
+        "notes": ""
+      }
+    ],
+    "play_N:DiTieObjManager.SFishLockActive_money": [
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 1675.2118629279432,
+            "y": 1281.5729321266715,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 235.42221145085216,
+            "y": 507.7854315486703,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.2708888470466171,
+            "dy": 0.057601687246953255,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.17501755134618927,
+            "dy": -0.1699524317420124,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.3414361787131945,
+            "dy": -0.3414832961048613,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 95,
+        "successes": 95,
+        "failures": 0,
+        "notes": ""
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.3414361787131945,
+            "dy": 0.3414832961048613,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
         "failures": 0,
         "notes": ""
       }

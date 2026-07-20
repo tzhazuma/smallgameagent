@@ -398,130 +398,169 @@ def _add_architecture_slide(prs) -> None:
     _set_text_style(tb.text_frame.paragraphs[0], "AgentBus · Observer → StateMapper → DecisionAnalyst → Verifier → Critic → MemoryCurator", Pt(12), color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
 
+def _add_section_slide(prs, title: str, subtitle: str = "") -> None:
+    """A full-bleed section divider with a dark background."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
+    _set_fill(bg, _C_PRIMARY)
+
+    tb = slide.shapes.add_textbox(Inches(0.6), Inches(2.7), Inches(12.1), Inches(1.2))
+    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(44), bold=True, color=_C_LIGHT)
+    if subtitle:
+        tb2 = slide.shapes.add_textbox(Inches(0.6), Inches(4.0), Inches(12.1), Inches(0.8))
+        _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(22), color=_C_LIGHT)
+
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(4.0 if not subtitle else 4.7), Inches(2), Inches(0.08))
+    _set_fill(accent, _C_ACCENT)
+
+
 def write_pptx() -> None:
     prs = Presentation()
     prs.slide_width = _W
     prs.slide_height = _H
 
-    slides_data: list[tuple[str, Any]] = []
-
-    def register(slide, key: str) -> None:
-        slides_data.append((key, slide))
-
     # ---- Slide 1: Title ----
     _add_title_slide(prs, "smallgameagent 实验进展", "LLM/VLM + 规则驱动的小游戏 Agent\n多 Provider、在线规则更新与批量数据管线")
-    register(prs.slides[-1], "title")
 
-    # ---- Slide 2: 一页结论 ----
-    s = _add_bullet_slide(prs, "核心结论", [
-        "代表性子集（6 游戏 × 15 runs）已跑通：B 类 tap-only 游戏 rule 模式即达 composite 0.300；A 类 joystick 游戏中 multi-bus-memory 对 00461 提升最大（0.106 → 0.300）。",
-        "浏览器环境修复是前置条件：WSL2 headless 需 Playwright bundled Chromium + --enable-unsafe-swiftshader --in-process-gpu。",
-        "记忆读回效果因游戏而异：对 00461 显著，但对 00483 无帮助，说明需要按游戏类型调优 driver/profile。",
-        "云端 API 适合做长程规划与规则更新，但必须在 L2 输出目标名称而非坐标；本地 VLM 更适合离线视觉标注。",
-        "多 Provider API 已统一接入：OpenCodeGo、Kimi、DeepSeek、MiMo（xiaomi）、Qwen 均可通过环境变量切换。",
-        "训练数据：processed-runs 34,150 条 + representative 1,173 条，为后续 QLoRA 微调做好准备。",
+    # ---- Slide 2: Agenda ----
+    _add_bullet_slide(prs, "今天聊什么？", [
+        "小游戏 Agent 到底难在哪？",
+        "我们的解法：三层快慢分离架构",
+        "云端多模型 API 与本地 VLM 的落地配置",
+        "规则在线更新：让底层规则也能「进化」",
+        "最新实验结果与训练数据管线",
+        "下一步我们要攻什么？",
     ])
-    register(s, "summary")
 
-    # ---- Slide 3: 架构图 ----
+    # ---- Section: Problem ----
+    _add_section_slide(prs, "01 我们在解决什么问题？")
+
+    _add_bullet_slide(prs, "小游戏可玩广告，自动化起来并不 trivial", [
+        "空间一致性：场景会随进度改变，云端模型容易「记错」障碍物位置",
+        "时间一致性：后续策略会反向改写前面的行为语义，导致推进失败",
+        "策略短视：有钱就去升级，而不是攒够再升级，效率很低",
+        "运行效率：每个游戏后端数据不同，日志与探针不能一刀切",
+        "API 延迟：纯云端决策太慢，无法满足实时逐步控制",
+    ])
+
+    # ---- Section: Architecture ----
+    _add_section_slide(prs, "02 三层架构")
+
     _add_architecture_slide(prs)
-    register(prs.slides[-1], "architecture")
 
-    # ---- Slide 4: 全游戏矩阵 ----
-    s = _add_table_slide(prs, "全游戏 × 多模式批量矩阵（节选）", 
-        ["游戏", "类型", "rule", "multi-bus", "multi-bus-memory", "hierarchical"],
-        [
-            ["00461 塔防", "joystick", "0.106", "0.161", "0.300", "未跑"],
-            ["00483 吸沙抽水", "joystick", "0.244", "0.150", "0.150", "未跑"],
-            ["00522 地下炸矿", "joystick", "0.215", "0.227", "0.240", "未跑"],
-            ["00382 低坑杀鲨鱼", "tap-only", "0.300", "—", "0.300", "—"],
-            ["00594 破石收水", "tap-only", "0.300", "—", "0.300", "—"],
-            ["00742 加油小镇", "tap-only", "0.300", "—", "0.300", "—"],
-        ])
-    register(s, "matrix")
-
-    # ---- Slide 5: 记忆读回 A/B ----
-    s = _add_table_slide(prs, "记忆读回 A/B 验证", 
-        ["阶段", "composite", "activity", "memory_hits", "wm_violations", "主要决策来源"],
-        [
-            ["phase1_write", "0.150", "1.000", "92", "3", "strategy_memory:23, rule_engine:7"],
-            ["phase2_read", "0.300", "1.000", "116", "0", "strategy_memory:29, rule_engine:1"],
-            ["control_no_memory", "0.150", "1.000", "0", "3", "rule_engine:30"],
-        ])
-    register(s, "memory_ab")
-
-    # ---- Slide 6: 云端 API vs 本地 VLM ----
-    s = _add_table_slide(prs, "云端 API vs 本地 VLM 基准", 
-        ["模型", "模态", "struct 解析", "延迟", "结论"],
-        [
-            ["kimi-k2.7-code", "文本", "—", "~2.2 s", "最快文本模型，适合长程规划"],
-            ["mimo-v2.5", "视觉", "3/3", "~18 s/帧", "视觉准确但慢，适合离线标注"],
-            ["kimi-k2.6", "视觉", "0/3", "~4 s/帧", "思考链截断，需更强输出契约"],
-            ["gemma-4-E4B", "本地视觉", "3/3", "~5 s/帧", "本地最佳，8GB 显存可跑"],
-            ["Qwen3.5-4B", "本地视觉", "0/3", "~12 s/帧", "量化后可用，准确率待提升"],
-        ])
-    register(s, "cloud_vs_local")
-
-    # ---- Slide 7: 规则在线更新设计 ----
-    s = _add_bullet_slide(prs, "规则在线更新：触发 → 决策 → 应用", [
-        "触发：composite 连续低迷、stall 超过阈值、世界模型 stale、L0/L2 决策冲突。",
-        "L1 本地 VLM：看截图生成结构化视觉上下文，告诉云端 API 当前画面里有哪些可交互元素。",
-        "L2 云端 API：输出结构化规则更新（参数 / phase contract / memory entry / 可选代码片段）。",
-        "应用：保守方案只改内存参数和 strategy memory；代码级更新需 diff + pytest + 短轨迹验证 + 自动回滚。",
-        "效果预期：把「拿到钱就升级」的短视行为，改成「攒够钱批量升级」的长程最优策略。",
+    _add_bullet_slide(prs, "慢思考 + 快执行，各司其职", [
+        "L0 规则引擎：每步 ~0 ms，负责 move / tap 的零延迟执行",
+        "L1 本地 VLM：看截图判断当前状态，每 5 步或卡住时做战术修正",
+        "L2 云端 API：看 probe state 做长程规划与规则更新，每 15 步或阶段切换触发",
+        "核心思路：把贵且慢的调用摊到多步，单步延迟压到接近 0",
     ])
-    register(s, "rule_update")
 
-    # ---- Slide 8: 多 Provider API ----
-    s = _add_bullet_slide(prs, "多 Provider 云端 API 配置", [
-        "新增 MultiProviderClient，统一接入 OpenCodeGo / Kimi / DeepSeek / MiMo（xiaomi）/ Qwen。",
-        "API key 统一存放在 .env，已加入 .gitignore，绝不会被提交。",
-        "通过 CLOUD_PROVIDER 环境变量即可切换 provider；模型名随 provider 自动默认。",
-        "kimi 系列自动省略 temperature 参数，避免 400 错误。",
-        "保持 OpenCodeGoClient 兼容，现有调用无需修改。",
+    # ---- Section: Cloud API ----
+    _add_section_slide(prs, "03 云端多 Provider API")
+
+    _add_bullet_slide(prs, "一个客户端，切换多家云模型", [
+        "统一接入 OpenCodeGo / MiMo、Kimi、DeepSeek、Xiaomi、Qwen",
+        ".env 集中管理 key 与 base_url，provider 用 CLOUD_PROVIDER 环境变量切换",
+        "当前实测可用：Xiaomi / mimo-v2.5（文本 + 多模态）",
+        "OpenCodeGo、DeepSeek 余额不足；Kimi、Qwen 需确认模型名后重测",
+        "Kimi 系列自动省略 temperature，避免代理返回 400",
     ])
-    register(s, "multi_provider")
 
-    # ---- Slide 9: 关键修复 ----
-    s = _add_bullet_slide(prs, "关键修复：让评测结果更可信", [
-        "probe 终止假阳性：cc.Button._transitionFinished 被 WIN 正则误命中 → 改为佐证制完成判定。",
-        "失败面板处理：minify 后组件名变单字母，改按节点名匹配 retry/continue，避开 download 广告陷阱。",
-        "rubric 动作盲区：tap 不再被计为 stall，multi-bus 的 activity=1.0 才真实可信。",
-        "generic fallback：22 个无 profile 游戏不再抛错，用未校准基线驱动并采集数据。",
-        "L2 输出契约：从抽象文本改为可执行指令队列，验证架构正确。",
+    # ---- Section: Rule update ----
+    _add_section_slide(prs, "04 规则在线更新")
+
+    _add_bullet_slide(prs, "规则不是写死的，触发后才让上层改", [
+        "触发器监控：composite 持续低迷 / stall 计数 / L0-L2 冲突 / 世界模型 stale",
+        "L2 输出结构化 JSON：param、memory_entry、phase_contract、code_file",
+        "默认只修改内存参数与 strategy memory，零风险、即时生效",
+        "代码文件改写需 allowlist + 置信度 ≥ 0.9 + 自动备份，未通过则进入待审队列",
+        "目标：把「拿到钱就升级」的短视行为，改成「攒够再升级」的长程最优策略",
     ])
-    register(s, "fixes")
 
-    # ---- Slide 10: 训练数据 ----
-    s = _add_table_slide(prs, "训练数据规模（7 任务格式）", 
-        ["任务", "processed-runs", "轨迹转换", "总计"],
+    # ---- Section: Local VLM ----
+    _add_section_slide(prs, "05 本地 VLM：把 8 GB 显存用到极限")
+
+    _add_bullet_slide(prs, "小模型 + 重量化 = 可落地的视觉层", [
+        "基线：4-bit NF4 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
+        "进一步减显存：KV-cache 量化（q4_0 / q8_0 / q4_k_m）",
+        "当前本地测试：Gemma-4-E4B 输出最稳定，3/3 帧可解析",
+        "Qwen 系列速度更快，但需要更强的「只输出 JSON」系统提示约束",
+        "未来：离线标注 → QLoRA 微调 → 给云端 API 提供视觉上下文",
+    ])
+
+    # ---- Section: Results ----
+    _add_section_slide(prs, "06 实验结果")
+
+    _add_table_slide(prs, "6 款代表性游戏：B 类 tap-only 全部满分",
+        ["game_id", "mode", "composite", "activity", "stall"],
         [
-            ["next_probe_action", "2,645", "—", "2,645"],
-            ["probe_action_effect", "2,645", "+3,040", "5,685"],
-            ["field_grounding", "2,645", "—", "2,645"],
-            ["information_gain_judgment", "3,054", "+3,040", "6,094"],
-            ["pulse_response_grounding", "1,435", "+159", "1,594"],
-            ["progression_grounding", "2,645", "+3,165", "5,810"],
-            ["failure_recovery", "14", "+9", "23"],
-            ["总计", "15,083", "+9,413", "23,596"],
+            ["SSD_00382P01", "rule", "0.300", "1.000", "0"],
+            ["SSD_00382P01", "multi-bus-memory", "0.300", "1.000", "0"],
+            ["SSD_00461P01", "rule", "0.106", "0.708", "7"],
+            ["SSD_00461P01", "multi-bus-memory", "0.300", "1.000", "0"],
+            ["SSD_00483P01", "rule", "0.244", "0.625", "9"],
+            ["SSD_00483P01", "multi-bus-memory", "0.150", "0.000", "24"],
+            ["SSD_00522P02", "rule", "0.215", "0.833", "4"],
+            ["SSD_00522P02", "multi-bus-memory", "0.240", "1.000", "0"],
+            ["SSD_00594P02", "rule", "0.300", "1.000", "0"],
+            ["SSD_00594P02", "multi-bus-memory", "0.300", "1.000", "0"],
+            ["SSD_00742P01", "rule", "0.300", "1.000", "0"],
+            ["SSD_00742P01", "multi-bus-memory", "0.300", "1.000", "0"],
         ])
-    register(s, "training_data")
 
-    # ---- Slide 11: 后续工作 ----
-    s = _add_bullet_slide(prs, "下一步工作", [
-        "跑通本地 4-bit VLM 离线标注管线：qwen3.5-4b / gemma4-e4b，记录延迟与准确率。",
-        "在 00461 / 00736 等代表游戏上验证规则在线更新（方案 A）能否降低 stall、提升 composite。",
-        "把 L2 输出从「坐标」改为「目标名称」，让 L0 用 probe screenPosition 自行映射。",
-        "扩充 failure_recovery 训练样本，解决当前仅 23 条的短板。",
-        "ssh5090 可访问后，用 23,596 条样本启动 QLoRA 训练。",
+    _add_table_slide(prs, "A 组 7 款 joystick 游戏最终平均结果",
+        ["游戏", "rule", "multi-bus-memory", "multi-bus", "最优模式"],
+        [
+            ["00440 清障通车", "0.206", "0.175", "0.172", "rule"],
+            ["00461 塔防", "0.143", "0.300", "0.300", "multi-bus*"],
+            ["00483 吸沙抽水", "0.244", "0.300", "0.300", "multi-bus*"],
+            ["00496 电网抓丧尸", "0.250", "0.150", "0.150", "rule"],
+            ["00517 末世旅店", "0.150", "0.150", "0.150", "—"],
+            ["00522 地下炸矿", "0.215", "0.300", "0.300", "multi-bus*"],
+            ["00736 养蛙捕鱼", "0.256", "0.153", "0.150", "rule"],
+        ])
+
+    _add_bullet_slide(prs, "关键发现", [
+        "B 类 tap-only 游戏 rule 模式即可达到 composite 0.300，tap 坐标映射已稳定",
+        "multi-bus 在 00461 / 00483 / 00522 上稳定满分，说明 bus + memory 对这类游戏有决定性收益",
+        "00496 / 00517 / 00736 的 multi-bus activity=0，driver 在这些游戏上选错了动作，需要按游戏调优",
+        "A 组整体平均：rule 0.209、multi-bus 0.217、multi-bus-memory 0.218，差异被少数游戏拉满",
+        "浏览器修复是前置条件：WSL2 headless 需 bundled Chromium + swiftshader 参数",
     ])
-    register(s, "next_steps")
+
+    # ---- Section: Data ----
+    _add_section_slide(prs, "07 训练数据管线")
+
+    _add_bullet_slide(prs, "跑过的轨迹 = 可复用的训练数据", [
+        "batch_runner 每步记录 state / action / keyNumbers / reason",
+        "trajectory_converter 离线生成 7 任务样本：next_probe_action、information_gain_judgment 等",
+        "已累积 33,250 条样本，覆盖 rule / multi-bus-memory / hierarchical",
+        "可直接喂给 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调脚本",
+    ])
+
+    # ---- Section: Next ----
+    _add_section_slide(prs, "08 下一步")
+
+    _add_bullet_slide(prs, "接下来要攻的几件事", [
+        "跑完 B 组 15 游戏 × 2 模式 × 2 seeds，拿到完整 22 游戏矩阵",
+        "定位并修复 00483 multi-bus / multi-bus-memory activity=0 的问题",
+        "让本地 VLM 常驻，验证 hierarchical 三层协同的真实收益",
+        "在 5090 服务器上跑 QLoRA 微调，把 VLM 变成专用的画面理解器",
+    ])
+
+    # ---- Thanks ----
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
+    _set_fill(bg, _C_PRIMARY)
+    tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.9), Inches(12.3), Inches(1.4))
+    _set_text_style(tb.text_frame.paragraphs[0], "谢谢，欢迎讨论", Pt(48), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5.67), Inches(4.3), Inches(2), Inches(0.08))
+    _set_fill(accent, _C_ACCENT)
 
     # Add footers with page numbers
     total = len(prs.slides)
     for idx, slide in enumerate(prs.slides, start=1):
         if idx == 1:
-            # Title slide has its own footer area
             continue
         _add_footer(slide, idx, total)
 
