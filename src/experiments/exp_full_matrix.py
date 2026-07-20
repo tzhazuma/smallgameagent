@@ -78,7 +78,8 @@ def build_configs() -> list[dict]:
 
     configs = []
 
-    # A 类: full matrix
+    # A 类: full matrix (exclude hierarchical by default: it requires a running
+    # LM Studio local VLM and is expensive per step).
     a_games = {}
     for gid in types["A"]:
         html = _resolve_html(gid)
@@ -88,7 +89,7 @@ def build_configs() -> list[dict]:
         configs.append({
             "name": "A_full",
             "games": a_games,
-            "modes": ["rule", "multi-bus-memory", "multi-bus", "hierarchical"],
+            "modes": ["rule", "multi-bus-memory", "multi-bus"],
         })
 
     # B 类: tap-only, reduced modes
