@@ -206,6 +206,7 @@ class GameAgentInference:
         max_new_tokens: int = 256,
         temperature: float = 0.0,
         skip_warmup: bool = False,
+        kv_cache_quant: str | None = None,
     ) -> None:
         self._model_path = model_path
         self._adapter_path = adapter_path
@@ -214,6 +215,7 @@ class GameAgentInference:
         self._use_flash_attn = use_flash_attn
         self._max_new_tokens = max_new_tokens
         self._temperature = temperature
+        self._kv_cache_quant = kv_cache_quant
 
         self._model_family = _detect_model_family(model_path)
         self._short_name = _resolve_short_name(model_path)
@@ -224,6 +226,7 @@ class GameAgentInference:
         # These are set by _load_model.
         self._model: Any = None
         self._processor: Any = None
+        self._cache_config: Any = None
 
         self._skip_warmup = skip_warmup
         self._load_model()
@@ -324,6 +327,7 @@ class GameAgentInference:
         self._model = model
         self._processor = processor
         self._loaded = True
+        self._cache_config = self._build_cache_config(self._kv_cache_quant)
         logger.info("Model loaded successfully (%s)", self._short_name)
 
         if not self._skip_warmup:
@@ -417,6 +421,44 @@ class GameAgentInference:
         logger.info("Replaced Gemma4ClippableLinear -> Linear (PEFT compat)")
         return model
 
+    @staticmethod
+    def _build_cache_config(quant: str | None) -> Any:
+        """Build a quantized KV-cache config to fit large models on 8 GB GPUs.
+
+        Supports ``q4_0``, ``q8_0`` and (when ``quanto`` is installed) ``fp8``.
+        Falls back to the standard KV cache when the requested backend is
+        unavailable.
+        """
+        import torch
+
+        if not quant:
+            return None
+        backend = "quanto"  # transformers default quantized cache backend
+        try:
+            from transformers.cache_utils import QuantizedCacheConfig
+        except ImportError:
+            logger.warning("QuantizedCacheConfig not available; ignoring --kv-cache-quant")
+            return None
+
+        valid = {"q4_0", "q4_1", "q8_0", "fp8", "q4_k_m", "q6_k"}
+        if quant not in valid:
+            logger.warning("Unknown KV-cache quant %r; ignoring", quant)
+            return None
+
+        try:
+            cfg = QuantizedCacheConfig(
+                backend=backend,
+                nbits=8 if "q8" in quant else 4,
+                qtype=quant,
+                compute_dtype="bfloat16",
+                device="cuda" if torch.cuda.is_available() else "cpu",
+            )
+            logger.info("Using %s %d-bit quantized KV cache", quant, cfg.nbits)
+            return cfg
+        except Exception as exc:
+            logger.warning("Failed to build quantized KV-cache config: %s", exc)
+            return None
+
     # ------------------------------------------------------------------
     # Warmup
     # ------------------------------------------------------------------
@@ -509,14 +551,21 @@ class GameAgentInference:
         ).to(self._model.device)
 
         # ── Generate ────────────────────────────────────────────────────
+        gen_kwargs: dict[str, Any] = {
+            "max_new_tokens": self._max_new_tokens,
+            "temperature": self._temperature if self._temperature > 0 else None,
+            "do_sample": self._temperature > 0,
+            "pad_token_id": self._processor.tokenizer.pad_token_id,
+            "eos_token_id": self._processor.tokenizer.eos_token_id,
+        }
+        if self._cache_config is not None:
+            gen_kwargs["cache_implementation"] = "quantized"
+            gen_kwargs["cache_config"] = self._cache_config
+
         with torch.inference_mode():
             outputs = self._model.generate(
                 **inputs,
-                max_new_tokens=self._max_new_tokens,
-                temperature=self._temperature if self._temperature > 0 else None,
-                do_sample=self._temperature > 0,
-                pad_token_id=self._processor.tokenizer.pad_token_id,
-                eos_token_id=self._processor.tokenizer.eos_token_id,
+                **gen_kwargs,
             )
 
         # ── Decode ──────────────────────────────────────────────────────
@@ -772,6 +821,9 @@ async def predict_stream_endpoint(
                 "pad_token_id": engine._processor.tokenizer.pad_token_id,
                 "eos_token_id": engine._processor.tokenizer.eos_token_id,
             }
+            if engine._cache_config is not None:
+                gen_kwargs["cache_implementation"] = "quantized"
+                gen_kwargs["cache_config"] = engine._cache_config
 
             thread = Thread(target=engine._model.generate, kwargs=gen_kwargs)
             thread.start()
@@ -787,15 +839,19 @@ async def predict_stream_endpoint(
             logger.warning("Streaming not supported, falling back: %s", exc)
 
         if not streamed:
+            gen_kwargs = {
+                **inputs,
+                "max_new_tokens": engine._max_new_tokens,
+                "temperature": engine._temperature if engine._temperature > 0 else None,
+                "do_sample": engine._temperature > 0,
+                "pad_token_id": engine._processor.tokenizer.pad_token_id,
+                "eos_token_id": engine._processor.tokenizer.eos_token_id,
+            }
+            if engine._cache_config is not None:
+                gen_kwargs["cache_implementation"] = "quantized"
+                gen_kwargs["cache_config"] = engine._cache_config
             with torch.inference_mode():
-                outputs = engine._model.generate(
-                    **inputs,
-                    max_new_tokens=engine._max_new_tokens,
-                    temperature=engine._temperature if engine._temperature > 0 else None,
-                    do_sample=engine._temperature > 0,
-                    pad_token_id=engine._processor.tokenizer.pad_token_id,
-                    eos_token_id=engine._processor.tokenizer.eos_token_id,
-                )
+                outputs = engine._model.generate(**gen_kwargs)
             input_len = inputs["input_ids"].shape[1]
             generated_ids = outputs[0][input_len:]
             raw_output = engine._processor.decode(generated_ids, skip_special_tokens=True)
@@ -927,6 +983,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Host to bind to (default: 0.0.0.0)",
     )
     parser.add_argument(
+        "--kv-cache-quant",
+        type=str,
+        default=None,
+        choices=["q4_0", "q4_1", "q8_0", "fp8", "q4_k_m", "q6_k"],
+        help="Quantize the KV cache to save VRAM on 8 GB GPUs (requires quanto)",
+    )
+    parser.add_argument(
         "--skip-warmup",
         action="store_true",
         help="Skip model warmup (3 dummy inference passes)",
@@ -956,6 +1019,7 @@ def main(argv: list[str] | None = None) -> None:
         max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         skip_warmup=args.skip_warmup,
+        kv_cache_quant=args.kv_cache_quant,
     )
 
     # Swap lifespan with one that uses the already-loaded engine.

@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_COMPOSITE_THRESHOLD = 0.15
 DEFAULT_STALL_THRESHOLD = 5
 DEFAULT_CONFLICT_THRESHOLD = 3
+
+#: Safety knobs for code-file updates.  These are intentionally conservative:
+#: code-file updates are disabled by default (empty allowlist) and require a
+#: high confidence + small patch size when enabled.
+DEFAULT_CODE_FILE_CONFIDENCE_THRESHOLD = 0.9
+DEFAULT_CODE_FILE_MAX_PATCH_CHARS = 2000
+DEFAULT_CODE_FILE_MAX_SEARCH_CHARS = 500
+DEFAULT_CODE_FILE_BACKUP_COUNT = 3
 
 
 @dataclass
@@ -148,16 +158,38 @@ class RuleUpdateTrigger:
 
 
 class RuleUpdateApplier:
-    """Apply structured rule updates to parameters and strategy memory."""
+    """Apply structured rule updates to parameters, strategy memory, and optionally source files.
+
+    Code-file updates are gated by an explicit allowlist, a high confidence
+    threshold, and a maximum patch size.  Any update that does not meet the
+    safety criteria is queued in ``pending_code_updates`` for human review
+    instead of being applied.
+    """
 
     def __init__(
         self,
         params: RuleParameters,
         strategy_memory: Any | None = None,
+        code_file_allowlist: list[str] | None = None,
+        code_file_confidence_threshold: float = DEFAULT_CODE_FILE_CONFIDENCE_THRESHOLD,
+        code_file_max_patch_chars: int = DEFAULT_CODE_FILE_MAX_PATCH_CHARS,
+        code_file_max_search_chars: int = DEFAULT_CODE_FILE_MAX_SEARCH_CHARS,
+        code_file_backup_count: int = DEFAULT_CODE_FILE_BACKUP_COUNT,
     ) -> None:
         self._params = params
         self._memory = strategy_memory
         self._history: list[dict[str, Any]] = []
+        self._pending_code_updates: list[dict[str, Any]] = []
+        self._code_file_allowlist = [Path(p).resolve() for p in (code_file_allowlist or [])]
+        self._code_confidence = code_file_confidence_threshold
+        self._code_max_patch = code_file_max_patch_chars
+        self._code_max_search = code_file_max_search_chars
+        self._code_backup_count = code_file_backup_count
+
+    @property
+    def pending_code_updates(self) -> list[dict[str, Any]]:
+        """Code-file updates that were not auto-applied."""
+        return list(self._pending_code_updates)
 
     def apply(self, request: RuleUpdateRequest) -> bool:
         """Apply one update request.
@@ -178,6 +210,8 @@ class RuleUpdateApplier:
             self._params.set(f"phase_contract:{request.target}", request.payload)
             self._record(request)
             return True
+        if request.update_type == "code_file":
+            return self._apply_code_file(request)
 
         logger.warning("Unsupported rule update type: %s", request.update_type)
         return False
@@ -211,6 +245,128 @@ class RuleUpdateApplier:
             logger.exception("Failed to record memory entry")
             return False
 
+    def _apply_code_file(self, request: RuleUpdateRequest) -> bool:
+        """Apply a code-file patch if safety checks pass.
+
+        The expected payload is::
+
+            {
+              "file_path": "configs/runtime_rules.json",
+              "search": "<exact existing substring>",
+              "replace": "<new substring>"
+            }
+
+        If the file is not in the allowlist, the confidence is too low, or the
+        patch is too large, the update is queued in ``pending_code_updates``
+        instead of being applied.
+        """
+        payload = request.payload
+        if not isinstance(payload, dict):
+            logger.warning("code_file payload is not a dict: %s", payload)
+            return False
+
+        file_path = payload.get("file_path", "")
+        search = payload.get("search", "")
+        replace = payload.get("replace", "")
+        if not file_path or not isinstance(search, str) or not isinstance(replace, str):
+            logger.warning("code_file payload missing file_path/search/replace")
+            return False
+
+        path = Path(file_path).resolve()
+
+        # Safety gate 1: allowlist.
+        allowed = any(
+            path == allowed_path or path.is_relative_to(allowed_path)
+            for allowed_path in self._code_file_allowlist
+        )
+        if not allowed:
+            logger.warning("Code-file update rejected: %s not in allowlist", path)
+            self._queue_pending(request, "file_not_in_allowlist")
+            return False
+
+        # Safety gate 2: confidence.
+        if request.confidence < self._code_confidence:
+            logger.warning(
+                "Code-file update confidence %.2f below threshold %.2f; pending review",
+                request.confidence,
+                self._code_confidence,
+            )
+            self._queue_pending(request, "confidence_below_threshold")
+            return False
+
+        # Safety gate 3: patch size.
+        patch_chars = len(search) + len(replace)
+        if patch_chars > self._code_max_patch:
+            logger.warning(
+                "Code-file update patch too large (%d > %d chars); pending review",
+                patch_chars,
+                self._code_max_patch,
+            )
+            self._queue_pending(request, "patch_too_large")
+            return False
+        if len(search) > self._code_max_search:
+            logger.warning(
+                "Search block too large (%d > %d chars); pending review",
+                len(search),
+                self._code_max_search,
+            )
+            self._queue_pending(request, "search_block_too_large")
+            return False
+
+        # Safety gate 4: file must exist and be a regular file inside the repo.
+        if not path.is_file():
+            logger.warning("Code-file target does not exist: %s", path)
+            self._queue_pending(request, "file_not_found")
+            return False
+
+        # Apply the patch.
+        try:
+            original = path.read_text(encoding="utf-8")
+            if search not in original:
+                logger.warning("Search block not found in %s; pending review", path)
+                self._queue_pending(request, "search_block_not_found")
+                return False
+            if original.count(search) > 1:
+                logger.warning("Search block ambiguous in %s; pending review", path)
+                self._queue_pending(request, "ambiguous_search_block")
+                return False
+
+            new_content = original.replace(search, replace, 1)
+            self._backup_file(path)
+            path.write_text(new_content, encoding="utf-8")
+            self._record(request)
+            logger.info(
+                "Applied code-file update to %s (+%d/-%d chars)",
+                path,
+                len(replace),
+                len(search),
+            )
+            return True
+        except Exception:
+            logger.exception("Failed to apply code-file update to %s", path)
+            return False
+
+    def _backup_file(self, path: Path) -> None:
+        """Keep up to N backups of a file before modifying it."""
+        stem = path.name
+        backup_dir = path.parent / ".rule_backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        # Rotate existing backups.
+        for i in range(self._code_backup_count - 1, 0, -1):
+            src = backup_dir / f"{stem}.{i - 1}.bak"
+            if src.is_file():
+                shutil.move(str(src), str(backup_dir / f"{stem}.{i}.bak"))
+        shutil.copy2(str(path), str(backup_dir / f"{stem}.0.bak"))
+
+    def _queue_pending(self, request: RuleUpdateRequest, reason: str) -> None:
+        self._pending_code_updates.append(
+            {
+                "step": getattr(request, "step", None),
+                "pending_reason": reason,
+                **request.to_dict(),
+            }
+        )
+
     def _record(self, request: RuleUpdateRequest) -> None:
         self._history.append({"step": getattr(request, "step", None), **request.to_dict()})
 
@@ -230,13 +386,15 @@ def update_prompt(
         "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
         "L2 cloud API for long-range planning and rule updates.\n\n"
         "Output a single JSON object (no markdown fences) with this schema:\n"
-        '{"update_type": "param|memory_entry|phase_contract", '
-        '"target": "rule_name_or_game_id", '
+        '{"update_type": "param|memory_entry|phase_contract|code_file", '
+        '"target": "rule_name_or_game_id_or_file", '
         '"reason": "why this update helps", '
         '"payload": {...}, '
         '"confidence": 0.0-1.0}\n\n'
         "For update_type=param, payload is {\"param_name\": value}.\n"
         "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
+        "For update_type=code_file, payload is {\"file_path\", \"search\", \"replace\"}.\n"
+        "Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
         "Prefer small, verifiable parameter changes."
     )
     user = {

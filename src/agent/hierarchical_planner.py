@@ -45,13 +45,15 @@ _L2_UPDATE_SYSTEM = (
     "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
     "L2 cloud API for long-range planning and rule updates.\n\n"
     "Output a single JSON object (no markdown fences) with this schema:\n"
-    '{"update_type": "param|memory_entry|phase_contract", '
-    '"target": "rule_name_or_game_id", '
+    '{"update_type": "param|memory_entry|phase_contract|code_file", '
+    '"target": "rule_name_or_game_id_or_file", '
     '"reason": "why this update helps", '
     '"payload": {...}, '
     '"confidence": 0.0-1.0}\n\n'
     "For update_type=param, payload is {\"param_name\": value}.\n"
     "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
+    "For update_type=code_file, payload is {\"file_path\", \"search\", \"replace\"}.\n"
+    "Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
     "Prefer small, verifiable parameter changes."
 )
 
@@ -106,6 +108,7 @@ class HierarchicalPlanner:
         stuck_threshold: int = 3,
         rule_params: RuleParameters | None = None,
         strategy_memory: Any | None = None,
+        rule_update_allowlist: list[str] | None = None,
     ) -> None:
         self._rule_engine = rule_engine
         self._api_client = api_client
@@ -122,7 +125,11 @@ class HierarchicalPlanner:
 
         # Rule update machinery
         self._rule_params = rule_params or RuleParameters()
-        self._rule_applier = RuleUpdateApplier(self._rule_params, strategy_memory)
+        self._rule_applier = RuleUpdateApplier(
+            self._rule_params,
+            strategy_memory,
+            code_file_allowlist=rule_update_allowlist,
+        )
         self._rule_trigger = RuleUpdateTrigger()
 
         # Call counters for metrics

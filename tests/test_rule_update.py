@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -142,6 +143,80 @@ class TestRuleUpdateApplier:
         )
         assert applier.apply(req) is True
         assert params.get("phase_contract:early") == {"precondition": "money<100"}
+
+    def test_code_file_not_allowed_by_default(self, tmp_path: Path) -> None:
+        target = tmp_path / "runtime.json"
+        target.write_text('{"a": 1}', encoding="utf-8")
+        params = RuleParameters()
+        applier = RuleUpdateApplier(params)
+        req = RuleUpdateRequest(
+            update_type="code_file",
+            target="runtime.json",
+            reason="update rule",
+            payload={"file_path": str(target), "search": '{"a": 1}', "replace": '{"a": 2}'},
+            confidence=0.95,
+        )
+        assert applier.apply(req) is False
+        assert len(applier.pending_code_updates) == 1
+        assert applier.pending_code_updates[0]["pending_reason"] == "file_not_in_allowlist"
+        assert target.read_text(encoding="utf-8") == '{"a": 1}'
+
+    def test_code_file_apply_and_backup(self, tmp_path: Path) -> None:
+        target = tmp_path / "runtime.json"
+        target.write_text('{"a": 1}', encoding="utf-8")
+        params = RuleParameters()
+        applier = RuleUpdateApplier(
+            params,
+            code_file_allowlist=[str(tmp_path)],
+            code_file_confidence_threshold=0.9,
+        )
+        req = RuleUpdateRequest(
+            update_type="code_file",
+            target="runtime.json",
+            reason="update rule",
+            payload={"file_path": str(target), "search": '{"a": 1}', "replace": '{"a": 2}'},
+            confidence=0.95,
+        )
+        assert applier.apply(req) is True
+        assert target.read_text(encoding="utf-8") == '{"a": 2}'
+        assert (tmp_path / ".rule_backups" / "runtime.json.0.bak").is_file()
+
+    def test_code_file_low_confidence_pending(self, tmp_path: Path) -> None:
+        target = tmp_path / "runtime.json"
+        target.write_text('{"a": 1}', encoding="utf-8")
+        params = RuleParameters()
+        applier = RuleUpdateApplier(
+            params,
+            code_file_allowlist=[str(tmp_path)],
+            code_file_confidence_threshold=0.95,
+        )
+        req = RuleUpdateRequest(
+            update_type="code_file",
+            target="runtime.json",
+            reason="update rule",
+            payload={"file_path": str(target), "search": '{"a": 1}', "replace": '{"a": 2}'},
+            confidence=0.9,
+        )
+        assert applier.apply(req) is False
+        assert applier.pending_code_updates[0]["pending_reason"] == "confidence_below_threshold"
+
+    def test_code_file_search_not_found_pending(self, tmp_path: Path) -> None:
+        target = tmp_path / "runtime.json"
+        target.write_text('{"a": 1}', encoding="utf-8")
+        params = RuleParameters()
+        applier = RuleUpdateApplier(
+            params,
+            code_file_allowlist=[str(tmp_path)],
+        )
+        req = RuleUpdateRequest(
+            update_type="code_file",
+            target="runtime.json",
+            reason="update rule",
+            payload={"file_path": str(target), "search": "missing", "replace": "x"},
+            confidence=0.95,
+        )
+        assert applier.apply(req) is False
+        assert applier.pending_code_updates[0]["pending_reason"] == "search_block_not_found"
 
 
 class TestParseUpdateResponse:
