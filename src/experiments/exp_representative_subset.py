@@ -63,10 +63,12 @@ def build_configs() -> list[dict]:
 
     configs = []
     if a_games:
+        # hierarchical requires a running LM Studio local VLM; excluded from
+        # the default representative run to keep latency/cost bounded.
         configs.append({
             "name": "A_representative",
             "games": a_games,
-            "modes": ["rule", "multi-bus", "multi-bus-memory", "hierarchical"],
+            "modes": ["rule", "multi-bus", "multi-bus-memory"],
         })
     if b_games:
         configs.append({
