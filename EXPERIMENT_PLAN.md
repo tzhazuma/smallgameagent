@@ -7,15 +7,16 @@
 - **多 Provider 云端 API**：`.env` 配置 + `MultiProviderClient` 支持 OpenCodeGo / Kimi / DeepSeek / MiMo / Qwen。
 - **三层架构**：L0 规则引擎、L1 本地小 VLM、L2 云端多模态 API；规则在线更新（保守方案 A）已落地。
 - **Agent 通信与记忆**：`AgentBus` + `StrategyMemory` + Critic/Verifier 循环；记忆读回 A/B 验证 composite 0.150 → 0.300。
-- **训练数据管线**：`trajectory_converter.py` 已产出 34,150 条样本，覆盖 22 游戏、7 任务。
-- **报告/PPT**：`scripts/generate_deliverables.py` 已修复 LibreOffice 颜色渲染，报告已推送 GitHub 并复制到 Windows 下载目录。
+- **训练数据管线**：`trajectory_converter.py` 已产出 34,150 + 4,076 = 38,226 条样本，覆盖 22 游戏、7 个任务。
+- **报告/PPT**：`scripts/generate_deliverables.py` 已重写为 22 页 humanized 中文 PPT，报告已推送 GitHub。
 
-## P7 目标
+## P7 目标（更新）
 
-1. **多游戏自动跑测**：用 `src/experiments/batch_runner.py` 在 22 游戏上跑出代表性/完整矩阵。
-2. **多 Provider 对比**：对同一视觉/文本决策任务，比较 Kimi / MiMo / DeepSeek / Qwen 的延迟、成本、结构化输出准确率。
-3. **规则在线更新调优**：解决 hierarchical 模式 activity=0、multi-bus-memory 记忆未预热问题；引入触发阈值、Verifier 可行性检查、L2 输出目标名称契约。
-4. **数据资产沉淀**：每次批量跑测自动转换 trajectory → VLM 训练数据，持续扩充数据集。
+1. **多游戏自动跑测**：A 组 7 游戏已完成，B 组 15 游戏进行中；跑完后转换轨迹并更新报告/PPT。
+2. **多 Provider 对比**：当前仅 Xiaomi/MiMo 可用；OpenCodeGo/DeepSeek 余额不足，Kimi/Qwen 模型名待确认。
+3. **规则在线更新调优**：保守方案 A（内存参数 + memory + phase contract）已落地；可选代码文件更新已实现（allowlist + 置信度 + 备份 + 待审队列）。下一步是在真实游戏上触发并观察效果。
+4. **本地 VLM 准备**：4-bit 量化 + KV-cache 量化代码已就绪，等依赖安装/5090 可访问后跑基准。
+5. **数据资产沉淀**：每次批量跑测自动转换 trajectory → VLM 训练数据，持续扩充数据集。
 
 ## 1. 批量跑测快速开始
 
@@ -116,11 +117,12 @@ results = asyncio.run(run_batch(cfg))
 
 ### 3.2 下一步实验
 
-1. **预热 memory 再测 multi-bus-memory**：先跑 1 轮 rule 或 api，把成功 tap 模式写入 strategy memory，再跑 multi-bus-memory。
-2. **L2 输出契约**：强制 L2 输出 `target_name` + `action_hint`（tap/move/wait），坐标由 L1/L0 解析。
-3. **Verifier 可行性检查**：Verifier 检查 L2 计划中的目标是否在当前观测中存在，不存在则触发 re-plan。
-4. **触发阈值自适应**：`RuleUpdateTrigger` 加入滑动窗口，窗口长度按游戏类型（A/B）和当前阶段动态调整。
-5. **代码级规则更新（激进方案 B）**：在沙盒中让 L2 生成 Python 代码补丁，经类型检查 + 单测通过后由人工确认写入 `src/engine/rules.py`。
+1. **预热 memory 再测 multi-bus-memory**：先跑 1 轮 rule，把成功 tap 模式写入 strategy memory，再跑 multi-bus-memory。
+2. **L2 输出契约验证**：`HierarchicalPlanner` 已要求 L2 输出 `target_name` + `action_hint`，在 00461/00483 上跑 hierarchical 模式验证 composite 是否提升。
+3. **规则更新触发实战**：在 00461/00736 上开启 `RuleUpdateTrigger`，观察 stall 阈值触发后 L2 输出的 param/phase_contract 是否能降低 stall、提升 composite。
+4. **代码文件更新沙盒**：指定 `rule_update_allowlist=["configs/runtime_rules.json"]`，让 L2 在沙盒 JSON 文件中调整参数，验证自动应用 + 备份机制。
+5. **Verifier 可行性检查**：Verifier 检查 L2 计划中的目标是否在当前观测中存在，不存在则触发 re-plan。
+6. **触发阈值自适应**：`RuleUpdateTrigger` 加入滑动窗口，窗口长度按游戏类型（A/B）和当前阶段动态调整。
 
 ## 4. 训练准备（等 ssh5090 可访问）
 
