@@ -18,16 +18,21 @@
 
 实现：`src/agent/api_client.py` 新增 `MultiProviderClient`，通过环境变量 `LLM_PROVIDER` / `LLM_MODEL` 切换，保留旧 `OpenCodeGoClient` 兼容。测试 `tests/test_api_client.py`：覆盖 provider 路由、缺 key 失败、kimi 温度省略逻辑。
 
-### 规则在线更新架构（保守方案 A）
+### 规则在线更新架构（保守方案 A + 可选代码文件更新）
 
-目标：把规则作为 L0 执行层，需要更新时由 L2 云端 API / L1 本地 VLM 触发，通过结构化输出修改规则参数或 phase contract，而不是直接重写代码。
+目标：把规则作为 L0 执行层，需要更新时由 L2 云端 API / L1 本地 VLM 触发，通过结构化输出修改规则参数、phase contract、strategy memory，并在高置信度 + allowlist 保护下可选地重写代码文件。
 
-新增模块：
-- `src/agent/rule_update.py`：`RuleUpdateTrigger`（触发条件评估）、`RuleUpdatePlanner`（生成结构化更新计划）、`apply_rule_patch`（内存 + 可选文件回写）。
-- 触发条件：`composite` 连续低于阈值、stall 超过 5 步、L0/L2 决策冲突、世界模型 stale 命中。
-- 更新产物：参数更新、phase contract、strategy memory 摘要、可选代码片段（人工审核后写入）。
-- `src/agent/multi_agent/bus.py`：新增 `RULE_UPDATE` 消息类型。
-- `src/agent/hierarchical_planner.py` + `src/agent/decision_makers/hierarchical_maker.py`：L2 规划器集成规则更新。
+新增/更新模块：
+- `src/agent/rule_update.py`：`RuleUpdateTrigger`（composite/stall/conflict/world-model stale 触发评估）、`RuleUpdateApplier`（应用 param/memory/phase/code_file 更新）、`RuleParameters`（内存参数存储）。
+- 触发条件：`composite` 连续低于阈值（默认 0.15）、stall 超过 5 步、L0/L2 决策冲突、世界模型 stale 命中。
+- 更新产物：
+  - `param`：直接写入内存参数；
+  - `memory_entry`：记录到 `StrategyMemory`；
+  - `phase_contract`：以命名空间形式存入参数；
+  - `code_file`：搜索/替换目标文件，受 allowlist、置信度 ≥ 0.9、补丁大小、自动备份、待审队列保护。
+- `src/agent/hierarchical_planner.py`：集成规则更新触发与 L2 结构化输出解析；L2 规划输出目标名称，由 L0 解析坐标。
+
+新增 `tests/test_rule_update.py` 覆盖参数更新、低置信度跳过、内存写入、代码文件 allowlist/备份/待审队列。
 
 ### 规则更新 A/B（experiment_rule_update_ab.json / rule_update_ab_results/batch_results.json）
 
@@ -121,9 +126,36 @@
 - **A 类 joystick 游戏**中，multi-bus-memory 对 00461 提升显著（0.106 → 0.300），但对 00483 无帮助（multi-bus/multi-bus-memory 均 activity=0）。00483 的 multi-bus 模式陷入持续 move + stall，需要进一步诊断 driver/profile。
 - 平均墙钟：A 类 ~15–20s/25 步，B 类 ~13–17s/25 步。
 
-### 训练数据扩充
+### A_full 7 游戏矩阵最终结果
 
-新增代表性子集轨迹转换：`trajectory_converter.py` 已支持 `--input-dir` / `--output-dir` 参数。
+7 个 joystick 游戏 × 3 模式 × 2 seeds = 42 runs：
+
+| 游戏 | rule | multi-bus-memory | multi-bus | 最优 |
+|---|---|---|---|---|
+| 00440 清障通车 | 0.206 | 0.175 | 0.172 | rule |
+| 00461 塔防 | 0.143 | **0.300** | **0.300** | multi-bus* |
+| 00483 吸沙抽水 | 0.244 | **0.300** | **0.300** | multi-bus* |
+| 00496 电网抓丧尸 | **0.250** | 0.150 | 0.150 | rule |
+| 00517 末世旅店 | 0.150 | 0.150 | 0.150 | — |
+| 00522 地下炸矿 | 0.215 | **0.300** | **0.300** | multi-bus* |
+| 00736 养蛙捕鱼 | **0.256** | 0.153 | 0.150 | rule |
+
+A 组整体平均：rule 0.209、multi-bus 0.217、multi-bus-memory 0.218。
+
+关键发现：
+- multi-bus/multi-bus-memory 在 00461/00483/00522 上稳定满分，说明 bus + memory 对这三类游戏有决定性收益。
+- 00496/00517/00736 的 multi-bus activity=0，driver 在这些游戏上选错动作，需要按游戏类型调优。
+- A_full 轨迹经 `trajectory_converter.py` 转换后新增 **4,076** 条 7 任务样本，存放于 `vlm-training-data-A-full/`。
+
+### B_tap 15 游戏矩阵
+
+**进行中**，完成后补充。
+
+### 本地 VLM 推理准备（5060 Laptop 8 GB）
+
+- `src/inference/server.py` 新增 `--kv-cache-quant {q4_0,q4_1,q8_0,fp8,q4_k_m,q6_k}`，使用 transformers `QuantizedCacheConfig` 进一步压缩 KV cache 显存；缺少 `quanto` 时自动回退标准 cache。
+- 新增 `scripts/launch_local_vlm.sh`：支持 LM Studio / llama.cpp CUDA / llama.cpp Vulkan 三种启动方式，并给出 RTX 5060 8 GB 推荐配置。
+- 当前环境未安装 transformers/bitsandbytes/quanto，因此尚未在 5060 上实际加载模型；依赖安装命令已写入 `AGENTS.md` / `README.md` 后续可执行。
 
 ```bash
 .venv/bin/python src/training/trajectory_converter.py \
