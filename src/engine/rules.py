@@ -124,6 +124,15 @@ class RuleEngine:
 
         # Runtime tunable parameters (shared with hierarchical planner updates)
         self.rule_params = rule_params or RuleParameters()
+        # Seed rule_params from runtime_rules.json so that trigger/watchdog
+        # parameters are visible to RuleUpdateTrigger via the shared store.
+        try:
+            runtime = self._load_runtime_rules()
+            for k, v in runtime.items():
+                if self.rule_params.get(k) is None:
+                    self.rule_params.set(k, v)
+        except Exception:
+            pass
 
         # State
         self.step_count: int = 0

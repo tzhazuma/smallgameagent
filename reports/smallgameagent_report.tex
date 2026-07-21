@@ -2178,7 +2178,35 @@ SSD\_00483P01 & \_\_BOLD\_0000\_\_ & 30 & 0.279 & 4 & 1 & \_\_BOLD\_0000\_\_ \\
 3. \_\_BOLD\_0000\_\_（0.279 vs 0.274），说明 mock L2 的参数调整偶尔有正向作用；改进触发器在保留这份收益的同时把调用次数从 6 压到 2。\\
 4. \_\_BOLD\_0000\_\_：从 joystick 游戏（00461/00483）到 tap-only 游戏（00382），改进触发器的行为一致且稳定。\\
 
-\subsubsection{36.9 下一步}
+\subsubsection{36.10 触发器参数持久化到 runtime\_rules.json}
+
+为了让 L2 能通过 code-file 更新调整触发灵敏度，我们把触发器/ watchdog 参数写进了 \_\_CODE\_0000\_\_：\\
+
+```json\\
+\{\\
+"trigger\_composite\_threshold": 0.15,\\
+"trigger\_stall\_threshold": 5,\\
+"trigger\_conflict\_threshold": 3,\\
+"trigger\_cooldown\_steps": 8,\\
+"trigger\_relative\_decrease\_pct": null,\\
+"trigger\_max\_updates\_per\_run": 3,\\
+"watchdog\_baseline\_window": 3,\\
+"watchdog\_trial\_window": 3,\\
+"watchdog\_activity\_drop\_margin": 0.15,\\
+"watchdog\_stall\_increase\_margin": 2\\
+\}\\
+```\\
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_CODE\_0000\_\_ 在创建时把 \_\_CODE\_0001\_\_ 的所有键值种子化到共享的 \_\_CODE\_0002\_\_。\\
+2. \_\_CODE\_0000\_\_ 持有 \_\_CODE\_0001\_\_ 引用，\_\_CODE\_0002\_\_ 时通过 \_\_CODE\_0003\_\_ 动态读取阈值。\\
+3. L2 输出 \_\_CODE\_0000\_\_ 更新修改 \_\_CODE\_0001\_\_ 后，\_\_BOLD\_0004\_\_；若 L2 输出 \_\_CODE\_0002\_\_ 更新直接改 \_\_CODE\_0003\_\_，则\_\_BOLD\_0005\_\_。\\
+
+\_\_BOLD\_0001\_\_：离线回放 SSD\_00461P01（20 步，mock L2）触发 2 次更新（\_\_CODE\_0000\_\_ 来自 runtime\_rules.json），composite=0.258，行为与显式传入参数一致。\\
+
+\_\_BOLD\_0000\_\_：触发器配置不再是硬编码或仅内存态，而是持久化、可审计、可被 L2 安全修改的「规则旋钮」。这完成了同学想要的「直接用 API 修改规则代码文件」闭环中最后一块拼图：L2 不仅能改引擎参数，还能改触发器本身的灵敏度。\\
+
+\subsubsection{36.11 下一步}
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。\\
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。\\

@@ -152,6 +152,7 @@ class HierarchicalPlanner:
             cooldown_steps=cooldown_steps,
             relative_decrease_pct=relative_decrease_pct,
             max_updates_per_run=max_updates_per_run,
+            rule_params=self._rule_params,
         )
         self._rule_watchdog = RuleUpdateWatchdog(self._rule_applier)
 

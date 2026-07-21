@@ -3,5 +3,15 @@
   "stuck_escape_threshold": 5,
   "target_lock_max_steps": 8,
   "obstacle_repulse_weight": 1.3,
-  "escape_score_radius": 3.0
+  "escape_score_radius": 3.0,
+  "trigger_composite_threshold": 0.15,
+  "trigger_stall_threshold": 5,
+  "trigger_conflict_threshold": 3,
+  "trigger_cooldown_steps": 8,
+  "trigger_relative_decrease_pct": null,
+  "trigger_max_updates_per_run": 3,
+  "watchdog_baseline_window": 3,
+  "watchdog_trial_window": 3,
+  "watchdog_activity_drop_margin": 0.15,
+  "watchdog_stall_increase_margin": 2
 }

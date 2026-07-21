@@ -1498,7 +1498,35 @@ python -B src/experiments/offline_replay.py \
 3. **SSD_00483P01 上 hierarchical 略优于 rule**（0.279 vs 0.274），说明 mock L2 的参数调整偶尔有正向作用；改进触发器在保留这份收益的同时把调用次数从 6 压到 2。
 4. **泛化性良好**：从 joystick 游戏（00461/00483）到 tap-only 游戏（00382），改进触发器的行为一致且稳定。
 
-### 36.9 下一步
+### 36.10 触发器参数持久化到 runtime_rules.json
+
+为了让 L2 能通过 code-file 更新调整触发灵敏度，我们把触发器/ watchdog 参数写进了 `configs/runtime_rules.json`：
+
+```json
+{
+  "trigger_composite_threshold": 0.15,
+  "trigger_stall_threshold": 5,
+  "trigger_conflict_threshold": 3,
+  "trigger_cooldown_steps": 8,
+  "trigger_relative_decrease_pct": null,
+  "trigger_max_updates_per_run": 3,
+  "watchdog_baseline_window": 3,
+  "watchdog_trial_window": 3,
+  "watchdog_activity_drop_margin": 0.15,
+  "watchdog_stall_increase_margin": 2
+}
+```
+
+**实现路径**：
+1. `RuleEngine.__init__` 在创建时把 `runtime_rules.json` 的所有键值种子化到共享的 `RuleParameters`。
+2. `RuleUpdateTrigger` 持有 `RuleParameters` 引用，`check()` 时通过 `_param()` 动态读取阈值。
+3. L2 输出 `code_file` 更新修改 `runtime_rules.json` 后，**下一次 run 自动生效**；若 L2 输出 `param` 更新直接改 `RuleParameters`，则**当前 run 即时生效**。
+
+**验证**：离线回放 SSD_00461P01（20 步，mock L2）触发 2 次更新（`trigger_max_updates_per_run=2` 来自 runtime_rules.json），composite=0.258，行为与显式传入参数一致。
+
+**意义**：触发器配置不再是硬编码或仅内存态，而是持久化、可审计、可被 L2 安全修改的「规则旋钮」。这完成了同学想要的「直接用 API 修改规则代码文件」闭环中最后一块拼图：L2 不仅能改引擎参数，还能改触发器本身的灵敏度。
+
+### 36.11 下一步
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。

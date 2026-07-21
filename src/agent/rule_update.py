@@ -118,6 +118,7 @@ class RuleUpdateTrigger:
         cooldown_steps: int = 8,
         relative_decrease_pct: float | None = None,
         max_updates_per_run: int = 3,
+        rule_params: RuleParameters | None = None,
     ) -> None:
         self.composite_threshold = composite_threshold
         self.stall_threshold = stall_threshold
@@ -126,6 +127,7 @@ class RuleUpdateTrigger:
         self.cooldown_steps = cooldown_steps
         self.relative_decrease_pct = relative_decrease_pct
         self.max_updates_per_run = max_updates_per_run
+        self._rule_params = rule_params
         self._composites: list[float] = []
         self._stall_streak: int = 0
         self._conflict_streak: int = 0
@@ -133,6 +135,14 @@ class RuleUpdateTrigger:
         self._last_trigger_step: int = -cooldown_steps - 1
         self._peak_avg: float = 0.0
         self._updates_this_run: int = 0
+
+    def _param(self, name: str, default: Any) -> Any:
+        """Read a trigger parameter from shared RuleParameters if available."""
+        if self._rule_params is not None:
+            val = self._rule_params.get(name)
+            if val is not None:
+                return val
+        return default
 
     def check(
         self,
@@ -145,12 +155,22 @@ class RuleUpdateTrigger:
             return None
         self._last_step = step
 
+        # Read dynamic thresholds from shared RuleParameters (allows L2 online tuning).
+        max_updates = int(self._param("trigger_max_updates_per_run", self.max_updates_per_run))
+        cooldown = int(self._param("trigger_cooldown_steps", self.cooldown_steps))
+        composite_threshold = float(self._param("trigger_composite_threshold", self.composite_threshold))
+        stall_threshold = int(self._param("trigger_stall_threshold", self.stall_threshold))
+        conflict_threshold = int(self._param("trigger_conflict_threshold", self.conflict_threshold))
+        relative_decrease_pct = self._param("trigger_relative_decrease_pct", self.relative_decrease_pct)
+        if relative_decrease_pct is not None:
+            relative_decrease_pct = float(relative_decrease_pct)
+
         # Hard cap: stop triggering after max_updates_per_run.
-        if self._updates_this_run >= self.max_updates_per_run:
+        if self._updates_this_run >= max_updates:
             return None
 
         # Cooldown: do not spam L2 with back-to-back calls.
-        if step - self._last_trigger_step < self.cooldown_steps:
+        if step - self._last_trigger_step < cooldown:
             return None
 
         wm = getattr(ctx, "working_memory", None) or {}
@@ -179,26 +199,26 @@ class RuleUpdateTrigger:
 
         # Relative-decrease trigger (preferred when configured).
         if (
-            self.relative_decrease_pct is not None
+            relative_decrease_pct is not None
             and self._peak_avg > 0
             and len(self._composites) >= self.composite_window
         ):
             drop_pct = (self._peak_avg - avg_composite) / self._peak_avg
-            if drop_pct >= self.relative_decrease_pct:
+            if drop_pct >= relative_decrease_pct:
                 self._last_trigger_step = step
                 self._updates_this_run += 1
                 return f"relative_drop_{drop_pct:.1%}_from_peak_{self._peak_avg:.3f}"
 
         # Absolute threshold trigger.
-        if avg_composite < self.composite_threshold and len(self._composites) >= self.composite_window:
+        if avg_composite < composite_threshold and len(self._composites) >= self.composite_window:
             self._last_trigger_step = step
             self._updates_this_run += 1
             return f"low_composite_avg_{avg_composite:.3f}"
-        if self._stall_streak >= self.stall_threshold:
+        if self._stall_streak >= stall_threshold:
             self._last_trigger_step = step
             self._updates_this_run += 1
             return f"stall_streak_{self._stall_streak}"
-        if self._conflict_streak >= self.conflict_threshold:
+        if self._conflict_streak >= conflict_threshold:
             self._last_trigger_step = step
             self._updates_this_run += 1
             return f"conflict_streak_{self._conflict_streak}"
