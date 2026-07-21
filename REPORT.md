@@ -1454,7 +1454,29 @@ python src/training/train_qwen35.py \
 
 **结论**：目标感知先验带来了稳定但有限的提升。beam search 仍显著落后于 hierarchical_long，说明**局部 2 步搜索无法替代结构化 L2 长程规划**。beam search 的瓶颈不在启发式，而在 horizon 太短（2 步）和动作空间太粗（{move, tap, wait}）。下一步可尝试把 beam search 扩展到 4–5 步，或把 L2 输出的目标队列作为 beam search 的初始 plan。
 
-### 37.6 对架构的启示
+### 37.6 多 Provider 规则更新 Prompt 遵循度测试
+
+用改进后的 `update_prompt()`（含 Tunable parameters 列表）直接请求四家 provider 输出规则更新 JSON：
+
+| Provider | 模型 | 延迟 | 结果 | 说明 |
+|---|---|---|---|---|
+| qwen | qwen3.7-max | 9.0s | ✅ 有效 JSON | `{"update_type":"param","payload":{"stuck_escape_threshold":3},"confidence":0.75}` |
+| kimi | kimi-k2.7-code | — | ❌ 配额耗尽 | 403 billing cycle limit |
+| xiaomi | mimo-v2.5 | 5.5s | ❌ 空返回 | 简单 JSON 请求可用，但复杂策略 prompt 触发内容过滤 |
+| opencodego | deepseek-v4-flash | 10.3s | ❌ 空返回 | code-file 更新可用，但 rule-update prompt 返回空 |
+
+**关键发现**：
+1. **只有 qwen 能稳定输出规则更新 JSON**。kimi 配额耗尽，xiaomi 和 opencodego 对复杂策略 prompt 返回空内容。
+2. **xiaomi 的「简单请求可用、复杂请求空返回」模式**说明其内容过滤对「AI agent 策略优化」类 prompt 敏感，而非 JSON 格式问题。
+3. **opencodego 在 code-file 更新实验（§22.4）中可用，但 rule-update prompt 返回空**。差异可能在于 code-file prompt 更偏「代码编辑」，而 rule-update prompt 更偏「游戏策略」，触发了不同的过滤策略。
+4. **qwen 的 confidence=0.75 低于自动应用阈值 0.9**，会进入待审队列而非直接应用。若需自动应用，需在 prompt 中引导更高置信度，或降低 applier 阈值。
+
+**结论**：当前在线规则更新的唯一可靠 provider 是 **qwen**。后续应尝试：
+- 对 xiaomi/opencodego 使用更简短的 prompt 或 few-shot 模板，规避内容过滤。
+- 对 kimi 等待配额恢复后重测。
+- 在 prompt 中明确要求 `confidence >= 0.9`，让 qwen 输出可直接应用的更新。
+
+### 37.7 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。

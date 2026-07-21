@@ -2121,7 +2121,42 @@ SSD\_00483P01 & 0.388 & \_\_BOLD\_0000\_\_ (+4\%) & 0.620 \\
 
 \_\_BOLD\_0000\_\_：目标感知先验带来了稳定但有限的提升。beam search 仍显著落后于 hierarchical\_long，说明\_\_BOLD\_0001\_\_。beam search 的瓶颈不在启发式，而在 horizon 太短（2 步）和动作空间太粗（\{move, tap, wait\}）。下一步可尝试把 beam search 扩展到 4–5 步，或把 L2 输出的目标队列作为 beam search 的初始 plan。\\
 
-\subsubsection{37.6 对架构的启示}
+\subsubsection{37.6 多 Provider 规则更新 Prompt 遵循度测试}
+
+用改进后的 \_\_CODE\_0000\_\_（含 Tunable parameters 列表）直接请求四家 provider 输出规则更新 JSON：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+Provider & 模型 & 延迟 & 结果 & 说明 \\
+\hline
+qwen & qwen3.7-max & 9.0s & ✅ 有效 JSON & \_\_CODE\_0000\_\_ \\
+\hline
+kimi & kimi-k2.7-code & — & ❌ 配额耗尽 & 403 billing cycle limit \\
+\hline
+xiaomi & mimo-v2.5 & 5.5s & ❌ 空返回 & 简单 JSON 请求可用，但复杂策略 prompt 触发内容过滤 \\
+\hline
+opencodego & deepseek-v4-flash & 10.3s & ❌ 空返回 & code-file 更新可用，但 rule-update prompt 返回空 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0000\_\_。kimi 配额耗尽，xiaomi 和 opencodego 对复杂策略 prompt 返回空内容。\\
+2. \_\_BOLD\_0000\_\_说明其内容过滤对「AI agent 策略优化」类 prompt 敏感，而非 JSON 格式问题。\\
+3. \_\_BOLD\_0000\_\_。差异可能在于 code-file prompt 更偏「代码编辑」，而 rule-update prompt 更偏「游戏策略」，触发了不同的过滤策略。\\
+4. \_\_BOLD\_0000\_\_，会进入待审队列而非直接应用。若需自动应用，需在 prompt 中引导更高置信度，或降低 applier 阈值。\\
+
+\_\_BOLD\_0000\_\_：当前在线规则更新的唯一可靠 provider 是 \_\_BOLD\_0001\_\_。后续应尝试：\\
+\begin{itemize}
+  \item 对 xiaomi/opencodego 使用更简短的 prompt 或 few-shot 模板，规避内容过滤。
+  \item 对 kimi 等待配额恢复后重测。
+  \item 在 prompt 中明确要求 \_\_CODE\_0000\_\_，让 qwen 输出可直接应用的更新。
+\end{itemize}
+
+\subsubsection{37.7 对架构的启示}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_（target\_name + action\_hint），而不是自然语言描述。
