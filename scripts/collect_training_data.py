@@ -36,8 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.agent.hybrid_agent import HybridAgent
-from src.training.trajectory_converter import main as convert_main
+from src.agent.hybrid_agent import HybridAgent  # noqa: E402
+from src.training.trajectory_converter import main as convert_main  # noqa: E402
 
 logger = logging.getLogger("collect_training_data")
 

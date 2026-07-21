@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.agent.api_client import MultiProviderClient
+from src.agent.api_client import MultiProviderClient  # noqa: E402
 
 OUTPUT = ROOT / "cloud_provider_smoke_results.json"
 
