@@ -2,6 +2,52 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P19 PPT 美化 + OpenCodeGo 可用性验证 + 规则更新触发设计
+
+### PPT 与报告更新
+
+- 重写 `scripts/generate_deliverables.py`：
+  - 标题页增加模拟渐变、几何装饰、更大气排版；
+  - 普通内容页加左侧色条与浅灰卡片背景；
+  - section divider 增加大号数字水印；
+  - 新增「规则更新触发机制」「技术路线图」「游戏覆盖矩阵」等页面；
+  - 文案进一步 humanize，减少翻译腔。
+- 在 `REPORT.md` 新增 §24，专门回答同学的问题：
+  - 规则在线更新的触发条件（composite/stall/冲突/stale/L1 视觉异常）；
+  - L2 结构化输出 schema；
+  - Applier 安全门（allowlist、置信度、patch 大小、唯一匹配、备份）；
+  - L1 本地 VLM 作为「证据层」的设计。
+
+### 云端 Provider 状态刷新（用同学提供的 key）
+
+运行 `scripts/test_cloud_providers.py`：
+
+| Provider | 文本 | 视觉 | 备注 |
+|---|---|---|---|
+| OpenCodeGo | ✅ 3.5s | ✅ 7.7s | 新 key 可用，mimo-v2.5 视觉可用 |
+| Kimi | ✅ 1.5s | ✅ 3.0s | kimi-k2.7-code / k2.6 可用 |
+| MiMo (xiaomi) | ✅ 5.2s | ✅ 5.1s | mimo-v2.5 双可用 |
+| Qwen | ✅ 11.4s | ⚠️ 400 | 视觉格式待适配 |
+| DeepSeek | ❌ | ❌ | 余额不足 |
+
+### OpenCodeGo code-file 规则更新实验
+
+```bash
+. .env
+CLOUD_PROVIDER=opencodego PYTHONPATH=. .venv/bin/python -B \
+  src/experiments/exp_code_file_rule_update_real.py --provider opencodego
+```
+
+结果：PASSED，延迟 9.08s，模型 deepseek-v4-flash 成功生成可应用的 JSON patch，将 `stuck_escape_threshold` 从 5 改为 3，置信度 0.90。
+
+### 质量门
+
+- 全量 pytest：`707 passed, 58 skipped`。
+- ruff：全绿。
+- 已推送 GitHub `df466ab`，报告/PPT 已复制到 `/mnt/c/Users/tzh03/Downloads/`。
+
+---
+
 ## 2026-07-21 P18 本地 VLM 画面理解 + 云端策略对比实验
 
 ### 环境
