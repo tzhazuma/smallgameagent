@@ -950,6 +950,56 @@ def _add_table_slide_raw(slide, left: float, top: float, width: float, height: f
             paragraph.alignment = PP_ALIGN.CENTER
 
 
+def _add_bar_chart_slide(prs) -> None:
+    """Slide with horizontal bars comparing search/plan variants."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "规划变体对比：长 horizon 收益最大")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    # Data: (label, value, color)
+    data = [
+        ("rule 基线", 0.194, _C_MUTED),
+        ("beam_2step", 0.254, _C_WARN),
+        ("hierarchical_mock_5", 0.328, _C_SECONDARY),
+        ("hierarchical_short", 0.328, _C_SECONDARY),
+        ("hierarchical_mock_15", 0.298, _C_SECONDARY),
+        ("hierarchical_long", 0.388, _C_SUCCESS),
+    ]
+    max_val = 0.45
+    left = 3.2
+    top_start = 1.7
+    bar_height = 0.55
+    gap = 0.25
+    max_width = 8.5
+
+    for i, (label, val, color) in enumerate(data):
+        top = top_start + i * (bar_height + gap)
+        # Label
+        tb = slide.shapes.add_textbox(Inches(0.5), Inches(top + 0.08), Inches(2.6), Inches(bar_height))
+        _set_text_style(tb.text_frame.paragraphs[0], label, Pt(13), color=_C_DARK, align=PP_ALIGN.RIGHT)
+        # Bar background
+        bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(max_width), Inches(bar_height))
+        _set_fill(bg, _C_LIGHT)
+        bg.line.color.rgb = RGBColor(0xE1, 0xE5, 0xE9)
+        bg.line.width = Pt(1)
+        # Bar fill
+        width = max(0.1, val / max_val * max_width)
+        bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(bar_height))
+        _set_fill(bar, color)
+        bar.line.width = Pt(0)
+        # Value label
+        vb = slide.shapes.add_textbox(Inches(left + width + 0.1), Inches(top + 0.08), Inches(1.0), Inches(bar_height))
+        _set_text_style(vb.text_frame.paragraphs[0], f"{val:.3f}", Pt(12), bold=True, color=color)
+
+    # Insight box
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.0), Inches(12.3), Inches(0.8))
+    _set_fill(insight, _C_LIGHT)
+    _set_text_style(insight.text_frame.paragraphs[0],
+        "SSD_00461P01 · type_match rate · hierarchical_long（8 意图）比 rule 提升 +100%，比 beam search 提升 +53%",
+        Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
 def _add_next_steps_slide(prs) -> None:
     """Next steps slide."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -1122,6 +1172,8 @@ def write_pptx() -> None:
     _add_key_findings_slide(prs)
 
     _add_representative_results_slide(prs)
+
+    _add_bar_chart_slide(prs)
 
     # ---- Section: Data ----
     _add_section_slide(prs, "08", "训练数据管线")

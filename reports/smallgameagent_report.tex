@@ -2156,7 +2156,49 @@ opencodego & deepseek-v4-flash & 10.3s & ❌ 空返回 & code-file 更新可用�
   \item 在 prompt 中明确要求 \_\_CODE\_0000\_\_，让 qwen 输出可直接应用的更新。
 \end{itemize}
 
-\subsubsection{37.7 对架构的启示}
+\subsubsection{37.7 在线规则更新验证（qwen，SSD\_00461P01 / SSD\_00483P01）}
+
+用唯一可靠输出规则更新 JSON 的 qwen，在真实浏览器中跑了 15 步在线 A/B（改进触发器：\_\_CODE\_0000\_\_）：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+Game & Mode & Composite & Activity & Steps & Elapsed \\
+\hline
+SSD\_00461P01 & rule & 0.129 & 0.857 & 15 & 9.8s \\
+\hline
+SSD\_00461P01 & hierarchical (qwen) & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 15 & 178.5s \\
+\hline
+SSD\_00483P01 & rule & \_\_BOLD\_0000\_\_ & 0.571 & 15 & 15.7s \\
+\hline
+SSD\_00483P01 & hierarchical (qwen) & 0.150 & \_\_BOLD\_0000\_\_ & 15 & 191.3s \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+
+1. \_\_BOLD\_0000\_\_：触发器 → qwen L2 → 结构化 JSON → Applier 应用 → RuleEngine 读取新参数，整条链路在真实浏览器中跑通。\\
+2. \_\_BOLD\_0000\_\_：hierarchical 模式下 agent 没有产生有效动作（全 wait/stall）。composite 0.150 是「不动作就不会错」的假象（consistency 得分高，activity 为 0）。\\
+3. \_\_BOLD\_0000\_\_：activity 从 0.857 掉到 0.000，说明 qwen 的参数更新破坏了 rule engine 的正常行为。\\
+4. \_\_BOLD\_0000\_\_：qwen 更新让原本能跑的 rule engine 完全 stall。\\
+5. \_\_BOLD\_0000\_\_：qwen 单次 L2 调用 \textasciitilde{}10s，15 步 run 总耗时 \textasciitilde{}180s（rule 只需 \textasciitilde{}10s）。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item qwen 输出的 \_\_CODE\_0000\_\_ 等参数更新本身是合理的，但\_\_BOLD\_0001\_\_。降低 escape 阈值可能导致 rule engine 在错误时机触发 escape，打乱正常的 tap-guide 循环。
+  \item Watchdog 未能回滚，因为 composite proxy（基于 player displacement）在 activity=0 时无法区分「rule engine 正常等待」和「rule engine 被坏参数卡死」。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 在线规则更新的\_\_BOLD\_0000\_\_，但\_\_BOLD\_0001\_\_。qwen 能输出格式正确的更新，却不知道当前游戏真正需要什么参数。
+  \item 下一步需要：(a) 在 L2 prompt 中注入当前 rule engine 的参数 schema 和取值范围；(b) 让 watchdog 监控 activity 而不仅是 composite；(c) 在离线回放中先用 mock L2 搜索「什么参数更新真正提升 composite」，再把搜索到的更新作为 few-shot 示例喂给 qwen。
+\end{itemize}
+
+\subsubsection{37.8 对架构的启示}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_（target\_name + action\_hint），而不是自然语言描述。

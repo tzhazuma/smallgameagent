@@ -1476,7 +1476,34 @@ python src/training/train_qwen35.py \
 - 对 kimi 等待配额恢复后重测。
 - 在 prompt 中明确要求 `confidence >= 0.9`，让 qwen 输出可直接应用的更新。
 
-### 37.7 对架构的启示
+### 37.7 在线规则更新验证（qwen，SSD_00461P01 / SSD_00483P01）
+
+用唯一可靠输出规则更新 JSON 的 qwen，在真实浏览器中跑了 15 步在线 A/B（改进触发器：`relative_decrease_pct=0.25, max_updates_per_run=2, cooldown_steps=10`）：
+
+| Game | Mode | Composite | Activity | Steps | Elapsed |
+|---|---|---|---|---|---|
+| SSD_00461P01 | rule | 0.129 | 0.857 | 15 | 9.8s |
+| SSD_00461P01 | hierarchical (qwen) | **0.150** | **0.000** | 15 | 178.5s |
+| SSD_00483P01 | rule | **0.236** | 0.571 | 15 | 15.7s |
+| SSD_00483P01 | hierarchical (qwen) | 0.150 | **0.000** | 15 | 191.3s |
+
+**关键发现**：
+
+1. **机制闭环验证成功**：触发器 → qwen L2 → 结构化 JSON → Applier 应用 → RuleEngine 读取新参数，整条链路在真实浏览器中跑通。
+2. **但 activity 全部为 0**：hierarchical 模式下 agent 没有产生有效动作（全 wait/stall）。composite 0.150 是「不动作就不会错」的假象（consistency 得分高，activity 为 0）。
+3. **00461 composite 微升（0.129→0.150）不是收益**：activity 从 0.857 掉到 0.000，说明 qwen 的参数更新破坏了 rule engine 的正常行为。
+4. **00483 composite 下降（0.236→0.150）**：qwen 更新让原本能跑的 rule engine 完全 stall。
+5. **延迟极高**：qwen 单次 L2 调用 ~10s，15 步 run 总耗时 ~180s（rule 只需 ~10s）。
+
+**根因分析**：
+- qwen 输出的 `stuck_escape_threshold: 3` 等参数更新本身是合理的，但**当前 rule engine 对参数变化过于敏感**。降低 escape 阈值可能导致 rule engine 在错误时机触发 escape，打乱正常的 tap-guide 循环。
+- Watchdog 未能回滚，因为 composite proxy（基于 player displacement）在 activity=0 时无法区分「rule engine 正常等待」和「rule engine 被坏参数卡死」。
+
+**结论**：
+- 在线规则更新的**机制已跑通**，但**策略质量不足**。qwen 能输出格式正确的更新，却不知道当前游戏真正需要什么参数。
+- 下一步需要：(a) 在 L2 prompt 中注入当前 rule engine 的参数 schema 和取值范围；(b) 让 watchdog 监控 activity 而不仅是 composite；(c) 在离线回放中先用 mock L2 搜索「什么参数更新真正提升 composite」，再把搜索到的更新作为 few-shot 示例喂给 qwen。
+
+### 37.8 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。
