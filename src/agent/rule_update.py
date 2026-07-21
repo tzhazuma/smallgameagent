@@ -120,6 +120,16 @@ class RuleUpdateTrigger:
         max_updates_per_run: int = 3,
         rule_params: RuleParameters | None = None,
     ) -> None:
+        # Store explicit constructor values so they can override runtime_rules.json
+        # defaults seeded into rule_params.  A value equal to the class default
+        # is treated as "not explicitly set" and defers to rule_params.
+        self._init_composite_threshold = composite_threshold
+        self._init_stall_threshold = stall_threshold
+        self._init_conflict_threshold = conflict_threshold
+        self._init_cooldown_steps = cooldown_steps
+        self._init_relative_decrease_pct = relative_decrease_pct
+        self._init_max_updates_per_run = max_updates_per_run
+
         self.composite_threshold = composite_threshold
         self.stall_threshold = stall_threshold
         self.conflict_threshold = conflict_threshold
@@ -136,8 +146,16 @@ class RuleUpdateTrigger:
         self._peak_avg: float = 0.0
         self._updates_this_run: int = 0
 
-    def _param(self, name: str, default: Any) -> Any:
-        """Read a trigger parameter from shared RuleParameters if available."""
+    def _param(self, name: str, default: Any, init_value: Any = None) -> Any:
+        """Read a trigger parameter with priority: explicit init > rule_params > default.
+
+        If *init_value* is provided and differs from *default*, it is treated as
+        an explicit override (e.g. from CLI) and returned immediately.  Otherwise
+        the shared ``RuleParameters`` store is consulted (allowing L2 online
+        tuning), falling back to *default*.
+        """
+        if init_value is not None and init_value != default:
+            return init_value
         if self._rule_params is not None:
             val = self._rule_params.get(name)
             if val is not None:
@@ -155,13 +173,25 @@ class RuleUpdateTrigger:
             return None
         self._last_step = step
 
-        # Read dynamic thresholds from shared RuleParameters (allows L2 online tuning).
-        max_updates = int(self._param("trigger_max_updates_per_run", self.max_updates_per_run))
-        cooldown = int(self._param("trigger_cooldown_steps", self.cooldown_steps))
-        composite_threshold = float(self._param("trigger_composite_threshold", self.composite_threshold))
-        stall_threshold = int(self._param("trigger_stall_threshold", self.stall_threshold))
-        conflict_threshold = int(self._param("trigger_conflict_threshold", self.conflict_threshold))
-        relative_decrease_pct = self._param("trigger_relative_decrease_pct", self.relative_decrease_pct)
+        # Read dynamic thresholds with priority: explicit init > rule_params > class default.
+        max_updates = int(self._param(
+            "trigger_max_updates_per_run", 3, self._init_max_updates_per_run,
+        ))
+        cooldown = int(self._param(
+            "trigger_cooldown_steps", 8, self._init_cooldown_steps,
+        ))
+        composite_threshold = float(self._param(
+            "trigger_composite_threshold", DEFAULT_COMPOSITE_THRESHOLD, self._init_composite_threshold,
+        ))
+        stall_threshold = int(self._param(
+            "trigger_stall_threshold", DEFAULT_STALL_THRESHOLD, self._init_stall_threshold,
+        ))
+        conflict_threshold = int(self._param(
+            "trigger_conflict_threshold", DEFAULT_CONFLICT_THRESHOLD, self._init_conflict_threshold,
+        ))
+        relative_decrease_pct = self._param(
+            "trigger_relative_decrease_pct", None, self._init_relative_decrease_pct,
+        )
         if relative_decrease_pct is not None:
             relative_decrease_pct = float(relative_decrease_pct)
 

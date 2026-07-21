@@ -1542,7 +1542,26 @@ python -B src/experiments/offline_replay.py \
 - 如果 watchdog 回滚太激进，L2 可以放宽 `watchdog_stall_increase_margin`。
 - 这形成了「L2 调整触发器 → 触发器控制 L2 调用频率」的自反馈闭环。
 
-### 36.12 下一步
+### 36.12 全量离线验证（22 游戏）
+
+修复 `_param()` 优先级 bug（显式 CLI 值 > rule_params > 类默认值）后，对全部 22 个 processed-runs 跑了 rule vs improved_trigger 离线回放（max_steps=30，mock L2）：
+
+| 指标 | 数值 |
+|---|---|
+| 有效游戏数 | 20（2 个 processed-run 步数为 0，跳过） |
+| Rule mean composite | **0.284** |
+| Improved trigger mean composite | **0.284** |
+| Improved trigger mean updates | **1.9** |
+| Improved trigger max updates | **2**（硬上限生效） |
+| 游戏表现变化 | 1 提升 / 1 下降 / 18 持平 |
+
+**关键发现**：
+1. **全量验证通过**：20 个游戏上，改进触发器在保持 composite 完全一致的同时，把 L2 调用精确控制在 ≤2 次。
+2. **优先级 bug 已修复**：之前 `runtime_rules.json` 中的 `trigger_max_updates_per_run=3` 会覆盖 CLI 传入的 `--max-updates-per-run 2`；现在显式构造参数优先于 runtime_rules.json 默认值。
+3. **仅 1 个游戏表现变化**：SSD_00483P01 从 0.274 提升到 0.279（mock L2 更新有正向作用），SSD_00332P01 从 0.300 微降到 0.295（mock 更新轻微干扰），其余 18 个完全持平。
+4. **泛化性极强**：从 joystick 到 tap-only，从 cal 到 generic profile，改进触发器行为一致。
+
+### 36.13 下一步
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。

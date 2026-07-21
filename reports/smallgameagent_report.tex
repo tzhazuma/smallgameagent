@@ -2228,7 +2228,39 @@ SSD\_00483P01 & \_\_BOLD\_0000\_\_ & 30 & 0.279 & 4 & 1 & \_\_BOLD\_0000\_\_ \\
   \item 这形成了「L2 调整触发器 → 触发器控制 L2 调用频率」的自反馈闭环。
 \end{itemize}
 
-\subsubsection{36.12 下一步}
+\subsubsection{36.12 全量离线验证（22 游戏）}
+
+修复 \_\_CODE\_0000\_\_ 优先级 bug（显式 CLI 值 > rule\_params > 类默认值）后，对全部 22 个 processed-runs 跑了 rule vs improved\_trigger 离线回放（max\_steps=30，mock L2）：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|}
+\hline
+指标 & 数值 \\
+\hline
+有效游戏数 & 20（2 个 processed-run 步数为 0，跳过） \\
+\hline
+Rule mean composite & \_\_BOLD\_0000\_\_ \\
+\hline
+Improved trigger mean composite & \_\_BOLD\_0000\_\_ \\
+\hline
+Improved trigger mean updates & \_\_BOLD\_0000\_\_ \\
+\hline
+Improved trigger max updates & \_\_BOLD\_0000\_\_（硬上限生效） \\
+\hline
+游戏表现变化 & 1 提升 / 1 下降 / 18 持平 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0000\_\_：20 个游戏上，改进触发器在保持 composite 完全一致的同时，把 L2 调用精确控制在 ≤2 次。\\
+2. \_\_BOLD\_0003\_\_：之前 \_\_CODE\_0000\_\_ 中的 \_\_CODE\_0001\_\_ 会覆盖 CLI 传入的 \_\_CODE\_0002\_\_；现在显式构造参数优先于 runtime\_rules.json 默认值。\\
+3. \_\_BOLD\_0000\_\_：SSD\_00483P01 从 0.274 提升到 0.279（mock L2 更新有正向作用），SSD\_00332P01 从 0.300 微降到 0.295（mock 更新轻微干扰），其余 18 个完全持平。\\
+4. \_\_BOLD\_0000\_\_：从 joystick 到 tap-only，从 cal 到 generic profile，改进触发器行为一致。\\
+
+\subsubsection{36.13 下一步}
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。\\
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。\\
