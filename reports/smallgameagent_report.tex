@@ -2250,7 +2250,41 @@ reason & 泛泛而谈 & 「agent is stuck on suboptimal targets; reducing lock t
 
 \_\_BOLD\_0000\_\_：参数 schema 注入是解决「L2 策略质量不足」的关键一步。L2 从「盲目猜参数」进化为「理解参数含义后做 informed 调整」。下一步可把 schema 扩展到全部 12 个参数，并加入当前游戏的 profile 类型（joystick / tap-only）让 L2 知道驱动模式。\\
 
-\subsubsection{37.9 对架构的启示}
+\subsubsection{37.9 参数 Schema 扩展至全量 + 驱动类型注入}
+
+把 \_\_CODE\_0000\_\_ 从 6 个参数扩展到 \_\_BOLD\_0005\_\_（覆盖 \_\_CODE\_0001\_\_ 中全部可调旋钮），并在 user message 中新增 \_\_CODE\_0002\_\_ 字段（如 \_\_CODE\_0003\_\_ / \_\_CODE\_0004\_\_），让 L2 知道当前游戏的控制模式。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_（float, 0–5）：障碍物排斥权重
+  \item \_\_CODE\_0000\_\_（float, 1–10）：escape 评分半径
+  \item \_\_CODE\_0000\_\_（int, 1–20）：stall 触发阈值
+  \item \_\_CODE\_0000\_\_（int, 1–10）：冲突触发阈值
+  \item \_\_CODE\_0000\_\_（float, 0–1）：相对下降触发百分比
+  \item \_\_CODE\_0000\_\_（float, 0–1）：activity 回滚边界
+  \item \_\_CODE\_0000\_\_（int, 0–10）：stall 回滚边界
+\end{itemize}
+
+\_\_BOLD\_0000\_\_（trigger\_reason="stall\_streak\_6", driver\_type="tap-guide"）：\\
+
+```json\\
+\{\\
+"update\_type": "param",\\
+"target": "escape",\\
+"reason": "Agent is stalling for 6 steps despite a threshold of 5; lowering the threshold will trigger escape maneuvers sooner to prevent prolonged stalls.",\\
+"payload": \{"stuck\_escape\_threshold": 3\},\\
+"confidence": 0.85\\
+\}\\
+```\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item L2 正确关联了 trigger reason（stall\_streak\_6）和当前参数（stuck\_escape\_threshold=5），做出「降低到 3」的 informed 决策。
+  \item confidence 0.85，接近自动应用阈值。
+  \item 没有盲目调整不相关的参数（如 coin\_save\_buffer），说明 schema 中的 meaning 字段帮助 L2 聚焦于问题相关的旋钮。
+\end{itemize}
+
+\subsubsection{37.10 对架构的启示}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_（target\_name + action\_hint），而不是自然语言描述。

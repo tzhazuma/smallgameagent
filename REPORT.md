@@ -1542,7 +1542,37 @@ param_schema = {
 
 **意义**：参数 schema 注入是解决「L2 策略质量不足」的关键一步。L2 从「盲目猜参数」进化为「理解参数含义后做 informed 调整」。下一步可把 schema 扩展到全部 12 个参数，并加入当前游戏的 profile 类型（joystick / tap-only）让 L2 知道驱动模式。
 
-### 37.9 对架构的启示
+### 37.9 参数 Schema 扩展至全量 + 驱动类型注入
+
+把 `param_schema` 从 6 个参数扩展到 **13 个**（覆盖 `runtime_rules.json` 中全部可调旋钮），并在 user message 中新增 `driver_type` 字段（如 `"tap-guide"` / `"joystick"`），让 L2 知道当前游戏的控制模式。
+
+**新增参数**：
+- `obstacle_repulse_weight`（float, 0–5）：障碍物排斥权重
+- `escape_score_radius`（float, 1–10）：escape 评分半径
+- `trigger_stall_threshold`（int, 1–20）：stall 触发阈值
+- `trigger_conflict_threshold`（int, 1–10）：冲突触发阈值
+- `trigger_relative_decrease_pct`（float, 0–1）：相对下降触发百分比
+- `watchdog_activity_drop_margin`（float, 0–1）：activity 回滚边界
+- `watchdog_stall_increase_margin`（int, 0–10）：stall 回滚边界
+
+**qwen 测试**（trigger_reason="stall_streak_6", driver_type="tap-guide"）：
+
+```json
+{
+  "update_type": "param",
+  "target": "escape",
+  "reason": "Agent is stalling for 6 steps despite a threshold of 5; lowering the threshold will trigger escape maneuvers sooner to prevent prolonged stalls.",
+  "payload": {"stuck_escape_threshold": 3},
+  "confidence": 0.85
+}
+```
+
+**分析**：
+- L2 正确关联了 trigger reason（stall_streak_6）和当前参数（stuck_escape_threshold=5），做出「降低到 3」的 informed 决策。
+- confidence 0.85，接近自动应用阈值。
+- 没有盲目调整不相关的参数（如 coin_save_buffer），说明 schema 中的 meaning 字段帮助 L2 聚焦于问题相关的旋钮。
+
+### 37.10 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。

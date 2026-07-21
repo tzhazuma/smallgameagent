@@ -437,19 +437,50 @@ class HierarchicalPlanner:
                 "type": "float", "range": [0, 100],
                 "meaning": "Extra coins to save before upgrading. Higher = less frequent upgrades, more saving.",
             },
+            "obstacle_repulse_weight": {
+                "type": "float", "range": [0.0, 5.0],
+                "meaning": "Weight of obstacle repulsion in movement scoring. Higher = avoid obstacles more aggressively.",
+            },
+            "escape_score_radius": {
+                "type": "float", "range": [1.0, 10.0],
+                "meaning": "Radius around player considered for escape scoring. Larger = look farther for escape routes.",
+            },
             "trigger_composite_threshold": {
                 "type": "float", "range": [0.0, 0.5],
                 "meaning": "Absolute composite below which rule updates may trigger. Lower = less sensitive.",
+            },
+            "trigger_stall_threshold": {
+                "type": "int", "range": [1, 20],
+                "meaning": "Consecutive stall steps before trigger fires. Higher = tolerate more stalling.",
+            },
+            "trigger_conflict_threshold": {
+                "type": "int", "range": [1, 10],
+                "meaning": "Consecutive L0/L2 decision conflicts before trigger fires. Higher = tolerate more disagreement.",
             },
             "trigger_cooldown_steps": {
                 "type": "int", "range": [1, 50],
                 "meaning": "Min steps between rule-update triggers. Higher = fewer L2 calls.",
             },
+            "trigger_relative_decrease_pct": {
+                "type": "float", "range": [0.0, 1.0],
+                "meaning": "Relative drop from peak composite that triggers update. null = disabled. Lower = more sensitive.",
+            },
             "trigger_max_updates_per_run": {
                 "type": "int", "range": [0, 10],
                 "meaning": "Hard cap on rule-update L2 calls per run. Lower = more conservative.",
             },
+            "watchdog_activity_drop_margin": {
+                "type": "float", "range": [0.0, 1.0],
+                "meaning": "Activity drop that triggers watchdog rollback. Lower = rollback on smaller drops.",
+            },
+            "watchdog_stall_increase_margin": {
+                "type": "int", "range": [0, 10],
+                "meaning": "Stall increase that triggers watchdog rollback. Lower = rollback on smaller increases.",
+            },
         }
+
+        # Include game driver type so L2 knows the control mode.
+        driver_type = getattr(self._rule_engine, "driver_type", "unknown") if self._rule_engine else "unknown"
 
         try:
             resp = self._api_client.chat(
@@ -460,6 +491,7 @@ class HierarchicalPlanner:
                         "content": json.dumps(
                             {
                                 "trigger_reason": trigger_reason,
+                                "driver_type": driver_type,
                                 "state": state_snippet,
                                 "current_params": self._rule_params.to_dict(),
                                 "param_schema": param_schema,
