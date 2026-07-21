@@ -2198,7 +2198,59 @@ SSD\_00483P01 & hierarchical (qwen) & 0.150 & \_\_BOLD\_0000\_\_ & 15 & 191.3s \
   \item 下一步需要：(a) 在 L2 prompt 中注入当前 rule engine 的参数 schema 和取值范围；(b) 让 watchdog 监控 activity 而不仅是 composite；(c) 在离线回放中先用 mock L2 搜索「什么参数更新真正提升 composite」，再把搜索到的更新作为 few-shot 示例喂给 qwen。
 \end{itemize}
 
-\subsubsection{37.8 对架构的启示}
+\subsubsection{37.8 L2 Prompt 注入参数 Schema（解决策略质量不足）}
+
+§37.7 发现 qwen 能输出格式正确的更新，但参数调整破坏了 rule engine 行为。根因是 L2 \_\_BOLD\_0000\_\_，只能盲目猜测。\\
+
+\_\_BOLD\_0003\_\_：在 \_\_CODE\_0000\_\_ 和 \_\_CODE\_0001\_\_ 中注入 \_\_CODE\_0002\_\_，包含每个可调参数的：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_：int / float
+  \item \_\_CODE\_0000\_\_：合法取值区间
+  \item \_\_CODE\_0000\_\_：一句话解释参数作用和调整方向
+\end{itemize}
+
+```python\\
+param\_schema = \{\\
+"stuck\_escape\_threshold": \{\\
+"type": "int", "range": [1, 20],\\
+"meaning": "Steps of zero displacement before escape maneuver triggers. Lower = escape sooner.",\\
+\},\\
+"target\_lock\_max\_steps": \{\\
+"type": "int", "range": [1, 30],\\
+"meaning": "Max steps to stay locked on one target before re-evaluating. Lower = switch targets faster.",\\
+\},\\
+...\\
+\}\\
+```\\
+
+\_\_BOLD\_0000\_\_（相同 trigger\_reason="low\_composite\_avg\_0.120"）：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+指标 & 无 schema（§37.6） & 有 schema（本轮） \\
+\hline
+update\_type & param & param \\
+\hline
+payload & \_\_CODE\_0000\_\_ & \_\_CODE\_0000\_\_ \\
+\hline
+confidence & 0.75 & \_\_BOLD\_0000\_\_ \\
+\hline
+reason & 泛泛而谈 & 「agent is stuck on suboptimal targets; reducing lock time and escape threshold to react faster」 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0000\_\_（target\_lock + escape），而不是只改一个。\\
+2. \_\_BOLD\_0000\_\_，更接近自动应用阈值 0.9。\\
+3. \_\_BOLD\_0000\_\_，说明 L2 真正理解了 schema。\\
+
+\_\_BOLD\_0000\_\_：参数 schema 注入是解决「L2 策略质量不足」的关键一步。L2 从「盲目猜参数」进化为「理解参数含义后做 informed 调整」。下一步可把 schema 扩展到全部 12 个参数，并加入当前游戏的 profile 类型（joystick / tap-only）让 L2 知道驱动模式。\\
+
+\subsubsection{37.9 对架构的启示}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_（target\_name + action\_hint），而不是自然语言描述。

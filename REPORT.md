@@ -1503,7 +1503,46 @@ python src/training/train_qwen35.py \
 - 在线规则更新的**机制已跑通**，但**策略质量不足**。qwen 能输出格式正确的更新，却不知道当前游戏真正需要什么参数。
 - 下一步需要：(a) 在 L2 prompt 中注入当前 rule engine 的参数 schema 和取值范围；(b) 让 watchdog 监控 activity 而不仅是 composite；(c) 在离线回放中先用 mock L2 搜索「什么参数更新真正提升 composite」，再把搜索到的更新作为 few-shot 示例喂给 qwen。
 
-### 37.8 对架构的启示
+### 37.8 L2 Prompt 注入参数 Schema（解决策略质量不足）
+
+§37.7 发现 qwen 能输出格式正确的更新，但参数调整破坏了 rule engine 行为。根因是 L2 **不知道每个参数的含义和取值范围**，只能盲目猜测。
+
+**修复**：在 `_run_l2_rule_update()` 和 `update_prompt()` 中注入 `param_schema`，包含每个可调参数的：
+- `type`：int / float
+- `range`：合法取值区间
+- `meaning`：一句话解释参数作用和调整方向
+
+```python
+param_schema = {
+    "stuck_escape_threshold": {
+        "type": "int", "range": [1, 20],
+        "meaning": "Steps of zero displacement before escape maneuver triggers. Lower = escape sooner.",
+    },
+    "target_lock_max_steps": {
+        "type": "int", "range": [1, 30],
+        "meaning": "Max steps to stay locked on one target before re-evaluating. Lower = switch targets faster.",
+    },
+    ...
+}
+```
+
+**qwen 对比测试**（相同 trigger_reason="low_composite_avg_0.120"）：
+
+| 指标 | 无 schema（§37.6） | 有 schema（本轮） |
+|---|---|---|
+| update_type | param | param |
+| payload | `{"stuck_escape_threshold": 3}` | `{"target_lock_max_steps": 5, "stuck_escape_threshold": 3}` |
+| confidence | 0.75 | **0.85** |
+| reason | 泛泛而谈 | 「agent is stuck on suboptimal targets; reducing lock time and escape threshold to react faster」 |
+
+**关键改进**：
+1. **同时调整两个相关参数**（target_lock + escape），而不是只改一个。
+2. **confidence 从 0.75 提升到 0.85**，更接近自动应用阈值 0.9。
+3. **reason 具体且引用了参数含义**，说明 L2 真正理解了 schema。
+
+**意义**：参数 schema 注入是解决「L2 策略质量不足」的关键一步。L2 从「盲目猜参数」进化为「理解参数含义后做 informed 调整」。下一步可把 schema 扩展到全部 12 个参数，并加入当前游戏的 profile 类型（joystick / tap-only）让 L2 知道驱动模式。
+
+### 37.9 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。

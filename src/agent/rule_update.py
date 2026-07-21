@@ -691,8 +691,13 @@ def update_prompt(
     state: dict[str, Any],
     params: dict[str, Any],
     visual_context: dict[str, Any] | None = None,
+    param_schema: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build a prompt for the cloud L2 model requesting a rule update."""
+    """Build a prompt for the cloud L2 model requesting a rule update.
+
+    When *param_schema* is provided it is included in the user message so the
+    model knows what each parameter means and what range is valid.
+    """
     system = (
         "You are a strategy optimizer for a small-game-playing agent. "
         "Your ONLY job is to decide whether to update the agent's rules/parameters. "
@@ -721,12 +726,14 @@ def update_prompt(
         "4. Prefer small, verifiable parameter changes.\n"
         "5. If no update is needed, return update_type=\"none\" with confidence 0.0."
     )
-    user = {
+    user: dict[str, Any] = {
         "trigger_reason": trigger_reason,
         "state": state,
         "current_params": params,
         "visual_context": visual_context or {},
     }
+    if param_schema:
+        user["param_schema"] = param_schema
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": json.dumps(user, ensure_ascii=False, default=str)},

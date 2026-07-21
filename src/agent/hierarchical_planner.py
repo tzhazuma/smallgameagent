@@ -422,6 +422,35 @@ class HierarchicalPlanner:
             default=str, ensure_ascii=False,
         )[:1500]
         visual_context = getattr(ctx, "visual_struct", None) or {}
+
+        # Build a parameter schema so L2 knows what each knob does.
+        param_schema = {
+            "stuck_escape_threshold": {
+                "type": "int", "range": [1, 20],
+                "meaning": "Steps of zero displacement before escape maneuver triggers. Lower = escape sooner.",
+            },
+            "target_lock_max_steps": {
+                "type": "int", "range": [1, 30],
+                "meaning": "Max steps to stay locked on one target before re-evaluating. Lower = switch targets faster.",
+            },
+            "coin_save_buffer": {
+                "type": "float", "range": [0, 100],
+                "meaning": "Extra coins to save before upgrading. Higher = less frequent upgrades, more saving.",
+            },
+            "trigger_composite_threshold": {
+                "type": "float", "range": [0.0, 0.5],
+                "meaning": "Absolute composite below which rule updates may trigger. Lower = less sensitive.",
+            },
+            "trigger_cooldown_steps": {
+                "type": "int", "range": [1, 50],
+                "meaning": "Min steps between rule-update triggers. Higher = fewer L2 calls.",
+            },
+            "trigger_max_updates_per_run": {
+                "type": "int", "range": [0, 10],
+                "meaning": "Hard cap on rule-update L2 calls per run. Lower = more conservative.",
+            },
+        }
+
         try:
             resp = self._api_client.chat(
                 [
@@ -433,6 +462,7 @@ class HierarchicalPlanner:
                                 "trigger_reason": trigger_reason,
                                 "state": state_snippet,
                                 "current_params": self._rule_params.to_dict(),
+                                "param_schema": param_schema,
                                 "visual_context": visual_context,
                             },
                             ensure_ascii=False,
