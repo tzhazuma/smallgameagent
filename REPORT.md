@@ -1393,6 +1393,55 @@ python src/training/train_qwen35.py \
 目标：让本地 VLM 稳定输出结构化 JSON 视觉摘要，并提升 `next_probe_action` 与 `failure_recovery` 任务准确率。
 
 
+## 37. 搜索/规划变体离线对比（search_plan_variants）
+
+### 37.1 实验设计
+
+`src/experiments/search_plan_variants.py` 在 processed-runs 上离线评估 6 种决策策略：
+
+1. **rule**：纯 L0 RuleEngine 基线。
+2. **hierarchical_mock_5 / _15**：mock L2 每 5/15 步重规划，输出 3 个意图。
+3. **hierarchical_short / _long**：mock L2 分别输出 3 / 8 个意图（horizon 长短）。
+4. **beam_2step**：2 步束搜索，按玩家位置 + keyNumbers 距离打分。
+
+### 37.2 SSD_00461P01（67 步）
+
+| Variant | Type Match | Action Match | Type Rate | Act Rate |
+|---|---|---|---|---|
+| rule | 13 | 3 | 0.194 | 0.045 |
+| hierarchical_mock_5 | 22 | 3 | 0.328 | 0.045 |
+| hierarchical_mock_15 | 20 | 4 | 0.298 | 0.060 |
+| hierarchical_short | 22 | 3 | 0.328 | 0.045 |
+| **hierarchical_long** | **26** | **5** | **0.388** | **0.075** |
+| beam_2step | 16 | 0 | 0.239 | 0.000 |
+
+### 37.3 SSD_00483P01（121 步）
+
+| Variant | Type Rate | Act Rate |
+|---|---|---|
+| rule | 0.008 | 0.008 |
+| hierarchical_mock_5 | 0.372 | 0.091 |
+| hierarchical_mock_15 | 0.132 | 0.017 |
+| hierarchical_short | 0.372 | 0.091 |
+| **hierarchical_long** | **0.620** | **0.141** |
+| beam_2step | 0.388 | 0.000 |
+
+### 37.4 关键发现
+
+1. **长 horizon 规划收益最大**：hierarchical_long（8 意图）在 00461 上把 type_match 从 0.194 提升到 0.388（+100%），在 00483 上从 0.008 提升到 0.620（+77 倍）。
+2. **规则引擎在 00483 上几乎失效**（type_match 0.008），但 mock L2 只要输出「向首个 active target 移动」的简单计划，就能大幅纠偏。这说明**结构化 L2 规划对规则薄弱游戏有巨大价值**。
+3. **重规划频率不是越高越好**：mock_5（每 5 步）在 00483 上 type_match 0.372，而 mock_15（每 15 步）掉到 0.132。说明长 horizon 计划需要更频繁的重规划来适应状态变化。
+4. **beam search 启发式太弱**：beam_2step 的 action_match 为 0，说明基于位置距离的启发式无法选出正确的动作类型；需要加入 target active 状态、keyNumber 增益预测等信号。
+5. **action_match 普遍低**：即使 type_match 提升，精确复现 move 向量或 tap 坐标仍然很难。下一步应在记忆中存储低级 action 模板，或把匹配标准从向量级放宽到 target 级。
+
+### 37.5 对架构的启示
+
+- **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
+- **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。
+- **规则引擎是 fallback，不是主力**：在 00483 上 rule 几乎全错，但 L2 规划能救回来。三层架构中 L2 的价值在规则薄弱时最明显。
+- **beam search 需要更好的启发式**：当前实现仅用位置距离，下一步应加入 target 可交互性、keyNumber 变化预测。
+
+
 ## 36. Watchdog 回滚机制增强：不止看 composite
 
 ### 36.1 动机
