@@ -1476,7 +1476,29 @@ python -B src/experiments/offline_replay.py \
   --composite-threshold 0.15 --max-updates-per-run 999 --cooldown-steps 5
 ```
 
-### 36.8 下一步
+### 36.8 多游戏批量离线验证
+
+在 3 个代表性游戏（00461 塔防 / 00382 低坑杀鲨鱼 / 00483 吸沙抽水）上批量对比 rule、旧触发、改进触发：
+
+| Game | Config | Steps | Composite | Type Match | Action Match | Updates |
+|---|---|---|---|---|---|---|
+| SSD_00461P01 | rule | 29 | 0.257 | 5 | 2 | 0 |
+| SSD_00461P01 | old_trigger | 29 | 0.257 | 5 | 2 | 4 |
+| SSD_00461P01 | **improved_trigger** | 29 | 0.257 | 5 | 2 | **2** |
+| SSD_00382P01 | rule | 30 | 0.300 | 1 | 1 | 0 |
+| SSD_00382P01 | old_trigger | 30 | 0.300 | 1 | 1 | 5 |
+| SSD_00382P01 | **improved_trigger** | 30 | 0.300 | 1 | 1 | **2** |
+| SSD_00483P01 | rule | 30 | 0.274 | 6 | 1 | 0 |
+| SSD_00483P01 | old_trigger | 30 | 0.279 | 4 | 1 | 6 |
+| SSD_00483P01 | **improved_trigger** | 30 | 0.279 | 4 | 1 | **2** |
+
+**关键发现**：
+1. **改进触发器在所有 3 个游戏上都把 L2 调用精确控制在 2 次**（`max_updates_per_run=2`），而旧触发器根据游戏不同触发了 4–6 次。
+2. **Composite 完全一致**：mock L2 的更新是无害的，减少调用次数不会损失性能。
+3. **SSD_00483P01 上 hierarchical 略优于 rule**（0.279 vs 0.274），说明 mock L2 的参数调整偶尔有正向作用；改进触发器在保留这份收益的同时把调用次数从 6 压到 2。
+4. **泛化性良好**：从 joystick 游戏（00461/00483）到 tap-only 游戏（00382），改进触发器的行为一致且稳定。
+
+### 36.9 下一步
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。

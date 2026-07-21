@@ -1,0 +1,83 @@
+[
+  {
+    "game": "SSD_00461P01",
+    "config": "rule",
+    "steps": 29,
+    "composite": 0.2571,
+    "type_match": 5,
+    "action_match": 2,
+    "rule_update_count": 0
+  },
+  {
+    "game": "SSD_00461P01",
+    "config": "old_trigger",
+    "steps": 29,
+    "composite": 0.2571,
+    "type_match": 5,
+    "action_match": 2,
+    "rule_update_count": 4
+  },
+  {
+    "game": "SSD_00461P01",
+    "config": "improved_trigger",
+    "steps": 29,
+    "composite": 0.2571,
+    "type_match": 5,
+    "action_match": 2,
+    "rule_update_count": 2
+  },
+  {
+    "game": "SSD_00382P01",
+    "config": "rule",
+    "steps": 30,
+    "composite": 0.3,
+    "type_match": 1,
+    "action_match": 1,
+    "rule_update_count": 0
+  },
+  {
+    "game": "SSD_00382P01",
+    "config": "old_trigger",
+    "steps": 30,
+    "composite": 0.3,
+    "type_match": 1,
+    "action_match": 1,
+    "rule_update_count": 5
+  },
+  {
+    "game": "SSD_00382P01",
+    "config": "improved_trigger",
+    "steps": 30,
+    "composite": 0.3,
+    "type_match": 1,
+    "action_match": 1,
+    "rule_update_count": 2
+  },
+  {
+    "game": "SSD_00483P01",
+    "config": "rule",
+    "steps": 30,
+    "composite": 0.2741,
+    "type_match": 6,
+    "action_match": 1,
+    "rule_update_count": 0
+  },
+  {
+    "game": "SSD_00483P01",
+    "config": "old_trigger",
+    "steps": 30,
+    "composite": 0.2793,
+    "type_match": 4,
+    "action_match": 1,
+    "rule_update_count": 6
+  },
+  {
+    "game": "SSD_00483P01",
+    "config": "improved_trigger",
+    "steps": 30,
+    "composite": 0.2793,
+    "type_match": 4,
+    "action_match": 1,
+    "rule_update_count": 2
+  }
+]
