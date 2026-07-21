@@ -286,6 +286,7 @@ class RuleUpdateApplier:
         code_file_max_patch_chars: int = DEFAULT_CODE_FILE_MAX_PATCH_CHARS,
         code_file_max_search_chars: int = DEFAULT_CODE_FILE_MAX_SEARCH_CHARS,
         code_file_backup_count: int = DEFAULT_CODE_FILE_BACKUP_COUNT,
+        driver_type: str | None = None,
     ) -> None:
         self._params = params
         self._memory = strategy_memory
@@ -297,6 +298,13 @@ class RuleUpdateApplier:
         self._code_max_patch = code_file_max_patch_chars
         self._code_max_search = code_file_max_search_chars
         self._code_backup_count = code_file_backup_count
+        self._driver_type = driver_type or "unknown"
+
+        # Parameters that are unsafe to change for tap-guide games.
+        self._TAP_GUIDE_BLOCKED_PARAMS = frozenset({
+            "stuck_escape_threshold",
+            "escape_score_radius",
+        })
 
     @property
     def pending_code_updates(self) -> list[dict[str, Any]]:
@@ -381,6 +389,18 @@ class RuleUpdateApplier:
         if not isinstance(payload, dict):
             logger.warning("Param update payload is not a dict: %s", payload)
             return False
+
+        # Driver-type safety gate: reject changes to blocked params.
+        if self._driver_type == "tap-guide":
+            blocked = [k for k in payload if k in self._TAP_GUIDE_BLOCKED_PARAMS]
+            if blocked:
+                logger.warning(
+                    "Param update rejected for tap-guide game: %s (blocked params: %s)",
+                    request.target, blocked,
+                )
+                self._queue_pending(request, f"tap_guide_blocked_params:{blocked}")
+                return False
+
         self._params.update(payload)
         self._record(request)
         logger.info("Applied param update %s: %s", request.target, payload)
@@ -692,12 +712,37 @@ def update_prompt(
     params: dict[str, Any],
     visual_context: dict[str, Any] | None = None,
     param_schema: dict[str, Any] | None = None,
+    driver_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build a prompt for the cloud L2 model requesting a rule update.
 
     When *param_schema* is provided it is included in the user message so the
     model knows what each parameter means and what range is valid.
+    When *driver_type* is provided, driver-specific safety rules are included.
     """
+    safety_rules = ""
+    if driver_type == "tap-guide":
+        safety_rules = (
+            "\n\nCRITICAL SAFETY RULES:\n"
+            "- For 'tap-guide' games: Do NOT change stuck_escape_threshold or escape_score_radius. "
+            "These parameters control joystick escape behavior which does not exist in tap-guide mode. "
+            "Changing them has no effect or may break the tap-guide mechanism. "
+            "Focus on trigger/watchdog parameters instead.\n"
+        )
+    elif driver_type and "joystick" in driver_type.lower():
+        safety_rules = (
+            "\n\nSAFETY NOTE:\n"
+            "- For 'joystick' games: stuck_escape_threshold and escape_score_radius are the primary tunables. "
+            "Lower threshold = escape sooner when stuck.\n"
+        )
+    else:
+        safety_rules = (
+            "\n\nSAFETY NOTE:\n"
+            "- Trigger/watchdog parameters are always safe to adjust for any driver type.\n"
+            "- Engine knob changes (stuck_escape_threshold, etc.) should be conservative "
+            "and only when the trigger reason clearly relates to that behavior.\n"
+        )
+
     system = (
         "You are a strategy optimizer for a small-game-playing agent. "
         "Your ONLY job is to decide whether to update the agent's rules/parameters. "
@@ -713,10 +758,11 @@ def update_prompt(
         "Tunable parameters (use these exact names in payload for param updates):\n"
         "- Engine knobs: stuck_escape_threshold (int), target_lock_max_steps (int), coin_save_buffer (float), obstacle_repulse_weight (float), escape_score_radius (float)\n"
         "- Trigger sensitivity: trigger_composite_threshold (float), trigger_stall_threshold (int), trigger_cooldown_steps (int), trigger_relative_decrease_pct (float or null), trigger_max_updates_per_run (int)\n"
-        "- Watchdog margins: watchdog_activity_drop_margin (float), watchdog_stall_increase_margin (int)\n\n"
+        "- Watchdog margins: watchdog_activity_drop_margin (float), watchdog_stall_increase_margin (int)\n"
+        + safety_rules +
         "Examples:\n"
-        '- To change a knob: {"update_type":"param","target":"escape","reason":"hero is stuck too often","payload":{"stuck_escape_threshold":3},"confidence":0.85}\n'
-        '- To relax trigger: {"update_type":"param","target":"trigger","reason":"too many L2 calls","payload":{"trigger_max_updates_per_run":1,"trigger_cooldown_steps":12},"confidence":0.8}\n'
+        '- Safe tap-guide update: {"update_type":"param","target":"trigger","reason":"too many L2 calls","payload":{"trigger_cooldown_steps":12,"trigger_max_updates_per_run":1},"confidence":0.8}\n'
+        '- Safe joystick update: {"update_type":"param","target":"escape","reason":"hero is stuck too often","payload":{"stuck_escape_threshold":3},"confidence":0.85}\n'
         '- To do nothing: {"update_type":"none","target":"","reason":"performance is acceptable","payload":{},"confidence":0.0}\n'
         '- To update a config file: {"update_type":"code_file","target":"runtime_rules.json","reason":"reduce lock time","payload":{"file_path":"configs/runtime_rules.json","search":"\\\"target_lock_max_steps\\\": 8","replace":"\\\"target_lock_max_steps\\\": 5"},"confidence":0.9}\n\n'
         "Rules:\n"

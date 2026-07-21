@@ -149,10 +149,12 @@ class HierarchicalPlanner:
 
         # Rule update machinery
         self._rule_params = rule_params or RuleParameters()
+        driver_type = getattr(rule_engine, "driver_type", "unknown") if rule_engine else "unknown"
         self._rule_applier = RuleUpdateApplier(
             self._rule_params,
             strategy_memory,
             code_file_allowlist=rule_update_allowlist,
+            driver_type=driver_type,
         )
         self._rule_trigger = RuleUpdateTrigger(
             composite_threshold=composite_threshold,
