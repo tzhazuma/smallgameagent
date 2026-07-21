@@ -1429,7 +1429,23 @@ python src/training/train_qwen35.py \
 - **为「灵活策略回退」提供多层安全网**：composite 是结果指标，activity/stall 是过程指标；过程指标恶化往往早于结果指标，提前回滚能减少无效步数。
 - **activity  tracking 预留接口**：当前 `activity=None`（待 WorkingMemory 暴露 per-step activity 后接入），stall 已生效。
 
-### 36.5 下一步
+### 36.5 触发器 + Watchdog 联合验证
+
+用合成数据模拟 20 步 run（baseline 0.14 → drop 0.08 → recover 0.12 → drop 0.07），配置 `relative_decrease_pct=0.25, max_updates_per_run=2, cooldown_steps=8`：
+
+| 指标 | 结果 |
+|---|---|
+| 触发更新 | 2 次（step 6、step 14），符合 max_updates=2 |
+| Watchdog 回滚 | 2 次（step 8、step 16），均因 composite 低于 baseline |
+| 最终参数 | 恢复为空（回滚生效） |
+
+**结论**：触发器负责「何时改」，watchdog 负责「改坏了就回滚」，两者配合形成闭环。即使 L2 频繁给出坏建议，系统也能自我纠正。
+
+### 36.6 在线验证尝试
+
+在 SSD_00461P01 上尝试了 rule vs hierarchical（qwen + 改进触发器）的 25 步在线 A/B，但 qwen 单次 L2 调用延迟过高（>70s），导致 25 步 run 超过 8 分钟仍未完成，已终止。这再次验证了 §34 的结论：**qwen 不适合需要频繁 L2 调用的在线场景**。改进触发器的机制正确性已由 §36.5 的合成数据测试充分验证；在线正向收益需要在延迟更低的 provider（如 kimi 配额恢复后）或离线回放中进一步确认。
+
+### 36.7 下一步
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。

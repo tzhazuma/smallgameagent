@@ -1055,6 +1055,22 @@ def write_pptx() -> None:
         "目标：把「有钱就升级」的短视行为改成「攒够再升级」的长程策略",
     ])
 
+    _add_bullet_slide(prs, "触发器改进：不再一刀切", [
+        "旧问题：绝对阈值 0.15 在低基线游戏上几乎每 5 步就触发，L2 调用泛滥",
+        "相对下降触发：记录本 run 峰值，下降超过 25% 才触发，避免过度敏感",
+        "硬上限：单 run 最多更新 3 次，防止「越更新越差、越差越更新」",
+        "cooldown 从 5 步提高到 8 步，给每次更新更长的观察窗口",
+        "单元测试验证：peak 0.30 → 0.20 触发（drop 22.2%），max=2 后不再触发",
+    ])
+
+    _add_bullet_slide(prs, "Watchdog 回滚：不止看分数", [
+        "旧版只比较 composite 平均值，小幅参数调整带来的 stall 增加被忽略",
+        "新版三层安全网：composite 下降 / activity 下降 ≥ 0.15 / stall 增加 ≥ 2",
+        "过程指标（stall/activity）恶化往往早于结果指标，提前回滚减少无效步数",
+        "实验验证：stall 从 0 升到 3 时即使 composite 不变也触发回滚",
+        "意义：L2 可以大胆试错，watchdog 负责兜底",
+    ])
+
     # ---- Section: Agent communication ----
     _add_section_slide(prs, "05", "Agent 通信与记忆")
 
