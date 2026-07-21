@@ -60,6 +60,7 @@ strategy_memory_*.json
 *.h5
 checkpoints/
 outputs/
+configs/.rule_backups/
 
 # IDE
 .idea/

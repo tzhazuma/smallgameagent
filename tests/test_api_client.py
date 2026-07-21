@@ -323,8 +323,8 @@ class TestMultiProviderClient:
         assert client.provider == "kimi"
         assert client._api_key == "sk-kimi"
         assert client._base_url == "https://api.kimi.com/coding/v1"
-        assert client._text_model == "kimi-k2.5"
-        assert client._vision_model == "kimi-k2.5"
+        assert client._text_model == "kimi-k2.7-code"
+        assert client._vision_model == "kimi-k2.6"
 
     def test_xiaomi_provider_defaults_to_mimo(self, monkeypatch) -> None:
         monkeypatch.setenv("CLOUD_PROVIDER", "xiaomi")
@@ -358,7 +358,7 @@ class TestMultiProviderClient:
             m.return_value = mock.Mock()
             client.chat(messages=[{"role": "user", "content": "hi"}])
             _, kwargs = m.call_args
-            assert kwargs["model"] == "kimi-k2.5"
+            assert kwargs["model"] == "kimi-k2.7-code"
             assert "temperature" not in kwargs
 
     def test_vision_routes_to_provider_vision_model(self, monkeypatch) -> None:

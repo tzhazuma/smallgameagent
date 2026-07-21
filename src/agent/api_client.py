@@ -28,8 +28,8 @@ PROVIDER_CONFIGS: dict[str, dict[str, str]] = {
     },
     "kimi": {
         "base_url": "https://api.kimi.com/coding/v1",
-        "text_model": "kimi-k2.5",
-        "vision_model": "kimi-k2.5",
+        "text_model": "kimi-k2.7-code",
+        "vision_model": "kimi-k2.6",
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com",
@@ -82,6 +82,8 @@ class OpenCodeGoClient:
         vision_model: str | None = None,
     ) -> None:
         if api_key is None:
+            api_key = os.environ.get("OPENCODEGO_API_KEY", "")
+        if not api_key:
             api_key = os.environ.get("OPENCODE_API_KEY", "")
         if not api_key:
             api_key = self._read_auth_file_key()

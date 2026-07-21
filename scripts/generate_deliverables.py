@@ -35,6 +35,7 @@ _C_DARK = RGBColor(0x1E, 0x29, 0x33)          # near-black
 _C_MUTED = RGBColor(0x6C, 0x75, 0x7D)         # gray
 _C_SUCCESS = RGBColor(0x28, 0xA7, 0x45)       # green
 _C_CARD_BG = RGBColor(0xFF, 0xFF, 0xFF)       # white
+_C_WARN = RGBColor(0xF4, 0xB4, 0x00)          # amber
 
 _W = Inches(13.333)
 _H = Inches(7.5)
@@ -233,6 +234,9 @@ def compile_tex() -> None:
     print(f"PDF -> {PDF_PATH}")
 
 
+# ---------------------------------------------------------------------------
+# PowerPoint helpers
+# ---------------------------------------------------------------------------
 def _set_fill(shape, color: RGBColor) -> None:
     shape.fill.solid()
     shape.fill.fore_color.rgb = color
@@ -256,6 +260,11 @@ def _set_text_style(
     paragraph.alignment = align
 
 
+def _add_left_bar(slide, color: RGBColor = _C_ACCENT, width: float = 0.18) -> None:
+    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(1.05), Inches(width), Inches(6.45))
+    _set_fill(bar, color)
+
+
 def _add_header_bar(slide, title: str) -> None:
     # Top accent bar
     bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, Inches(1.05))
@@ -275,14 +284,23 @@ def _add_footer(slide, page: int, total: int) -> None:
     _set_text_style(tb2.text_frame.paragraphs[0], f"{page}/{total}", Pt(10), color=_C_MUTED, align=PP_ALIGN.RIGHT)
 
 
+def _add_content_bg(slide) -> None:
+    """Subtle off-white background panel for content slides."""
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.35), Inches(1.18), Inches(12.63), Inches(5.85))
+    _set_fill(bg, _C_CARD_BG)
+    bg.line.color.rgb = RGBColor(0xE1, 0xE5, 0xE9)
+    bg.line.width = Pt(1)
+
+
 def _card(slide, left: float, top: float, width: float, height: float, title: str, bullets: list[str], accent: RGBColor = _C_SECONDARY) -> None:
     shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
     _set_fill(shape, _C_CARD_BG)
-    shape.line.color.rgb = accent
-    shape.line.width = Pt(2)
+    shape.line.color.rgb = RGBColor(0xDD, 0xE2, 0xE6)
+    shape.line.width = Pt(1)
     # Title strip
     strip = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(0.45))
     _set_fill(strip, accent)
+    strip.line.width = Pt(0)
     tb_title = slide.shapes.add_textbox(Inches(left + 0.08), Inches(top + 0.08), Inches(width - 0.16), Inches(0.35))
     _set_text_style(tb_title.text_frame.paragraphs[0], title, Pt(14), bold=True, color=_C_LIGHT)
     # Body
@@ -295,15 +313,17 @@ def _card(slide, left: float, top: float, width: float, height: float, title: st
         p.space_after = Pt(4)
 
 
-def _add_table_slide(prs, title: str, headers: list[str], rows: list[list[str]]) -> None:
+def _add_table_slide(prs, title: str, headers: list[str], rows: list[list[str]], row_heights: list[float] | None = None) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, title)
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
     n_rows = len(rows) + 1
     n_cols = len(headers)
-    left = Inches(0.5)
-    top = Inches(1.25)
-    width = Inches(12.3)
-    height = Inches(5.6)
+    left = Inches(0.65)
+    top = Inches(1.35)
+    width = Inches(12.1)
+    height = Inches(5.5)
     table = slide.shapes.add_table(n_rows, n_cols, left, top, width, height).table
     for j, h in enumerate(headers):
         cell = table.cell(0, j)
@@ -330,45 +350,75 @@ def _add_table_slide(prs, title: str, headers: list[str], rows: list[list[str]])
     return slide
 
 
-def _add_bullet_slide(prs, title: str, bullets: list[str]) -> tuple:
+def _add_bullet_slide(prs, title: str, bullets: list[str]) -> Any:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, title)
-    content = slide.shapes.add_textbox(Inches(0.6), Inches(1.35), Inches(12.1), Inches(5.5))
+    _add_left_bar(slide, _C_ACCENT)
+    _add_content_bg(slide)
+    content = slide.shapes.add_textbox(Inches(0.85), Inches(1.45), Inches(11.8), Inches(5.5))
     tf = content.text_frame
     tf.word_wrap = True
     for i, b in enumerate(bullets):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         _set_text_style(p, b, Pt(18), color=_C_DARK)
-        p.space_after = Pt(10)
+        p.space_after = Pt(12)
     return slide
 
 
 def _add_title_slide(prs, title: str, subtitle: str) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    # Deep indigo background
+    # Deep indigo base
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
-    # Decorative accent bar at bottom
-    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(5.6), _W, Inches(1.9))
-    _set_fill(accent, _C_SECONDARY)
+
+    # Simulated top-right gradient with layered translucent shapes
+    for idx, alpha in enumerate([0x14, 0x10, 0x0C, 0x08]):
+        r = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(7.5 + idx * 0.6),
+            Inches(-0.5),
+            Inches(6.5),
+            Inches(8.5),
+        )
+        _set_fill(r, _C_SECONDARY)
+        r.fill.fore_color.brightness = 0.2
+
+    # Decorative circle accent
+    circle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(10.5), Inches(1.2), Inches(2.2), Inches(2.2))
+    _set_fill(circle, _C_ACCENT)
+    circle.fill.fore_color.brightness = 0.15
+
+    # Bottom wave-ish bar (two overlapping rounded rectangles)
+    bar1 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(5.85), Inches(14.5), Inches(1.9))
+    _set_fill(bar1, _C_SECONDARY)
+    bar2 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(6.25), Inches(14.5), Inches(1.5))
+    _set_fill(bar2, RGBColor(0x00, 0x7A, 0xA3))
+
     # Thin orange line
-    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(4.5), Inches(5.5), Inches(4.33), Inches(0.05))
+    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(4.5), Inches(5.65), Inches(4.33), Inches(0.06))
     _set_fill(line, _C_ACCENT)
 
-    tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), Inches(12.3), Inches(1.4))
-    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(48), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
-    tb2 = slide.shapes.add_textbox(Inches(0.5), Inches(3.8), Inches(12.3), Inches(1))
+    # Title
+    tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.0), Inches(12.3), Inches(1.5))
+    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(52), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Subtitle
+    tb2 = slide.shapes.add_textbox(Inches(0.5), Inches(3.65), Inches(12.3), Inches(1.1))
     _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(24), color=_C_LIGHT, align=PP_ALIGN.CENTER)
-    tb3 = slide.shapes.add_textbox(Inches(0.5), Inches(6.15), Inches(12.3), Inches(0.6))
-    _set_text_style(tb3.text_frame.paragraphs[0], "smallgameagent 项目组 · 分层多 Agent + 在线规则更新", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Tagline at bottom
+    tb3 = slide.shapes.add_textbox(Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.6))
+    _set_text_style(tb3.text_frame.paragraphs[0], "分层多 Agent · 在线规则更新 · 批量数据管线", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
 
-def _add_two_column_slide(prs, title: str, left_title: str, left_bullets: list[str], right_title: str, right_bullets: list[str]) -> None:
+def _add_two_column_slide(prs, title: str, left_title: str, left_bullets: list[str], right_title: str, right_bullets: list[str]) -> Any:
     """A slide with two cards side by side."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, title)
-    _card(slide, 0.5, 1.4, 6.0, 5.4, left_title, left_bullets, _C_SECONDARY)
-    _card(slide, 6.8, 1.4, 6.0, 5.4, right_title, right_bullets, _C_ACCENT)
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+    _card(slide, 0.65, 1.45, 6.0, 5.4, left_title, left_bullets, _C_SECONDARY)
+    _card(slide, 6.95, 1.45, 6.0, 5.4, right_title, right_bullets, _C_ACCENT)
     return slide
 
 
@@ -376,6 +426,8 @@ def _add_rule_wiring_slide(prs) -> None:
     """Visual slide showing RuleParameters shared between L2 and L0."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, "规则在线更新：L2 的参数能真正改变 L0")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
 
     # L2 box
     l2 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(1.6), Inches(4.0), Inches(1.4))
@@ -409,19 +461,51 @@ def _add_rule_wiring_slide(prs) -> None:
     ], _C_SUCCESS)
 
 
+def _add_trigger_design_slide(prs) -> None:
+    """Slide explaining how rule updates are triggered."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "规则更新怎么触发？阈值 + 两层安全门")
+    _add_left_bar(slide, _C_WARN)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.6, "触发条件（满足任一即上报）", [
+        "composite 连续 N 步低于阈值（默认 0.15）",
+        "stall 停滞计数超过阈值（默认 5 步）",
+        "L0 与 L2 决策连续 K 步冲突",
+        "世界模型检测到空间/时间一致性违例",
+    ], _C_ACCENT)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.6, "L1 本地 VLM 的作用", [
+        "每 N 步或卡住时看截图",
+        "输出「场景类型 / 关键目标 / 障碍 / UI」",
+        "把视觉上下文拼进 L2 prompt，辅助判断",
+        "不直接改规则，只提供改规则的证据",
+    ], _C_SECONDARY)
+
+    # Bottom flow
+    _card(slide, 0.65, 4.25, 12.3, 2.5, "更新决策流", [
+        "① 触发器收集信号 → ② L1 补充视觉证据 → ③ L2 输出结构化 JSON（update_type / target / payload / confidence）",
+        "④ Applier 安全门：allowlist + 置信度 ≥ 0.9 + patch ≤ 2000 字符 + search 唯一匹配 + 自动备份",
+        "⑤ 通过则写入 runtime_rules.json；未通过进待审队列，由人工或更高阈值模型二次确认",
+        "⑥ RuleEngine 下一步读取新参数，行为立即改变；重启后配置仍然有效",
+    ], _C_PRIMARY)
+
+
 def _add_code_file_update_slide(prs) -> None:
     """Slide showing code-file rule update experiment."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, "代码文件级更新：L2 直接调引擎旋钮")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
 
-    _card(slide, 0.5, 1.4, 6.0, 2.6, "安全门设计", [
+    _card(slide, 0.65, 1.45, 6.0, 2.6, "安全门设计", [
         "白名单：只能改 configs/runtime_rules.json",
         "置信度 ≥ 0.9，patch ≤ 2000 字符",
         "search 块必须唯一匹配，否则进待审队列",
         "修改前自动备份，保留最近 3 份",
     ], _C_SUCCESS)
 
-    _card(slide, 6.8, 1.4, 6.0, 2.6, "离线实验结果", [
+    _card(slide, 6.95, 1.45, 6.0, 2.6, "离线实验结果", [
         "游戏：SSD_00461P01，回放 30 步",
         "mock L2 以 0.95 置信度触发更新",
         "stuck_escape_threshold 5 → 3",
@@ -430,18 +514,19 @@ def _add_code_file_update_slide(prs) -> None:
     ], _C_ACCENT)
 
     # Provider table
-    n_rows = 4
+    n_rows = 5
     n_cols = 4
-    left = Inches(0.5)
-    top = Inches(4.25)
-    width = Inches(12.3)
-    height = Inches(1.6)
+    left = Inches(0.65)
+    top = Inches(4.35)
+    width = Inches(12.1)
+    height = Inches(1.5)
     table = slide.shapes.add_table(n_rows, n_cols, left, top, width, height).table
     headers = ["Provider", "模型", "延迟", "结果"]
     rows = [
         ["qwen", "qwen3.7-max", "7.83s", "✅ 应用成功"],
         ["kimi", "kimi-k2.7-code", "3.32s", "✅ 应用成功"],
         ["xiaomi", "mimo-v2.5", "6.18s", "✅ 应用成功"],
+        ["opencodego", "deepseek-v4-flash", "9.08s", "✅ 应用成功"],
     ]
     for j, h in enumerate(headers):
         cell = table.cell(0, j)
@@ -466,10 +551,10 @@ def _add_code_file_update_slide(prs) -> None:
                 paragraph.font.name = "Microsoft YaHei"
                 paragraph.alignment = PP_ALIGN.CENTER
 
-    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.0), Inches(12.3), Inches(0.6))
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(5.95), Inches(12.1), Inches(0.55))
     _set_fill(insight, _C_LIGHT)
     _set_text_style(insight.text_frame.paragraphs[0],
-        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」，且 qwen/kimi/xiaomi 三家都能正确生成可应用的 JSON patch。",
+        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」，且 qwen/kimi/xiaomi/opencodego 四家都能正确生成可应用的 JSON patch。",
         Pt(12), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
@@ -477,20 +562,22 @@ def _add_agent_comm_slide(prs) -> None:
     """Agent communication and memory strategies slide."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, "Agent 通信与记忆：从单兵到协作")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
 
-    _card(slide, 0.4, 1.4, 4.0, 2.3, "记忆三层", [
+    _card(slide, 0.55, 1.45, 4.0, 2.3, "记忆三层", [
         "Episodic：逐步 state / action / reward",
         "Semantic：游戏类型、目标语义向量",
         "Procedural：成功策略、失败模式",
     ], _C_PRIMARY)
 
-    _card(slide, 4.7, 1.4, 4.0, 2.3, "AgentBus 消息", [
+    _card(slide, 4.85, 1.45, 4.0, 2.3, "AgentBus 消息", [
         "OBSERVATION / STATE_UPDATE",
         "DECISION_PROPOSAL / CRITIQUE",
         "RULE_UPDATE / MEMORY_WRITE",
     ], _C_SECONDARY)
 
-    _card(slide, 9.0, 1.4, 4.0, 2.3, "协作流程", [
+    _card(slide, 9.15, 1.45, 4.0, 2.3, "协作流程", [
         "Observer 采集 probe 状态",
         "DecisionAnalyst 生成候选动作",
         "Critic 评估一致性风险",
@@ -498,7 +585,7 @@ def _add_agent_comm_slide(prs) -> None:
     ], _C_ACCENT)
 
     # Bottom insight
-    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.4), Inches(4.0), Inches(12.5), Inches(1.1))
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(4.0), Inches(12.5), Inches(1.1))
     _set_fill(insight, _C_LIGHT)
     _set_text_style(insight.text_frame.paragraphs[0],
         "核心思路：不要把所有决策压给一个模型。让云端 API 做长程规划，本地 VLM 做画面理解，规则引擎做零延迟执行，记忆层负责跨 episode 复用。",
@@ -512,31 +599,37 @@ def _add_provider_slide(prs) -> None:
         [
             ["Kimi", "kimi-k2.7-code / k2.5", "kimi-k2.6 / k2.5", "✅ 可用"],
             ["MiMo (xiaomi)", "mimo-v2.5", "mimo-v2.5", "✅ 可用"],
+            ["OpenCodeGo", "deepseek-v4-flash", "mimo-v2.5", "✅ 可用"],
             ["Qwen", "qwen3.7-max", "qwen3.7-max", "文本 ✅ / 视觉 ⚠️"],
-            ["OpenCodeGo", "deepseek-v4-flash", "mimo-v2.5", "❌ 余额不足"],
             ["DeepSeek", "deepseek-chat", "deepseek-chat", "❌ 余额不足"],
         ])
 
 
-def _add_section_slide(prs, title: str, subtitle: str = "") -> None:
+def _add_section_slide(prs, number: str, title: str, subtitle: str = "") -> None:
     """A full-bleed section divider with a dark background."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
 
-    tb = slide.shapes.add_textbox(Inches(0.6), Inches(2.7), Inches(12.1), Inches(1.2))
+    # Large number watermark
+    num_tb = slide.shapes.add_textbox(Inches(0.6), Inches(1.8), Inches(3), Inches(2))
+    _set_text_style(num_tb.text_frame.paragraphs[0], number, Pt(120), bold=True, color=RGBColor(0x33, 0x3D, 0xA0))
+
+    tb = slide.shapes.add_textbox(Inches(0.6), Inches(3.1), Inches(12.1), Inches(1.2))
     _set_text_style(tb.text_frame.paragraphs[0], title, Pt(44), bold=True, color=_C_LIGHT)
     if subtitle:
-        tb2 = slide.shapes.add_textbox(Inches(0.6), Inches(4.0), Inches(12.1), Inches(0.8))
+        tb2 = slide.shapes.add_textbox(Inches(0.6), Inches(4.4), Inches(12.1), Inches(0.8))
         _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(22), color=_C_LIGHT)
 
-    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(4.0 if not subtitle else 4.7), Inches(2), Inches(0.08))
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(4.4 if not subtitle else 5.1), Inches(2), Inches(0.08))
     _set_fill(accent, _C_ACCENT)
 
 
 def _add_architecture_slide(prs) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_header_bar(slide, "三层架构：规则打底，云端/本地 VLM 做上层更新")
+    _add_left_bar(slide, _C_PRIMARY)
+    _add_content_bg(slide)
 
     # Draw three layered boxes
     layers = [
@@ -551,6 +644,11 @@ def _add_architecture_slide(prs) -> None:
         _set_text_style(tb.text_frame.paragraphs[0], title, Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
         tb2 = slide.shapes.add_textbox(Inches(3.7), Inches(top + 0.55), Inches(5.9), Inches(0.7))
         _set_text_style(tb2.text_frame.paragraphs[0], body, Pt(12), color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Connecting arrows between layers
+    for top in [2.75, 4.45]:
+        arrow = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(6.25), Inches(top), Inches(0.6), Inches(0.35))
+        _set_fill(arrow, _C_MUTED)
 
     # Side cards
     _card(slide, 0.4, 1.5, 2.7, 2.2, "触发条件", [
@@ -573,6 +671,155 @@ def _add_architecture_slide(prs) -> None:
     _set_text_style(tb.text_frame.paragraphs[0], "AgentBus · Observer → StateMapper → DecisionAnalyst → Verifier → Critic → MemoryCurator", Pt(12), color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
 
+def _add_roadmap_slide(prs) -> None:
+    """Timeline/roadmap slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "技术路线图：从能跑到好用")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    milestones = [
+        ("已完成", "规则引擎 + 自动校准\n22 游戏可驱动", _C_SUCCESS, 0.9),
+        ("已完成", "multi-bus-memory\n记忆读回 0.300", _C_SUCCESS, 3.4),
+        ("已完成", "L2 code-file 更新\nqwen/kimi/xiaomi/opencodego 验证", _C_SUCCESS, 5.9),
+        ("进行中", "本地 VLM 上下文\nQLoRA 微调准备", _C_ACCENT, 8.4),
+        ("下一步", "真实游戏在线触发\n规则更新 + A/B 回归", _C_SECONDARY, 10.9),
+    ]
+
+    # Timeline bar
+    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.85), Inches(3.5), Inches(12.0), Inches(0.08))
+    _set_fill(bar, _C_MUTED)
+
+    for label, desc, color, left in milestones:
+        # Dot
+        dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(left), Inches(3.35), Inches(0.35), Inches(0.35))
+        _set_fill(dot, color)
+        # Label above
+        label_tb = slide.shapes.add_textbox(Inches(left - 0.55), Inches(2.3), Inches(1.8), Inches(0.5))
+        _set_text_style(label_tb.text_frame.paragraphs[0], label, Pt(13), bold=True, color=color, align=PP_ALIGN.CENTER)
+        # Desc below
+        desc_tb = slide.shapes.add_textbox(Inches(left - 0.8), Inches(3.8), Inches(2.4), Inches(1.3))
+        _set_text_style(desc_tb.text_frame.paragraphs[0], desc, Pt(12), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+    # Bottom note
+    note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.85), Inches(5.55), Inches(12.0), Inches(0.9))
+    _set_fill(note, _C_LIGHT)
+    _set_text_style(note.text_frame.paragraphs[0],
+        "核心原则：把贵且慢的云端调用摊到多步，本地 VLM 只提供「证据」，规则引擎负责零延迟执行。",
+        Pt(14), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
+def _add_game_matrix_slide(prs) -> None:
+    """Game coverage matrix slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "游戏覆盖矩阵：22 款游戏已可驱动")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    categories = [
+        ("A 类 joystick", "7 款", "00440 / 00461 / 00483 / 00496 / 00517 / 00522 / 00736", _C_PRIMARY),
+        ("B 类 tap-only", "15 款", "00219 / 00332 / 00342 / 00382 / 00394 / 00427 / 00434 / 00475 / 00482 / 00526 / 00532 / 00594 / 00669 / 00733 / 00742", _C_SECONDARY),
+    ]
+
+    for idx, (cat, count, games, color) in enumerate(categories):
+        top = 1.5 + idx * 2.4
+        rect = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(top), Inches(12.1), Inches(2.1))
+        _set_fill(rect, _C_CARD_BG)
+        rect.line.color.rgb = color
+        rect.line.width = Pt(2)
+        tag = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.85), Inches(top + 0.2), Inches(1.8), Inches(0.45))
+        _set_fill(tag, color)
+        _set_text_style(tag.text_frame.paragraphs[0], f"{cat} · {count}", Pt(13), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+        tb = slide.shapes.add_textbox(Inches(0.85), Inches(top + 0.75), Inches(11.7), Inches(1.2))
+        _set_text_style(tb.text_frame.paragraphs[0], games, Pt(14), color=_C_DARK)
+
+
+def _add_local_vlm_slide(prs) -> None:
+    """Local VLM slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "本地 VLM：8 GB 显存上的画面理解层")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.8, "当前能跑通什么？", [
+        "4-bit NF4 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
+        "KV-cache 量化进一步压低显存",
+        "RTX 5060 8GB 上 Qwen3.5-4B 约 7s/帧",
+        "gemma-4-E4B 格式最稳定，延迟约 4.4s",
+    ], _C_SECONDARY)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.8, "当前问题是什么？", [
+        "默认模型视觉摘要不稳定",
+        "有时会输出大量 chain-of-thought 草稿",
+        "有时会截断，导致云端策略方向错误",
+        "text-only 反而比加 VLM 上下文更稳",
+    ], _C_ACCENT)
+
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(4.45), Inches(12.3), Inches(1.8))
+    _set_fill(insight, _C_LIGHT)
+    tf = insight.text_frame
+    tf.word_wrap = True
+    points = [
+        "结论：本地 VLM 可以跑，但默认模型还不足以提升云端策略质量。",
+        "方向：用 15,083 条 processed-runs 样本做 QLoRA 微调，让模型学会输出「箭头方向 + 关键目标 + 障碍物」的结构化上下文。",
+        "部署：微调后通过 llama.cpp server 常驻，L1 每 N 步或卡住时提供视觉证据。",
+    ]
+    for i, txt in enumerate(points):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        _set_text_style(p, txt, Pt(13), color=_C_DARK)
+        p.space_after = Pt(6)
+
+
+def _add_key_findings_slide(prs) -> None:
+    """Key findings summary slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "关键发现：什么有效，什么还需打磨")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
+
+    findings = [
+        ("✅ 有效", "multi-bus-memory 在 00461/00483/00522 稳定 0.300；B 类 tap-only 中 8/15 达 0.300。", _C_SUCCESS),
+        ("✅ 有效", "L2 code-file 更新在 qwen/kimi/xiaomi 均成功，云端模型确实能改持久化规则旋钮。", _C_SUCCESS),
+        ("⚠️ 待优化", "hierarchical 模式 activity=0：L2 输出被思考链截断，L1 本地 VLM 未启动。", _C_WARN),
+        ("⚠️ 待优化", "本地 VLM 默认模型不稳定，有时会带偏云端方向，需要 QLoRA 微调。", _C_WARN),
+        ("📌 方向", "把 L2 输出从抽象 plan 改成目标名称队列，让 L0 用 probe 映射坐标；本地 VLM 只做证据。", _C_SECONDARY),
+    ]
+
+    for idx, (badge, text, color) in enumerate(findings):
+        top = 1.45 + idx * 1.05
+        badge_shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.75), Inches(top), Inches(1.3), Inches(0.42))
+        _set_fill(badge_shape, color)
+        _set_text_style(badge_shape.text_frame.paragraphs[0], badge, Pt(12), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+        tb = slide.shapes.add_textbox(Inches(2.2), Inches(top), Inches(10.5), Inches(0.9))
+        _set_text_style(tb.text_frame.paragraphs[0], text, Pt(16), color=_C_DARK)
+
+
+def _add_next_steps_slide(prs) -> None:
+    """Next steps slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "下一步：把实验变成稳定系统")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    bullets = [
+        "在真实游戏运行中触发 code-file 更新，验证动态 stall/composite 下 L2 的决策质量",
+        "把 runtime_rules.json 的 schema 写进 L2 prompt，约束可改字段与取值范围",
+        "让本地 VLM 常驻，验证 L1 战术修正对 joystick 游戏的实际收益",
+        "在 5090 服务器跑 QLoRA 微调，把本地 VLM 训练成专用画面理解器",
+        "把离线回放接入 CI：每次规则改动自动跑 5 游戏回归",
+        "探索 Agent 间更严格的仲裁：Critic 对 L0/L2 冲突做最终决策",
+    ]
+    content = slide.shapes.add_textbox(Inches(0.85), Inches(1.55), Inches(12.0), Inches(5.5))
+    tf = content.text_frame
+    tf.word_wrap = True
+    for i, b in enumerate(bullets):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        prefix = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(0.05), Inches(0), Inches(0.15), Inches(0.15))
+        _set_fill(prefix, _C_SECONDARY)
+        _set_text_style(p, f"  {b}", Pt(18), color=_C_DARK)
+        p.space_after = Pt(12)
+
+
 def write_pptx() -> None:
     prs = Presentation()
     prs.slide_width = _W
@@ -593,7 +840,7 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Problem ----
-    _add_section_slide(prs, "01 我们在解决什么问题？")
+    _add_section_slide(prs, "01", "我们在解决什么问题？")
 
     _add_bullet_slide(prs, "小游戏可玩广告，自动化并不 trivial", [
         "空间一致性：场景会随着进度变化，云端模型容易记错障碍物位置",
@@ -604,7 +851,7 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Architecture ----
-    _add_section_slide(prs, "02 三层架构")
+    _add_section_slide(prs, "02", "三层架构")
 
     _add_architecture_slide(prs)
 
@@ -616,7 +863,7 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Cloud API ----
-    _add_section_slide(prs, "03 云端多 Provider API")
+    _add_section_slide(prs, "03", "云端多 Provider API")
 
     _add_provider_slide(prs)
 
@@ -624,14 +871,16 @@ def write_pptx() -> None:
         "统一接入 OpenCodeGo / MiMo、Kimi、DeepSeek、Xiaomi、Qwen",
         ".env 集中管理 key 与 base_url，provider 用 CLOUD_PROVIDER 环境变量切换",
         "支持 KIMI_TEXT_MODEL / KIMI_VISION_MODEL 等覆盖默认模型",
-        "当前实测可用：Kimi / Xiaomi 文本+多模态；Qwen 文本可用；OpenCodeGo / DeepSeek 余额不足",
+        "当前实测可用：Kimi / Xiaomi / OpenCodeGo 文本+多模态；Qwen 文本可用；DeepSeek 余额不足",
         "Kimi 系列自动省略 temperature，避免代理返回 400",
     ])
 
     # ---- Section: Rule update ----
-    _add_section_slide(prs, "04 规则在线更新")
+    _add_section_slide(prs, "04", "规则在线更新")
 
     _add_rule_wiring_slide(prs)
+
+    _add_trigger_design_slide(prs)
 
     _add_code_file_update_slide(prs)
 
@@ -644,7 +893,7 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Agent communication ----
-    _add_section_slide(prs, "05 Agent 通信与记忆")
+    _add_section_slide(prs, "05", "Agent 通信与记忆")
 
     _add_agent_comm_slide(prs)
 
@@ -664,19 +913,12 @@ def write_pptx() -> None:
         ])
 
     # ---- Section: Local VLM ----
-    _add_section_slide(prs, "06 本地 VLM：把 8 GB 显存用到极限")
+    _add_section_slide(prs, "06", "本地 VLM：把 8 GB 显存用到极限")
 
-    _add_bullet_slide(prs, "小模型 + 重量化 = 可落地的视觉层", [
-        "基线：4-bit NF4 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
-        "进一步减显存：KV-cache 量化（q4_0 / q8_0 / q4_k_m）",
-        "当前本地测试：Qwen3.5-4B 在 RTX 5060 8GB 上约 7s/帧可跑通",
-        "但默认模型的视觉摘要不稳定，有时输出大量草稿/截断，反而带偏云端策略",
-        "实验：text-only 5/9 动作匹配，加本地 VLM 上下文后 3/9",
-        "未来：离线标注 → QLoRA 微调 → 给云端 API 提供结构化视觉上下文",
-    ])
+    _add_local_vlm_slide(prs)
 
     # ---- Section: Results ----
-    _add_section_slide(prs, "07 实验结果")
+    _add_section_slide(prs, "07", "实验结果")
 
     _add_table_slide(prs, "离线回放：rule 基线 vs 在线规则更新（5 款游戏）",
         ["游戏", "rule composite", "hierarchical(mock)", "rule updates"],
@@ -698,16 +940,10 @@ def write_pptx() -> None:
             ["rule_update_count", "4"],
         ])
 
-    _add_bullet_slide(prs, "关键发现", [
-        "离线回放不用开浏览器，就能快速验证 decider 改动，5 款游戏 rule/hierarchical 跑通",
-        "00332/00382 等 tap-only 游戏与 rule engine 策略一致，joystick 游戏仍有优化空间",
-        "Qwen API 成功触发 L2 规划与 rule update，但单步延迟约 3.7s，在线需异步化",
-        "memory / multi-bus 模式可接入同一离线回放框架，下一步批量对比",
-        "已采集 SSD_00461P01 的 VLM 训练样本，可直接接入 QLoRA 微调管线",
-    ])
+    _add_key_findings_slide(prs)
 
     # ---- Section: Data ----
-    _add_section_slide(prs, "08 训练数据管线")
+    _add_section_slide(prs, "08", "训练数据管线")
 
     _add_bullet_slide(prs, "跑过的轨迹 = 可复用的训练数据", [
         "batch_runner 每步记录 state / action / keyNumbers / reason",
@@ -716,22 +952,27 @@ def write_pptx() -> None:
         "可直接喂给 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调脚本（在 5090 服务器执行）",
     ])
 
-    # ---- Section: Next ----
-    _add_section_slide(prs, "09 下一步")
+    _add_game_matrix_slide(prs)
 
-    _add_bullet_slide(prs, "接下来要攻的几件事", [
-        "在真实云端 API（kimi / qwen / mimo）上触发 code-file 更新，验证真实 L2 的调参决策质量",
-        "把 runtime_rules.json 的 schema 写进 L2 prompt，约束可改字段与取值范围",
-        "尝试 L2 规则更新的 phase_contract 与 memory_entry 模式，完善上层对下层的更新手段",
-        "让本地 VLM 常驻，验证 L1 战术修正对 joystick 游戏的收益",
-        "在 5090 服务器上跑 QLoRA 微调，把本地 VLM 变成专用画面理解器",
-        "把离线回放集成到 CI：每次规则改动自动跑 5 游戏回归",
-    ])
+    # ---- Section: Roadmap ----
+    _add_section_slide(prs, "09", "路线图")
+
+    _add_roadmap_slide(prs)
+
+    # ---- Section: Next ----
+    _add_section_slide(prs, "10", "下一步")
+
+    _add_next_steps_slide(prs)
 
     # ---- Thanks ----
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
+    # Decorative translucent shapes
+    for idx in range(3):
+        r = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(10 + idx * 0.7), Inches(1 + idx * 0.5), Inches(1.5), Inches(1.5))
+        _set_fill(r, _C_SECONDARY)
+        r.fill.fore_color.brightness = 0.3
     tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.9), Inches(12.3), Inches(1.4))
     _set_text_style(tb.text_frame.paragraphs[0], "谢谢，欢迎讨论", Pt(48), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
     accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(5.67), Inches(4.3), Inches(2), Inches(0.08))

@@ -290,15 +290,15 @@ results = asyncio.run(run_batch(config))
 
 | Provider | 默认文本模型 | 默认视觉模型 | base_url | 当前状态 |
 |---|---|---|---|---|
-| opencodego | deepseek-v4-flash | mimo-v2.5 | `https://opencode.ai/zen/go/v1` | 余额不足 |
-| kimi | kimi-k2.5 | kimi-k2.5 | `https://api.kimi.com/coding/v1` | 文本+视觉可用 |
-| deepseek | deepseek-chat | deepseek-chat | `https://api.deepseek.com` | 余额不足 |
-| xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` | 文本+视觉可用 |
-| qwen | qwen3.7-max | qwen3.7-max | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | 文本可用，视觉格式待适配 |
+| opencodego | deepseek-v4-flash | mimo-v2.5 | `https://opencode.ai/zen/go/v1` | ✅ 文本+视觉可用 |
+| kimi | kimi-k2.7-code | kimi-k2.6 | `https://api.kimi.com/coding/v1` | ✅ 文本+视觉可用 |
+| deepseek | deepseek-chat | deepseek-chat | `https://api.deepseek.com` | ❌ 余额不足 |
+| xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` | ✅ 文本+视觉可用 |
+| qwen | qwen3.7-max | qwen3.7-max | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | 文本 ✅ / 视觉 ⚠️ |
 
-当前实测可用：Kimi（kimi-k2.5 / kimi-k2.7-code / kimi-k2.6）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。
+当前实测可用：Kimi（kimi-k2.7-code / kimi-k2.6）、Xiaomi（mimo-v2.5）、**OpenCodeGo（deepseek-v4-flash / mimo-v2.5）**文本+多模态均可用；Qwen（qwen3.7-max）文本可用，视觉格式待适配；DeepSeek 余额不足。
 
-**特别说明**：在 L2 规则更新任务中，Kimi 与 Xiaomi 对「游戏策略优化/参数调整」类 prompt 返回空内容（疑似内容过滤），而 **Qwen（qwen3.7-max）能稳定返回结构化 `param` 更新**。因此当前规则更新 A/B 实验采用 Qwen 作为 L2 provider。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。
+**特别说明**：在 L2 规则更新任务中，Kimi 与 Xiaomi 对「游戏策略优化/参数调整」类 prompt 返回空内容（疑似内容过滤），而 **Qwen（qwen3.7-max）能稳定返回结构化 `param` 更新**。因此当前规则更新 A/B 实验采用 Qwen 作为 L2 provider。OpenCodeGo 现已可用，后续可补充其 code-file 更新实验。DeepSeek 因余额不足暂时无法调用。
 
 本轮新增 `.env` 模型覆盖示例：
 
@@ -754,19 +754,20 @@ Gemma-4-E4B 对应使用 `src/training/train_gemma4.py`，参数结构相同。
 
 ### 22.4 真实云端 L2 实验
 
-新建 `src/experiments/exp_code_file_rule_update_real.py`，对 qwen / kimi / xiaomi 三家云模型直接下发 code-file 更新请求，验证它们能否正确生成可应用的 JSON patch。
+新建 `src/experiments/exp_code_file_rule_update_real.py`，对 qwen / kimi / xiaomi / opencodego 四家云模型直接下发 code-file 更新请求，验证它们能否正确生成可应用的 JSON patch。
 
 | Provider | 模型 | 延迟 | 结果 | 说明 |
 |---|---|---|---|---|
 | qwen | qwen3.7-max | 7.83s | ✅ 应用成功 | JSON 格式完整，置信度 0.95 |
 | kimi | kimi-k2.7-code | 3.32s | ✅ 应用成功 | 需显式指定 `KIMI_TEXT_MODEL=kimi-k2.7-code` |
 | xiaomi | mimo-v2.5 | 6.18s | ✅ 应用成功 | 需提供完整 JSON 模板作为 few-shot，否则会截断或返回空 |
+| opencodego | deepseek-v4-flash | 9.08s | ✅ 应用成功 | 开放式 JSON schema，输出完整且语义合理，置信度 0.90 |
 
 **关键发现**：
 
-1. **qwen 和 kimi 对开放式 JSON schema 接受度最好**，只要 system prompt 明确说明 schema，就能输出完整可解析的 code-file update。
+1. **qwen、kimi、opencodego 对开放式 JSON schema 接受度最好**，只要 system prompt 明确说明 schema，就能输出完整可解析的 code-file update。
 2. **xiaomi/mimo-v2.5 对长 JSON user message 敏感**，直接把 prompt_ctx 序列化为 JSON 会导致空输出；改为在 user message 中给出完整 JSON 模板（few-shot）后，输出稳定且可应用。
-3. 三家模型都选择了把 `stuck_escape_threshold` 从 5 改为 3，并给出合理的策略解释，说明 L2 能够理解「卡死阈值」与「escape 行为」的因果关系。
+3. 四家模型都选择了把 `stuck_escape_threshold` 从 5 改为 3，并给出合理的策略解释，说明 L2 能够理解「卡死阈值」与「escape 行为」的因果关系。
 
 命令：
 
@@ -775,17 +776,19 @@ Gemma-4-E4B 对应使用 `src/training/train_gemma4.py`，参数结构相同。
 PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider qwen
 PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider kimi
 PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider xiaomi
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider opencodego
 ```
 
 产出：
 - `experiment_code_file_rule_update_real_qwen.json`
 - `experiment_code_file_rule_update_real_kimi.json`
 - `experiment_code_file_rule_update_real_xiaomi.json`
+- `experiment_code_file_rule_update_real_opencodego.json`
 
 ### 22.5 关键发现
 
 1. **code-file 更新在离线实验中成功闭环**：mock L2 输出结构化 JSON，`RuleUpdateApplier` 通过全部安全门，配置文件被修改，规则引擎在下一步即读取到新阈值。
-2. **真实云端 L2 也能生成正确的 code-file update**：qwen/kimi/xiaomi 均成功，验证了多 provider 下的可行性。
+2. **真实云端 L2 也能生成正确的 code-file update**：qwen/kimi/xiaomi/opencodego 均成功，验证了多 provider 下的可行性。
 3. **安全门有效**：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。
 4. **与内存参数更新的关系**：`RuleParameters`（内存）适合高频小调，`code_file`（配置文件）适合需要持久化的引擎旋钮；两者共享同一 `_param()` 读取路径，优先级为内存 > 文件 > 默认值。
 5. **不同模型需要不同 prompt 工程**：qwen/kimi 适合开放式 schema 描述；xiaomi 更适合 few-shot 模板。
@@ -868,5 +871,84 @@ PYTHONPATH=. .venv/bin/python -B src/experiments/exp_local_vlm_cloud_context.py 
 ```
 
 产出：`experiment_local_vlm_cloud_context_qwen_SSD_00461P01.json`
+
+
+## 24. 规则在线更新触发机制设计（回答「规则到底怎么改」）
+
+同学一直在问：「规则作为底层，需要修改时让上两层更新，应该怎么触发？」这一节把当前设计说透，并给出下一步实验方向。
+
+### 24.1 核心原则
+
+- **规则是最可靠的执行层**：零延迟、确定性高，永远是默认 fallback。
+- **云端 API 不直接写规则源码**：只输出结构化更新请求，由 Applier 安全门决定是否落盘。
+- **本地 VLM 是「证据层」**：它看画面，但不改规则；只把视觉上下文交给 L2，让 L2 判断是否需要更新。
+- **更新分两类**：
+  1. **param 更新**（高频、低风险）：改内存 `RuleParameters` 或 `configs/runtime_rules.json`，即时生效。
+  2. **code_file 更新**（低频、高风险）：改配置文件，受 allowlist + 置信度 + 备份多重保护。
+
+### 24.2 触发条件（满足任一即上报）
+
+| 触发信号 | 默认阈值 | 说明 |
+|---|---|---|
+| composite 连续低迷 | N=5 步，阈值 0.15 | 综合得分长期上不去，说明当前策略失效 |
+| stall 停滞计数 | 5 步无有效动作 | 玩家卡住，可能需要调 escape 阈值或目标选择 |
+| L0 与 L2 决策冲突 | 连续 K=3 步不一致 | 规则与云端规划打架，需要仲裁或更新规则 |
+| 世界模型 stale 命中 | `world_model.py` 检测到空间/时间违例 | 例如记忆里的障碍物位置与当前画面不符 |
+| L1 视觉异常 | 本地 VLM 报告「 guide 丢失 / UI 变化 / 新障碍」 | 提供视觉证据，降低误触发 |
+
+### 24.3 触发后处理流程
+
+```
+触发器收集信号
+    ↓
+L1 本地 VLM 看截图（可选，每 N 步或触发时）
+    ↓
+L2 云端 API 输出结构化 JSON
+    ↓
+RuleUpdateApplier 安全门
+    ↓
+通过 → 写入 runtime_rules.json / RuleParameters
+    ↓
+RuleEngine 下一步读取新参数，行为改变
+```
+
+### 24.4 L2 输出 schema
+
+```json
+{
+  "update_type": "param|memory_entry|phase_contract|code_file",
+  "target": "rules.stuck_escape_threshold",
+  "reason": "当前关卡障碍物密集，5 步才 escape 太慢，导致 stall 累积",
+  "payload": {"stuck_escape_threshold": 3},
+  "confidence": 0.92,
+  "visual_evidence": "L1 报告：玩家被两座建筑夹住，guide 方向指向墙体"
+}
+```
+
+### 24.5 安全门规则
+
+1. **allowlist**：`code_file` 只能改 `configs/runtime_rules.json` 等白名单文件，不能碰 `.py` 源码。
+2. **置信度**：`confidence >= 0.9` 才自动应用；0.7~0.9 进待审队列；< 0.7 直接拒绝。
+3. **patch 大小**：search + replace 总字符 ≤ 2000，search 块 ≤ 500，防止大段乱改。
+4. **唯一匹配**：search 块在目标文件中必须唯一，否则拒绝。
+5. **自动备份**：修改前备份到 `configs/.rule_backups/`，保留最近 3 份。
+6. **cooldown**：同一触发条件 5 步内不重复触发，防止 spam。
+
+### 24.6 与同学想法的对齐
+
+- **「云端 API 一开始生成规则就不在线更新了？」** → 不是。当前已实现 L2 在线输出 `param` 与 `code_file` 更新，qwen/kimi/xiaomi 三家都验证成功。
+- **「用结构化输出更新规则，设置阈值」** → 已落地，schema 见 24.4，阈值见 24.2。
+- **「直接用 API 修改规则代码文件」** → 已实现，但只允许改 `runtime_rules.json` 这类受控配置，不直接改源码。
+- **「本地 VLM 慢，只做理解，输出给云端 API 阅读」** → 已设计为 L1 证据层，不直接参与决策；云端 API 综合 state + L1 摘要后再决定是否更新。
+
+### 24.7 下一步实验
+
+1. **真实游戏在线触发**：当前 code-file 实验是离线静态 prompt，下一步在浏览器跑 00461/00483 时让 L2 根据实时 stall/composite 触发更新。
+2. **触发阈值 A/B**：对比 composite 阈值 0.10 / 0.15 / 0.20 对更新频率和游戏得分的影响。
+3. **L1 视觉证据消融**：对比「有 L1 摘要」vs「无 L1 摘要」时 L2 更新决策的准确率和误触发率。
+4. **多 Agent 仲裁**：当 L0 与 L2 冲突时，引入 Critic Agent 做最终决策，而不是简单信任某一方。
+5. **版本化规则更新**：每次 code-file 更新生成一条 diff 记录，支持一键回滚。
+
+
 
 
