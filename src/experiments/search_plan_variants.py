@@ -223,8 +223,20 @@ def _run_beam_search(
 
 
 def _beam_decision(state: dict[str, Any], future_states: list[dict[str, Any]], step_size: float) -> dict[str, Any]:
-    """Enumerate action sequences of length *len(future_states)* and pick best."""
+    """Enumerate action sequences of length *len(future_states)* and pick best.
+
+    Scoring combines three signals:
+    1. Distance to the recorded future state (original heuristic).
+    2. Distance to the active target (intrinsic navigation reward).
+    3. Action-type prior: prefer ``tap`` when close to target, ``move`` otherwise.
+    """
     horizon = len(future_states)
+    target = _first_active_target(state)
+    px, _, pz = _player_pos(state)
+    target_dist = float("inf")
+    if target is not None:
+        tx, _, tz = _player_pos({"player": target})
+        target_dist = math.hypot(tx - px, tz - pz)
 
     def expand(prefix: list[str], current_state: dict[str, Any]) -> list[tuple[list[str], dict[str, Any]]]:
         if len(prefix) == horizon:
@@ -238,13 +250,33 @@ def _beam_decision(state: dict[str, Any], future_states: list[dict[str, Any]], s
     sequences = expand([], state)
     best_seq, best_score = None, float("inf")
     for seq, final_state in sequences:
-        score = _state_distance(final_state, future_states[-1])
+        # Original: distance to recorded future state.
+        future_score = _state_distance(final_state, future_states[-1])
+
+        # Intrinsic: distance from final player position to active target.
+        fx, _, fz = _player_pos(final_state)
+        if target is not None:
+            tx, _, tz = _player_pos({"player": target})
+            nav_score = math.hypot(tx - fx, tz - fz)
+        else:
+            nav_score = 0.0
+
+        # Action-type prior: if close to target, tap is more likely; otherwise move.
+        first_action = seq[0] if seq else "wait"
+        prior = 0.0
+        if target_dist < 2.0 and first_action == "tap":
+            prior = -0.5  # reward tap when close
+        elif target_dist >= 2.0 and first_action == "move":
+            prior = -0.3  # reward move when far
+        elif first_action == "wait":
+            prior = 0.2  # mild penalty for waiting
+
+        score = future_score + 0.3 * nav_score + prior
         if score < best_score:
             best_score = score
             best_seq = seq
 
     first_action = best_seq[0] if best_seq else "wait"
-    target = _first_active_target(state)
     if first_action == "move":
         return {"action": "move", "params": {"target_name": target.get("name", "") if target else ""}, "reason": "beam_search"}
     if first_action == "tap":

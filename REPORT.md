@@ -1434,7 +1434,27 @@ python src/training/train_qwen35.py \
 4. **beam search 启发式太弱**：beam_2step 的 action_match 为 0，说明基于位置距离的启发式无法选出正确的动作类型；需要加入 target active 状态、keyNumber 增益预测等信号。
 5. **action_match 普遍低**：即使 type_match 提升，精确复现 move 向量或 tap 坐标仍然很难。下一步应在记忆中存储低级 action 模板，或把匹配标准从向量级放宽到 target 级。
 
-### 37.5 对架构的启示
+### 37.5 Beam Search 启发式改进
+
+针对 §37.4 中 beam search 表现弱的问题，改进了 `_beam_decision` 的评分函数，从单一「与真值未来状态的距离」扩展为三项加权：
+
+1. **未来状态距离**（原有）：预测终态与 recorded future state 的欧氏距离 + keyNumbers 差异。
+2. **目标导航距离**（新增）：预测终态到 active target 的距离，权重 0.3。鼓励向目标移动。
+3. **动作类型先验**（新增）：
+   - 距离目标 < 2.0 时，`tap` 获得 -0.5 奖励；
+   - 距离目标 ≥ 2.0 时，`move` 获得 -0.3 奖励；
+   - `wait` 受到 +0.2 惩罚。
+
+**改进后结果**：
+
+| Game | beam_2step (旧) | beam_2step (新) | hierarchical_long |
+|---|---|---|---|
+| SSD_00461P01 | 0.239 | **0.254** (+6%) | 0.388 |
+| SSD_00483P01 | 0.388 | **0.405** (+4%) | 0.620 |
+
+**结论**：目标感知先验带来了稳定但有限的提升。beam search 仍显著落后于 hierarchical_long，说明**局部 2 步搜索无法替代结构化 L2 长程规划**。beam search 的瓶颈不在启发式，而在 horizon 太短（2 步）和动作空间太粗（{move, tap, wait}）。下一步可尝试把 beam search 扩展到 4–5 步，或把 L2 输出的目标队列作为 beam search 的初始 plan。
+
+### 37.6 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。
