@@ -28,6 +28,7 @@ import argparse
 import base64
 import json
 import logging
+import re
 import sys
 import time
 from pathlib import Path
@@ -63,36 +64,49 @@ def _load_screenshot(game_dir: Path, step_record: dict[str, Any], key: str = "be
 
 
 def _local_vlm_summary(client: LMStudioClient, image_bytes: bytes, state: dict[str, Any]) -> str:
-    """Ask the local VLM for a concise visual summary of the screenshot."""
+    """Ask the local VLM for a structured JSON visual summary of the screenshot."""
     b64 = base64.b64encode(image_bytes).decode("ascii")
     state_snippet = json.dumps(
         {k: state.get(k) for k in ("player", "keyNumbers") if k in state},
         ensure_ascii=False,
         default=str,
     )[:500]
+    system = (
+        "You are a game visual analyst. Given a screenshot, output a single JSON object only. "
+        "No markdown, no explanation, no thinking tags. Use this exact schema:\n"
+        '{\n'
+        '  "scene_type": "e.g. desert battlefield / base / river",\n'
+        '  "player_location": "e.g. lower-center",\n'
+        '  "visible_objects": ["object1", "object2"],\n'
+        '  "enemies": {"count": 0, "relative_position": "e.g. bottom-left", "type": "red soldiers"},\n'
+        '  "guides_arrows": ["none" or "yellow arrow pointing up"],\n'
+        '  "obstacles": ["river", "rocks"],\n'
+        '  "ui_elements": ["coin icon top-right"]\n'
+        '}'
+    )
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are a game visual analyst. Describe the screenshot concisely for a strategy planner. "
-                "Mention: scene type, player location, visible enemies/objects, any arrows/guides, and UI elements. "
-                "Output plain text, no markdown."
-            ),
-        },
+        {"role": "system", "content": system},
         {
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                {"type": "text", "text": f"Game state snippet:\n{state_snippet}\n\nDescribe what you see."},
+                {"type": "text", "text": f"Game state snippet:\n{state_snippet}\n\nOutput JSON only."},
             ],
         },
     ]
     try:
         resp = client.chat_with_vision(messages, max_tokens=512)
-        return client.extract_content(resp) or ""
+        text = client.extract_content(resp) or ""
+        # Best-effort strip thinking / markdown fences.
+        text = re.sub(r"```(?:json)?\s*|\s*```", "", text)
+        text = re.sub(r"&lt;think&gt;.*?&lt;/think&gt;", "", text, flags=re.DOTALL)
+        text = re.sub(r"&lt;thought&gt;.*?&lt;/thought&gt;", "", text, flags=re.DOTALL)
+        # Validate it is JSON.
+        json.loads(text)
+        return text
     except Exception as exc:
         logger.warning("Local VLM call failed: %s", exc)
-        return ""
+        return "{}"
 
 
 def _cloud_action(provider: str, state: dict[str, Any], visual_summary: str | None = None) -> dict[str, Any]:

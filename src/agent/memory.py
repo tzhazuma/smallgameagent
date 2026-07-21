@@ -19,6 +19,7 @@ import datetime
 import hashlib
 import json
 import logging
+import math
 import re
 import struct
 import time
@@ -55,6 +56,7 @@ class StepRecord:
     state_summary: dict[str, Any] = field(default_factory=dict)
     action: dict[str, Any] = field(default_factory=dict)
     screenshot_hash: str | None = None
+    player: dict[str, Any] | None = None
 
 
 @dataclass
@@ -106,6 +108,18 @@ _STATE_KEYS = frozenset({"ready", "done", "win", "keyNumbers", "keyFlags"})
 def _extract_state_summary(state: dict[str, Any]) -> dict[str, Any]:
     """Return a shallow copy of only the keys relevant for prompt context."""
     return {k: state[k] for k in _STATE_KEYS if k in state}
+
+
+def _extract_player(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract player x/z position if present."""
+    player = state.get("player")
+    if not isinstance(player, dict):
+        return None
+    out: dict[str, Any] = {}
+    for k in ("x", "y", "z"):
+        if k in player:
+            out[k] = player[k]
+    return out if out else None
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +174,7 @@ class WorkingMemory:
             screenshot_hash=_compute_hash(screenshot_bytes)
             if screenshot_bytes is not None
             else None,
+            player=_extract_player(state),
         )
         self._history.append(record)
 
@@ -168,6 +183,45 @@ class WorkingMemory:
             self._history = self._history[-self._max_history :]
 
         self._last_activity = time.monotonic()
+
+    def last_composite(self, window: int = 5) -> float:
+        """Return a rolling composite proxy over the last *window* steps.
+
+        Uses the same rubric weights as :func:`src.experiments.game_env.score_trajectory`
+        but evaluated only on the recent window so the hierarchical planner can
+        detect bad rule updates online.
+        """
+        records = self._history[-window:]
+        n = len(records)
+        if n == 0:
+            return 0.0
+
+        # activity = 1 - stall_ratio in the window
+        stall = 0
+        for prev, cur in zip(records, records[1:]):
+            p = prev.player or {}
+            c = cur.player or {}
+            if "x" not in p or "x" not in c:
+                continue
+            disp = math.hypot(c.get("x", 0) - p.get("x", 0), c.get("z", 0) - p.get("z", 0))
+            # A move step with near-zero displacement counts as stall; taps are intentional.
+            if disp < 0.05 and cur.action.get("action") == "move":
+                stall += 1
+        activity = 1.0 - stall / max(1, n - 1)
+
+        # consistency: failCount flips in the window
+        fail_flips = 0
+        prev_fail = None
+        for rec in records:
+            fc = (rec.state_summary.get("keyNumbers") or {}).get("_failCount")
+            if fc is not None:
+                if prev_fail is not None and fc != prev_fail:
+                    fail_flips += 1
+                prev_fail = fc
+        consistency = max(0.0, 1.0 - fail_flips / max(1.0, n / 10.0))
+
+        # completion/progress proxies are unavailable online; weight activity + consistency.
+        return 0.6 * activity + 0.4 * consistency
 
     def recent_actions(self, n: int = 5) -> list[StepRecord]:
         """Return the *n* most recent step records (or all if fewer exist)."""

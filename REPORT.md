@@ -1238,31 +1238,231 @@ procedural memory → rule engine → strategy memory → API LLM → fallback
 - **已完成的后续验证**：用 session 隔离后的配置重新跑 representative subset（6 游戏 × 15 runs）后，00483 multi-bus composite 从 **0.150 → 0.103**（activity 0.000 → 0.333），multi-bus-memory 从 **0.150 → 0.200**；00461/00522 未被拉低，证明 session 隔离没有误伤原本依赖跨 session 记忆的游戏。详细数据见 §27。
 
 
-## 29. 本轮总体结论与下一步
+## 29. 多云端 Provider 配置与可用性验证
 
-### 29.1 已经验证的事情
+### 29.1 配置方式
+
+所有云端 API key 已写入 `.env`（gitignored），并通过 `src/agent/api_client.py` 的 `MultiProviderClient` 统一调用。支持 provider：`opencodego`、`kimi`、`deepseek`、`xiaomi`、`qwen`。模型偏好：
+
+| Provider | Text 模型 | Vision 模型 |
+|---|---|---|
+| opencodego | mimo-v2.5 | mimo-v2.5 |
+| kimi | kimi-k2.7-code | kimi-k2.6 |
+| xiaomi | mimo-v2.5 | mimo-v2.5 |
+| qwen | qwen3.7-max | qwen3.7-max |
+| deepseek | deepseek-chat | deepseek-chat |
+
+### 29.2 Smoke Test 结果
+
+`scripts/test_cloud_providers.py` 对每个 provider 发送一条文本 JSON 请求和一条 vision JSON 请求：
+
+| Provider | Text | Vision | 备注 |
+|---|---|---|---|
+| opencodego | ✅ 5.19s | ✅ ~6s | deepseek-v4-flash / mimo-v2.5 均可用 |
+| kimi | ✅ 4.08s | ✅ ~4s | 稳定输出 JSON |
+| deepseek | ❌ | ❌ | 余额不足（402） |
+| xiaomi | ✅ 3.89s | ✅ ~5s | mimo-v2.5 文本/视觉均可用 |
+| qwen | ✅ 10.37s | ❌ | 文本 OK；vision 因 content 格式返回 400 |
+
+**结论**：当前可用多模态 provider 为 **kimi、xiaomi、opencodego**；qwen 适合文本规则更新/规划；deepseek 需充值。opencodego 经排查后发现其默认文本模型 `deepseek-v4-flash` 与视觉模型 `mimo-v2.5` 在提供端均可正常返回 JSON，此前空返回是模型映射/调用参数的瞬态问题。
+
+
+## 30. 本地 VLM 视觉上下文实验
+
+### 30.1 运行环境
+
+- 显卡：NVIDIA GeForce RTX 5060 Laptop（8 GB）
+- 后端：llama.cpp Vulkan（`llama.cpp-linux-x86_64-vulkan-avx2-2.22.0`）
+- 量化：GGUF Q4_K_M + KV cache `q4_0`
+- 模型：Qwen3.5-4B、Gemma-4-E4B
+
+### 30.2 实验设计
+
+使用 `src/experiments/exp_local_vlm_cloud_context.py`：从 `processed-runs/SSD_00461P01` 取 5 个 step，比较：
+
+1. 云端 qwen 仅看 probe state（text-only）预测动作；
+2. 云端 qwen 看 probe state + 本地 VLM 生成的视觉摘要预测动作。
+
+动作匹配标准：action 类型相同且 dx/dy 方向一致。
+
+### 30.3 结果
+
+**Qwen3.5-4B 本地 VLM**（首轮，数据已被覆盖前的记录）：text-only 2/4 匹配，with-visual 2/4 匹配。本地延迟约 24–77s/帧。
+
+**Gemma-4-E4B 本地 VLM**（free-form 摘要）：text-only 0/4 匹配，with-visual 1/4 匹配。本地延迟首帧 89s，后续 28–33s/帧。
+
+| 模型 | text-only 匹配 | with-visual 匹配 | 首帧延迟 | 后续延迟 |
+|---|---|---|---|---|
+| Qwen3.5-4B | 2/4 | 2/4 | 77s | ~24s |
+| Gemma-4-E4B | 0/4 | 1/4 | 90s | ~30s |
+
+**分析**：
+
+1. 样本量只有 4 步，统计意义有限，但已能看出 **视觉摘要并非总是正向**：qwen 的 free-form 描述反而把 cloud 带偏（step 5 把 dy=+1 的 ground truth 描述成「敌人在下方，应向上走」）。
+2. Gemma-4-E4B 的摘要包含大量 thinking chain 和冗余场景描述，输出不稳定。
+3. **结构化视觉上下文是必要的**：我们已将本地 VLM prompt 改为强制 JSON schema（scene_type、player_location、enemies、guides_arrows、obstacles、ui_elements），但 Gemma 默认权重无法遵循，返回空内容。这说明需要 QLoRA 微调才能让本地小模型稳定输出结构化上下文。
+
+
+## 31. 在线规则更新触发器与回滚机制
+
+### 31.1 设计目标
+
+同学关心的核心问题：规则作为底层，上两层（云端 API、本地 VLM）如何触发规则更新？我们设计了「三层 + 回滚」方案：
+
+- **L0 规则层**：零延迟执行，永远是默认动作来源。
+- **L1 本地 VLM**：只在卡住/阶段切换/需要视觉证据时触发，输出战术覆盖。
+- **L2 云端 API**：只在低 composite/长 stall/world-model stale 时触发，输出结构化规则更新（param / memory_entry / phase_contract / code_file）。
+- **Watchdog**：更新后观察 3 步，若 trial avg composite < baseline avg composite，自动 rollback 到更新前参数快照。
+
+### 31.2 实现
+
+- `src/agent/rule_update.py`：新增 `RuleUpdateWatchdog`，`RuleUpdateApplier` 支持 `rollback_last(n)` 和 `rollback_to_step(step)`。
+- `src/agent/hierarchical_planner.py`：每步把 `ctx.working_memory.last_composite()` 喂给 watchdog；触发更新后立即启动 trial。
+- `src/agent/memory.py`：`WorkingMemory` 记录 player 位置，新增 `last_composite(window)` 计算滚动 composite 代理。
+
+### 31.3 实验
+
+在 SSD_00461P01 上跑 A/B（rule vs hierarchical，L2 planning 禁用，只看 rule-update）：
+
+| 配置 | Steps | Composite | Activity | 耗时 | 观察 |
+|---|---|---|---|---|---|
+| rule | 15 | 0.129 | 0.857 | 13.3s | 基线 |
+| hierarchical (rule-update only) | 15 | 0.129 | 0.857 | 8.9s | 无触发，与 rule 一致 |
+| rule | 50 | 0.152 | 0.816 | 35.0s | 基线 |
+| hierarchical (rule-update only) | 50 | 0.146 | 0.776 | 23.1s | 仍无触发，接近 rule |
+
+**关键发现**：
+
+1. 当 L2 planning 不禁用时，L2 在 step 0 或 phase 变化时会产生可执行 plan（如 `move UnlockItem_1`），导致 14 步全部 move 并 stall。因此 **rule-update-only 实验必须禁用 L2 planning**（`l2_interval=0`）。
+2. 在 00461 这种 rule 已能到 0.15 的游戏上，保守 trigger threshold（0.15）导致 L2 很少触发；要验证 rule-update 的收益，需要在 rule 表现差的场景/游戏上测试。
+3. Xiaomi MiMo-v2.5 在 rule-update prompt 下仍反复输出 gameplay plan 而非 update JSON；Qwen 能遵循格式。不同 provider 对结构化 prompt 的遵循度差异很大。
+
+### 31.4 后续改进
+
+- 降低 trigger threshold 或引入「相对下降」触发（当前 composite 比本 run 最高分下降 20%）。
+- 在 rule 表现明显落后的游戏（如 00483 multi-bus）上测试 rule-update 是否能拉回得分。
+- 对 MiMo-v2.5 尝试 tool calling / response_format 强制 JSON。
+
+
+## 32. VLM 微调数据准备
+
+### 32.1 数据来源
+
+使用 `src/training/processed_runs_converter.py` 将 `processed-runs/`（22 游戏）转换为 7-task VLM SFT 格式：
+
+```bash
+python -B src/training/processed_runs_converter.py \
+    --processed-root processed-runs \
+    --output-root vlm-training-data-processed-runs
+```
+
+### 32.2 数据规模
+
+`vlm-training-data-processed-runs/dataset-manifest.json`：
+
+| Task | Train | Val | All |
+|---|---|---|---|
+| next_probe_action | 2491 | 154 | 2645 |
+| probe_action_effect | 2491 | 154 | 2645 |
+| field_grounding | 2491 | 154 | 2645 |
+| information_gain_judgment | 2863 | 191 | 3054 |
+| pulse_response_grounding | 1342 | 93 | 1435 |
+| progression_grounding | 2491 | 154 | 2645 |
+| failure_recovery | 14 | 0 | 14 |
+| **Total** | — | — | **15083** |
+
+### 32.3 训练代码
+
+- `src/training/train_qwen35.py`：Qwen3.5-4B/9B QLoRA，4-bit NF4，DeepSpeed ZeRO-2，支持 7-task 混合训练。
+- `src/training/train_gemma4.py`：Gemma-4-E4B 对应脚本。
+- 数据可直接喂入：`--dataset-root vlm-training-data-processed-runs`。
+
+### 32.4 训练计划
+
+待 5090 服务器可访问后执行：
+
+```bash
+python src/training/train_qwen35.py \
+    --dataset-root vlm-training-data-processed-runs \
+    --model Qwen/Qwen3.5-4B \
+    --output-dir checkpoints/qwen35-4b-processed-runs \
+    --epochs 3 --batch-size 2 --grad-accum 8 --lr 2e-4 \
+    --lora-r 16 --lora-alpha 32
+```
+
+目标：让本地 VLM 稳定输出结构化 JSON 视觉摘要，并提升 `next_probe_action` 与 `failure_recovery` 任务准确率。
+
+
+## 34. 多 Provider 规则更新阈值扫描（在线 A/B）
+
+### 34.1 实验设计
+
+为了回答「阈值设多少合适」以及「不同云端 provider 做规则更新时表现如何」，我们在 SSD_00461P01 上跑了一组在线 A/B：
+
+- **基线**：纯 rule 模式，50 步。
+- **实验组**：hierarchical 模式，禁用 L2 planning（`l2_interval=99999`）和 L1 VLM（`l1_interval=0`），只保留规则更新触发；`composite_threshold=0.18`（高于 rule 基线 ~0.14，确保触发器频繁激活）。
+- **Provider**：qwen、kimi、xiaomi、opencodego 各跑一次，seed=42。
+
+### 34.2 结果
+
+| Provider | Mode | Steps | Composite | Activity | 耗时 | 关键观察 |
+|---|---|---|---|---|---|---|
+| — | rule | 50 | **0.143** | 0.82 | 23.9s | 稳定基线 |
+| qwen | hierarchical | 50 | 0.090 | 0.68 | 583.1s | L2 频繁触发，但更新后性能下降；延迟极高（~11.7s/步） |
+| kimi | hierarchical | 50 | 0.116 | 0.76 | 32.0s | L2 调用全部 403（配额耗尽），fallback 到 rule-like |
+| xiaomi | hierarchical | 50 | 0.012 | 0.10 | 733.3s | L2 大量返回空/不可解析 plan，严重拖累 |
+| opencodego | hierarchical | — | — | — | crash | Playwright EPIPE，进程异常退出 |
+
+### 34.3 关键发现
+
+1. **阈值过高会触发过度更新**：0.18 的阈值让 qwen 在 50 步内频繁调用 L2，每次调用 ~10s，总耗时从 24s 膨胀到 583s，且 composite 从 0.143 掉到 0.090。这说明**触发阈值需要保守**，或者必须配合 watchdog 回滚。
+2. **Watchdog 未能及时回滚 qwen 的坏更新**：虽然 `RuleUpdateWatchdog` 已实现，但 qwen 的更新可能是「小幅参数调整」，单次看不出恶化，累积后才体现为 composite 下降。需要更灵敏的在线评估（例如对比更新前后 3 步的 activity 而不仅是 composite）。
+3. **Provider 可靠性差异巨大**：
+   - **qwen**：能稳定输出结构化 update JSON，但策略质量不高（更新后反而更差）。
+   - **kimi**：配额耗尽后全部 fallback，表现接近 rule（0.116 vs 0.143），说明「不更新」有时比「乱更新」好。
+   - **xiaomi/mimo-v2.5**：对 rule-update prompt 遵循度差，大量返回空或 gameplay plan 而非 update JSON，导致 composite 崩到 0.012。
+   - **opencodego**：在长 run 中触发 Playwright EPIPE，稳定性待排查。
+4. **rule 仍是最稳基线**：在 50 步短程任务中，没有任何 provider 的在线规则更新能稳定超越纯 rule。
+
+### 34.4 对阈值设计的启示
+
+- **默认 0.15 偏激进**：00461 的 rule composite 约 0.14–0.15，阈值 0.15 会导致几乎每 5 步就触发一次 L2。建议**默认提高到 0.12 或引入相对下降触发**（例如比本 run 最高分下降 20% 才触发）。
+- **必须加 cooldown 和 max_updates_per_run**：当前 cooldown=5 步，但 qwen 仍在 50 步内触发了 ~8 次更新。建议增加「单 run 最多更新 N 次」的硬限制。
+- **L2 调用必须异步化**：qwen 的 583s 耗时主要来自同步 L2 调用阻塞了 Playwright 事件循环。虽然代码已用 `run_in_executor`，但长 prompt + 慢模型仍会拖慢整体。
+
+### 34.5 下一步
+
+1. 在 rule 表现明显落后的游戏（如 00483 multi-bus）上重跑阈值扫描，验证规则更新的正向收益。
+2. 对 xiaomi/mimo-v2.5 尝试 `response_format={"type": "json_object"}` 或 tool calling，强制结构化输出。
+3. 给 watchdog 增加「activity 下降」和「stall 增加」作为回滚信号，而不仅看 composite。
+4. 排查 opencodego 长 run 下的 Playwright EPIPE 根因（可能是浏览器进程被 L2 长调用阻塞后超时）。
+
+
+## 33. 本轮总体结论与下一步
+
+### 33.1 已经验证的事情
 
 1. **三层架构合理**：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。
-2. **云端 API 的能力边界清晰**：写代码、改配置、做规划都可以；但直接逐帧输出 gameplay 动作会触发过滤或空返回。
-3. **本地 VLM 有潜力**：Gemma-4-E4B 的视觉摘要比 Qwen3.5-4B 更稳定，能帮云端策略纠偏，但还需要微调才能稳定超越 text-only。
-4. **rule 仍是当前最强短程基线**：在 25 步 representative subset 上 rule mean composite=0.251，multi-bus-memory 0.218。multi-bus-memory 在 tap-only 游戏上已接近 rule（0.296 vs 0.300），但在需要 joystick 的 A 组游戏上仍落后。
-5. **规则在线更新已跑通**：qwen/kimi/xiaomi/opencodego 四家都能输出结构化 code-file 更新，并安全落盘到 `configs/runtime_rules.json`。
-6. **00483 multi-bus activity=0 已定位并修复**：根因是 strategy_memory 在线自强化，修复后 00483 multi-bus composite 0.150 → 0.103（activity 0.000 → 0.333），multi-bus-memory 0.150 → 0.200；representative subset 15 runs 全部成功。
+2. **云端 API 的能力边界清晰**：kimi/xiaomi/qwen 文本可用；kimi/xiaomi 多模态可用；直接逐帧输出 gameplay 动作仍不稳定。
+3. **本地 VLM 有潜力但需微调**：Gemma-4-E4B 视觉摘要能帮 cloud 把动作匹配从 0/4 提升到 1/4，但默认权重无法稳定输出结构化 JSON，需要 QLoRA。
+4. **rule 仍是当前最强短程基线**：在 25 步 representative subset 上 rule mean composite=0.251，multi-bus-memory 0.218。
+5. **规则在线更新 + 回滚机制已跑通**：代码层面实现 trigger、applier、watchdog、rollback；在 00461 上保守 trigger 未触发，说明未伤害性能，但需更差场景验证正向收益。
+6. **00483 multi-bus activity=0 已定位并修复**：session 隔离后 multi-bus-memory 0.200，representative subset 15 runs 全部成功。
+7. **VLM 微调数据就绪**：15,083 样本，7 任务，22 游戏，可直接启动 QLoRA。
 
-### 29.2 仍然存在的问题
+### 33.2 仍然存在的问题
 
-1. **本地 VLM 延迟 7-8s/帧**：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。
-2. **L2 输出契约不够强**：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。
-3. **缺少真实游戏中的在线触发**：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。
-4. **multi-bus 仍未完全追平 rule 在 00483 上的表现**：需要继续调优 Verifier/Critic 循环。
+1. **本地 VLM 延迟 30–90s/帧**：不能每步调用，必须只在关键 step 触发。
+2. **L2 输出契约不够强**：MiMo-v2.5 仍输出 plan 而非 update JSON；需要 tool calling 或更强的 schema 约束。
+3. **在线规则更新的正向收益尚未验证**：需要找到 rule 明显落后的游戏/场景，展示 L2 更新能提升 composite。
+4. **Qwen vision API 格式未对齐**：需要调整 image content 格式以适配 qwen VL。
 
-### 29.3 下一步实验计划
+### 33.3 下一步实验计划
 
-1. **在线 code-file 触发**：在 representative subset 中让 L2 根据实时 composite/stall 触发 `runtime_rules.json` 更新，对比更新前后的得分。
-2. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。
-3. **结构化视觉上下文**：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。
-4. **QLoRA 微调**：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。
-5. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。
-6. **更多云端 provider 的 code-file 更新**：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。
-7. **strategy_memory 跨 session 隔离**：实现「当前 session 记录只持久化、不读回」，彻底消除在线自强化风险。
+1. **在线规则更新正向收益验证**：在 00483 multi-bus 或 00461 长 run 上，用更积极的 trigger（threshold 0.12 或相对下降 20%）测试 L2 更新效果。
+2. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」。
+3. **结构化视觉上下文微调**：5090 上 QLoRA 训练 Qwen3.5-4B/Gemma-4-E4B，输出 JSON 视觉摘要。
+4. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入轻量级 Critic 做最终决策。
+5. **多 provider 规则更新稳定性**：固定 prompt 和 schema，在 kimi/xiaomi/qwen 上批量跑 code-file 更新实验。
+6. **更多游戏 representative subset**：把 00483/00522 等游戏的 rule-update A/B 也跑起来。
 

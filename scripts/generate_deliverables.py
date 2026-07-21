@@ -293,6 +293,11 @@ def _add_content_bg(slide) -> None:
 
 
 def _card(slide, left: float, top: float, width: float, height: float, title: str, bullets: list[str], accent: RGBColor = _C_SECONDARY) -> None:
+    # Subtle shadow shape (offset slightly, muted gray)
+    shadow = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left + 0.03), Inches(top + 0.03), Inches(width), Inches(height))
+    _set_fill(shadow, RGBColor(0xD0, 0xD5, 0xDA))
+    shadow.fill.transparency = 0.7
+
     shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
     _set_fill(shape, _C_CARD_BG)
     shape.line.color.rgb = RGBColor(0xDD, 0xE2, 0xE6)
@@ -310,7 +315,7 @@ def _card(slide, left: float, top: float, width: float, height: float, title: st
     for i, b in enumerate(bullets):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         _set_text_style(p, b, Pt(12), color=_C_DARK)
-        p.space_after = Pt(4)
+        p.space_after = Pt(5)
 
 
 def _add_table_slide(prs, title: str, headers: list[str], rows: list[list[str]], row_heights: list[float] | None = None) -> None:
@@ -367,48 +372,42 @@ def _add_bullet_slide(prs, title: str, bullets: list[str]) -> Any:
 
 def _add_title_slide(prs, title: str, subtitle: str) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    # Deep indigo base
+    # Deep indigo base with subtle bottom gradient
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
 
-    # Simulated top-right gradient with layered translucent shapes
-    for idx, alpha in enumerate([0x14, 0x10, 0x0C, 0x08]):
-        r = slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE,
-            Inches(7.5 + idx * 0.6),
-            Inches(-0.5),
-            Inches(6.5),
-            Inches(8.5),
-        )
-        _set_fill(r, _C_SECONDARY)
-        r.fill.fore_color.brightness = 0.2
+    # Top diagonal accent (translucent teal strip)
+    strip = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(8.5), Inches(-1), Inches(6), Inches(10))
+    _set_fill(strip, _C_SECONDARY)
+    strip.fill.fore_color.brightness = 0.25
 
-    # Decorative circle accent
-    circle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(10.5), Inches(1.2), Inches(2.2), Inches(2.2))
-    _set_fill(circle, _C_ACCENT)
-    circle.fill.fore_color.brightness = 0.15
+    # Decorative circles
+    circle1 = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(10.8), Inches(0.9), Inches(2.0), Inches(2.0))
+    _set_fill(circle1, _C_ACCENT)
+    circle2 = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(11.6), Inches(2.2), Inches(1.1), Inches(1.1))
+    _set_fill(circle2, _C_LIGHT)
 
-    # Bottom wave-ish bar (two overlapping rounded rectangles)
-    bar1 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(5.85), Inches(14.5), Inches(1.9))
+    # Bottom wave bar
+    bar1 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(5.7), Inches(14.5), Inches(2.1))
     _set_fill(bar1, _C_SECONDARY)
-    bar2 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(6.25), Inches(14.5), Inches(1.5))
+    bar2 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(-0.5), Inches(6.1), Inches(14.5), Inches(1.7))
     _set_fill(bar2, RGBColor(0x00, 0x7A, 0xA3))
 
     # Thin orange line
-    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(4.5), Inches(5.65), Inches(4.33), Inches(0.06))
+    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(4.5), Inches(5.55), Inches(4.33), Inches(0.06))
     _set_fill(line, _C_ACCENT)
 
     # Title
     tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.0), Inches(12.3), Inches(1.5))
-    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(52), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(54), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
     # Subtitle
     tb2 = slide.shapes.add_textbox(Inches(0.5), Inches(3.65), Inches(12.3), Inches(1.1))
     _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(24), color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
     # Tagline at bottom
-    tb3 = slide.shapes.add_textbox(Inches(0.5), Inches(6.55), Inches(12.3), Inches(0.6))
-    _set_text_style(tb3.text_frame.paragraphs[0], "分层多 Agent · 在线规则更新 · 批量数据管线", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+    tb3 = slide.shapes.add_textbox(Inches(0.5), Inches(6.45), Inches(12.3), Inches(0.6))
+    _set_text_style(tb3.text_frame.paragraphs[0], "分层多 Agent · 在线规则进化 · 批量数据管线", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
 
 def _add_two_column_slide(prs, title: str, left_title: str, left_bullets: list[str], right_title: str, right_bullets: list[str]) -> Any:
@@ -605,11 +604,111 @@ def _add_provider_slide(prs) -> None:
         ])
 
 
+def _add_metric_card(slide, left: float, top: float, width: float, height: float, number: str, label: str, accent: RGBColor = _C_PRIMARY) -> None:
+    """A large-number metric card for impact slides."""
+    # Shadow
+    shadow = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left + 0.02), Inches(top + 0.02), Inches(width), Inches(height))
+    _set_fill(shadow, RGBColor(0xD0, 0xD5, 0xDA))
+    shadow.fill.transparency = 0.65
+    # Card
+    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(height))
+    _set_fill(card, _C_CARD_BG)
+    card.line.color.rgb = accent
+    card.line.width = Pt(2)
+    # Accent bar at top
+    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(left), Inches(top), Inches(width), Inches(0.12))
+    _set_fill(bar, accent)
+    bar.line.width = Pt(0)
+    # Number
+    tb_num = slide.shapes.add_textbox(Inches(left), Inches(top + 0.25), Inches(width), Inches(height * 0.55))
+    _set_text_style(tb_num.text_frame.paragraphs[0], number, Pt(36), bold=True, color=accent, align=PP_ALIGN.CENTER)
+    # Label
+    tb_label = slide.shapes.add_textbox(Inches(left + 0.05), Inches(top + height * 0.55), Inches(width - 0.1), Inches(height * 0.35))
+    _set_text_style(tb_label.text_frame.paragraphs[0], label, Pt(12), color=_C_MUTED, align=PP_ALIGN.CENTER)
+
+
+def _add_metrics_slide(prs) -> None:
+    """Slide with 4-5 big numbers summarizing the project."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "项目速览：我们做到了什么")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
+
+    metrics = [
+        ("22", "款游戏已可驱动", _C_PRIMARY),
+        ("15,083", "条 VLM 训练样本", _C_SECONDARY),
+        ("0.251", "rule 基线 mean composite", _C_SUCCESS),
+        ("4", "家云端 provider 可用", _C_ACCENT),
+        ("3", "层架构（L0/L1/L2）", _C_PRIMARY),
+    ]
+
+    # Layout: top row 3 cards, bottom row 2 cards centered
+    positions = [
+        (0.9, 1.6, 3.7, 2.0),
+        (4.85, 1.6, 3.7, 2.0),
+        (8.8, 1.6, 3.7, 2.0),
+        (2.85, 3.95, 3.7, 2.0),
+        (6.8, 3.95, 3.7, 2.0),
+    ]
+    for (left, top, w, h), (num, label, color) in zip(positions, metrics):
+        _add_metric_card(slide, left, top, w, h, num, label, color)
+
+    # Bottom insight
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.9), Inches(6.15), Inches(11.6), Inches(0.7))
+    _set_fill(insight, _C_LIGHT)
+    _set_text_style(insight.text_frame.paragraphs[0],
+        "核心思路：用规则打底保证零延迟，云端 API 和本地 VLM 只在必要时出手修正。",
+        Pt(14), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
+def _add_humanized_intro_slide(prs) -> None:
+    """A more narrative 'why this matters' slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "为什么这件事值得做？")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.5, "小游戏可玩广告自动化", [
+        "每天有大量 playable ad 需要测试和调优",
+        "手动玩、手动评效率低，难以规模化",
+        "不同游戏后端差异大，'一刀切'策略走不通",
+    ], _C_PRIMARY)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.5, "我们的解法", [
+        "把'快执行'和'慢思考'拆开：规则负责毫秒级动作",
+        "云端大模型负责长程规划和规则进化",
+        "本地小 VLM 作为'眼睛'，给云端提供画面证据",
+    ], _C_SECONDARY)
+
+    # Arrow between cards
+    arrow = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, Inches(6.05), Inches(2.35), Inches(1.5), Inches(0.7))
+    _set_fill(arrow, _C_ACCENT)
+
+    # Bottom quote-like box
+    quote = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(4.25), Inches(12.3), Inches(1.9))
+    _set_fill(quote, _C_LIGHT)
+    tf = quote.text_frame
+    tf.word_wrap = True
+    points = [
+        "目标：让 Agent 能像人一样理解游戏画面、记住有效策略、在卡住时自我调整",
+        "同时保持每步接近零延迟，不拖累 playable ad 的实时交互",
+    ]
+    for i, txt in enumerate(points):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        _set_text_style(p, txt, Pt(16), color=_C_DARK, align=PP_ALIGN.CENTER)
+        p.space_after = Pt(8)
+
+
 def _add_section_slide(prs, number: str, title: str, subtitle: str = "") -> None:
     """A full-bleed section divider with a dark background."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
+
+    # Diagonal accent
+    diag = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(7.5), Inches(-1), Inches(6.5), Inches(9.5))
+    _set_fill(diag, _C_SECONDARY)
+    diag.fill.fore_color.brightness = 0.2
 
     # Large number watermark
     num_tb = slide.shapes.add_textbox(Inches(0.6), Inches(1.8), Inches(3), Inches(2))
@@ -886,7 +985,10 @@ def write_pptx() -> None:
     # ---- Slide 1: Title ----
     _add_title_slide(prs, "smallgameagent 实验进展", "LLM/VLM + 规则驱动的小游戏 Agent\n多 Provider、在线规则更新与批量数据管线")
 
-    # ---- Slide 2: Agenda ----
+    # ---- Slide 2: Humanized intro ----
+    _add_humanized_intro_slide(prs)
+
+    # ---- Slide 3: Agenda ----
     _add_bullet_slide(prs, "今天聊什么？", [
         "小游戏 Agent 到底卡在哪几个地方？",
         "我们的思路：把快执行和慢思考拆开，做三层架构",
@@ -897,13 +999,16 @@ def write_pptx() -> None:
         "下一步还想试什么？",
     ])
 
+    # ---- Slide 4: Key metrics ----
+    _add_metrics_slide(prs)
+
     # ---- Section: Problem ----
     _add_section_slide(prs, "01", "我们在解决什么问题？")
 
     _add_bullet_slide(prs, "小游戏可玩广告，自动化并不 trivial", [
-        "空间一致性：场景会随着进度变化，云端模型容易记错障碍物位置",
-        "时间一致性：后面的策略可能反过来改前面的行为含义，导致推进失败",
-        "策略短视：有钱就升级，而不是攒够再升级，来回跑很多步",
+        "空间一致性：场景随进度变化，云端模型容易记错障碍物位置",
+        "时间一致性：后续策略可能反过来改前面的行为含义，导致推进失败",
+        "策略短视：有钱就升级，而不是攒够再升级，来回跑很多冤枉步",
         "运行效率：不同游戏后端数据差异大，探针和日志不能一刀切",
         "API 延迟：纯云端决策太慢，实时控制扛不住",
     ])

@@ -134,7 +134,10 @@ class RuleUpdateTrigger:
             return None
 
         wm = getattr(ctx, "working_memory", None) or {}
-        composite = float(wm.get("last_composite", 0.0) if isinstance(wm, dict) else 0.0)
+        if hasattr(wm, "last_composite"):
+            composite = float(wm.last_composite(self.composite_window))
+        else:
+            composite = float(wm.get("last_composite", 0.0) if isinstance(wm, dict) else 0.0)
         stall = int(wm.get("stall_streak", 0) if isinstance(wm, dict) else 0)
         conflict = int(wm.get("conflict_streak", 0) if isinstance(wm, dict) else 0)
 
@@ -175,6 +178,9 @@ class RuleUpdateApplier:
     threshold, and a maximum patch size.  Any update that does not meet the
     safety criteria is queued in ``pending_code_updates`` for human review
     instead of being applied.
+
+    Parameter snapshots are captured before each applied update so that a
+    watchdog can roll back changes that hurt short-horizon performance.
     """
 
     def __init__(
@@ -190,6 +196,7 @@ class RuleUpdateApplier:
         self._params = params
         self._memory = strategy_memory
         self._history: list[dict[str, Any]] = []
+        self._snapshots: list[dict[str, Any]] = []
         self._pending_code_updates: list[dict[str, Any]] = []
         self._code_file_allowlist = [Path(p).resolve() for p in (code_file_allowlist or [])]
         self._code_confidence = code_file_confidence_threshold
@@ -206,11 +213,19 @@ class RuleUpdateApplier:
         """Apply one update request.
 
         Returns ``True`` when something changed, ``False`` when the request
-        type is unsupported or malformed.
+        type is unsupported or malformed.  A parameter snapshot is captured
+        before any state-changing update so it can be rolled back.
         """
         if request.confidence < 0.5:
             logger.info("Rule update confidence %.2f too low; skipped", request.confidence)
             return False
+
+        # Snapshot current parameters before applying any stateful update.
+        self._snapshots.append({
+            "step": getattr(request, "step", None),
+            "params": self._params.to_dict(),
+            "request": request.to_dict(),
+        })
 
         if request.update_type == "param":
             return self._apply_param(request)
@@ -229,6 +244,43 @@ class RuleUpdateApplier:
 
         logger.warning("Unsupported rule update type: %s", request.update_type)
         return False
+
+    def rollback_last(self, n: int = 1) -> bool:
+        """Revert the last *n* applied parameter updates.
+
+        Returns ``True`` if a rollback occurred.  Memory entries and code-file
+        changes are not undone; this focuses on the most common failure mode
+        (bad parameter knobs).
+        """
+        if n <= 0 or not self._snapshots:
+            return False
+        # Find the snapshot *before* the last n state-changing updates.
+        target_index = max(0, len(self._snapshots) - n)
+        target = self._snapshots[target_index]
+        self._params._params = dict(target["params"])
+        # Discard newer snapshots so they cannot be rolled back to again.
+        self._snapshots = self._snapshots[: target_index + 1]
+        logger.warning("Rolled back %d rule-update(s) to step %s snapshot", n, target.get("step"))
+        return True
+
+    def rollback_to_step(self, step: int) -> bool:
+        """Revert to the most recent snapshot taken at or before *step*."""
+        target = None
+        for snap in reversed(self._snapshots):
+            if snap.get("step", 0) <= step:
+                target = snap
+                break
+        if target is None:
+            return False
+        self._params._params = dict(target["params"])
+        # Keep snapshots up to and including the target.
+        cutoff = next(
+            (i for i, s in enumerate(self._snapshots) if s is target),
+            len(self._snapshots) - 1,
+        )
+        self._snapshots = self._snapshots[: cutoff + 1]
+        logger.warning("Rolled back to step %s snapshot", target.get("step"))
+        return True
 
     def _apply_param(self, request: RuleUpdateRequest) -> bool:
         payload = request.payload
@@ -388,6 +440,94 @@ class RuleUpdateApplier:
         return list(self._history)
 
 
+class RuleUpdateWatchdog:
+    """Monitor the short-horizon effect of rule updates and roll back bad ones.
+
+    When an update is applied, the watchdog records a pre-update baseline
+    (average composite over ``baseline_window`` steps).  It then watches the
+    next ``trial_window`` steps.  If the post-update average composite is
+    strictly worse than the baseline, it asks the applier to roll back the
+    last update.
+
+    This implements the "flexible strategy rollback" requested for the
+    three-layer architecture: L2 can experiment with rule knobs, but L0/L1
+    performance guards prevent a bad cloud suggestion from derailing the run.
+    """
+
+    def __init__(
+        self,
+        applier: RuleUpdateApplier,
+        baseline_window: int = 3,
+        trial_window: int = 3,
+        min_composite_samples: int = 2,
+    ) -> None:
+        self._applier = applier
+        self._baseline_window = baseline_window
+        self._trial_window = trial_window
+        self._min_composite_samples = min_composite_samples
+        self._baseline_composites: list[float] = []
+        self._trial_composites: list[float] = []
+        self._trialing: bool = False
+        self._rollbacks: int = 0
+
+    @property
+    def rollbacks(self) -> int:
+        return self._rollbacks
+
+    def on_update_applied(self, step: int, composite: float) -> None:
+        """Call immediately after the applier applies an update."""
+        self._baseline_composites = self._baseline_composites[-self._baseline_window :]
+        self._trial_composites = []
+        self._trialing = True
+        logger.info(
+            "Watchdog started trial at step %d (baseline composites: %s)",
+            step,
+            self._baseline_composites,
+        )
+
+    def observe(self, step: int, composite: float) -> bool:
+        """Feed one step's composite score into the watchdog.
+
+        Returns ``True`` if a rollback was triggered this step.
+        """
+        if not self._trialing:
+            self._baseline_composites.append(composite)
+            if len(self._baseline_composites) > self._baseline_window:
+                self._baseline_composites.pop(0)
+            return False
+
+        self._trial_composites.append(composite)
+        if len(self._trial_composites) < self._trial_window:
+            return False
+
+        # Trial window full: evaluate.
+        self._trialing = False
+        if (
+            len(self._baseline_composites) < self._min_composite_samples
+            or len(self._trial_composites) < self._min_composite_samples
+        ):
+            return False
+
+        baseline_avg = sum(self._baseline_composites) / len(self._baseline_composites)
+        trial_avg = sum(self._trial_composites) / len(self._trial_composites)
+        if trial_avg < baseline_avg:
+            logger.warning(
+                "Watchdog rollback triggered: trial avg %.3f < baseline avg %.3f",
+                trial_avg,
+                baseline_avg,
+            )
+            if self._applier.rollback_last(n=1):
+                self._rollbacks += 1
+                return True
+        else:
+            logger.info(
+                "Watchdog accepted update: trial avg %.3f >= baseline avg %.3f",
+                trial_avg,
+                baseline_avg,
+            )
+        return False
+
+
 def update_prompt(
     trigger_reason: str,
     state: dict[str, Any],
@@ -397,19 +537,26 @@ def update_prompt(
     """Build a prompt for the cloud L2 model requesting a rule update."""
     system = (
         "You are a strategy optimizer for a small-game-playing agent. "
-        "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
-        "L2 cloud API for long-range planning and rule updates.\n\n"
-        "Output a single JSON object (no markdown fences) with this schema:\n"
-        '{"update_type": "param|memory_entry|phase_contract|code_file", '
-        '"target": "rule_name_or_game_id_or_file", '
-        '"reason": "why this update helps", '
-        '"payload": {...}, '
-        '"confidence": 0.0-1.0}\n\n'
-        "For update_type=param, payload is {\"param_name\": value}.\n"
-        "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
-        "For update_type=code_file, payload is {\"file_path\", \"search\", \"replace\"}.\n"
-        "Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
-        "Prefer small, verifiable parameter changes."
+        "Your ONLY job is to decide whether to update the agent's rules/parameters. "
+        "Do NOT output a gameplay plan, action list, or explanation.\n\n"
+        "Respond with a single JSON object (no markdown fences, no thinking tags) exactly matching this schema:\n"
+        "{\n"
+        '  "update_type": "param|memory_entry|phase_contract|code_file|none",\n'
+        '  "target": "rule_name_or_game_id_or_file",\n'
+        '  "reason": "why this update helps",\n'
+        '  "payload": {...},\n'
+        '  "confidence": 0.0-1.0\n'
+        "}\n\n"
+        "Examples:\n"
+        '- To change a knob: {"update_type":"param","target":"escape","reason":"hero is stuck too often","payload":{"stuck_escape_threshold":3},"confidence":0.85}\n'
+        '- To do nothing: {"update_type":"none","target":"","reason":"performance is acceptable","payload":{},"confidence":0.0}\n'
+        '- To update a config file: {"update_type":"code_file","target":"runtime_rules.json","reason":"reduce lock time","payload":{"file_path":"configs/runtime_rules.json","search":"\\\"target_lock_max_steps\\\": 8","replace":"\\\"target_lock_max_steps\\\": 5"},"confidence":0.9}\n\n'
+        "Rules:\n"
+        "1. update_type MUST be one of: param, memory_entry, phase_contract, code_file, none.\n"
+        "2. For param updates, payload is a flat dict of parameter names to numeric values.\n"
+        "3. Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
+        "4. Prefer small, verifiable parameter changes.\n"
+        "5. If no update is needed, return update_type=\"none\" with confidence 0.0."
     )
     user = {
         "trigger_reason": trigger_reason,
@@ -424,7 +571,11 @@ def update_prompt(
 
 
 def parse_update_response(text: str) -> RuleUpdateRequest | None:
-    """Best-effort parse of an L2 JSON response into a request object."""
+    """Best-effort parse of an L2 JSON response into a request object.
+
+    Rejects responses that look like gameplay plans (keys such as ``plan``,
+    ``macro_plan``, ``actions``) or that lack a valid ``update_type``.
+    """
     if not text:
         return None
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
@@ -434,6 +585,16 @@ def parse_update_response(text: str) -> RuleUpdateRequest | None:
     try:
         data = json.loads(match.group(0))
     except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    # Reject plan-format responses that some models emit despite the system prompt.
+    if any(k in data for k in ("plan", "macro_plan", "actions", "sub_goals")):
+        logger.warning("L2 returned a plan instead of a rule update: %s", text[:120])
+        return None
+    valid_types = {"param", "memory_entry", "phase_contract", "code_file", "none"}
+    if data.get("update_type") not in valid_types:
+        logger.warning("L2 rule update missing/invalid update_type: %s", text[:120])
         return None
     try:
         return RuleUpdateRequest.from_dict(data)

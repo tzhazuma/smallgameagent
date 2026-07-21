@@ -12,6 +12,7 @@ from src.agent.rule_update import (
     RuleUpdateApplier,
     RuleUpdateRequest,
     RuleUpdateTrigger,
+    RuleUpdateWatchdog,
     parse_update_response,
     update_prompt,
 )
@@ -218,6 +219,60 @@ class TestRuleUpdateApplier:
         assert applier.apply(req) is False
         assert applier.pending_code_updates[0]["pending_reason"] == "search_block_not_found"
 
+    def test_rollback_param(self) -> None:
+        params = RuleParameters()
+        applier = RuleUpdateApplier(params)
+        req = RuleUpdateRequest(
+            update_type="param",
+            target="x",
+            reason="increase x",
+            payload={"x": 100},
+            confidence=0.9,
+        )
+        assert applier.apply(req) is True
+        assert params.get("x") == 100
+        assert applier.rollback_last(n=1) is True
+        assert params.get("x") is None
+
+    def test_rollback_multiple(self) -> None:
+        params = RuleParameters()
+        applier = RuleUpdateApplier(params)
+        applier.apply(RuleUpdateRequest("param", "x", "", {"x": 1}, confidence=0.9))
+        applier.apply(RuleUpdateRequest("param", "y", "", {"y": 2}, confidence=0.9))
+        assert params.to_dict() == {"x": 1, "y": 2}
+        assert applier.rollback_last(n=1) is True
+        assert params.to_dict() == {"x": 1}
+
+
+class TestRuleUpdateWatchdog:
+    def test_rollback_when_trial_worse(self) -> None:
+        params = RuleParameters()
+        applier = RuleUpdateApplier(params)
+        watchdog = RuleUpdateWatchdog(applier, baseline_window=2, trial_window=2)
+        # Build baseline.
+        watchdog.observe(0, 0.3)
+        watchdog.observe(1, 0.3)
+        applier.apply(RuleUpdateRequest("param", "x", "", {"x": 1}, confidence=0.9))
+        watchdog.on_update_applied(2, 0.3)
+        # Trial worse.
+        assert watchdog.observe(2, 0.1) is False
+        assert watchdog.observe(3, 0.1) is True  # rollback triggered
+        assert params.get("x") is None
+        assert watchdog.rollbacks == 1
+
+    def test_keep_when_trial_better(self) -> None:
+        params = RuleParameters()
+        applier = RuleUpdateApplier(params)
+        watchdog = RuleUpdateWatchdog(applier, baseline_window=2, trial_window=2)
+        watchdog.observe(0, 0.1)
+        watchdog.observe(1, 0.1)
+        applier.apply(RuleUpdateRequest("param", "x", "", {"x": 1}, confidence=0.9))
+        watchdog.on_update_applied(2, 0.1)
+        assert watchdog.observe(2, 0.3) is False
+        assert watchdog.observe(3, 0.3) is False
+        assert params.get("x") == 1
+        assert watchdog.rollbacks == 0
+
 
 class TestParseUpdateResponse:
     def test_parse_json(self) -> None:
@@ -235,6 +290,13 @@ class TestParseUpdateResponse:
 
     def test_parse_invalid_returns_none(self) -> None:
         assert parse_update_response("not json") is None
+
+    def test_parse_plan_returns_none(self) -> None:
+        text = '{"plan": [{"action": "move"}], "reason": "go forward"}'
+        assert parse_update_response(text) is None
+
+    def test_parse_missing_update_type_returns_none(self) -> None:
+        assert parse_update_response('{"target": "x", "payload": {}}') is None
 
 
 class TestUpdatePrompt:

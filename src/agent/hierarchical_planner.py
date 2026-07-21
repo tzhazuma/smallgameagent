@@ -20,6 +20,7 @@ from src.agent.rule_update import (
     RuleParameters,
     RuleUpdateApplier,
     RuleUpdateTrigger,
+    RuleUpdateWatchdog,
     parse_update_response,
 )
 
@@ -42,20 +43,26 @@ _L2_SYSTEM = (
 
 _L2_UPDATE_SYSTEM = (
     "You are a strategy optimizer for a small-game-playing agent. "
-    "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
-    "L2 cloud API for long-range planning and rule updates.\n\n"
-    "Output a single JSON object (no markdown fences, no thinking, no explanation) with this schema:\n"
-    '{"update_type": "param|memory_entry|phase_contract|code_file|none", '
-    '"target": "rule_name_or_game_id_or_file", '
-    '"reason": "why this update helps", '
-    '"payload": {...}, '
-    '"confidence": 0.0-1.0}\n\n'
-    "For update_type=param, payload maps parameter name to value, e.g. {\"coin_save_buffer\": 10, \"stuck_escape_threshold\": 3}.\n"
-    "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
-    "For update_type=code_file, payload is {\"file_path\", \"search\", \"replace\"}.\n"
-    "Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
-    "Prefer small, verifiable parameter changes. "
-    "If no update is needed, output {\"update_type\": \"none\", \"confidence\": 0.0}."
+    "Your ONLY job is to decide whether to update the agent's rule/parameters. "
+    "Do NOT output a gameplay plan, action list, or explanation.\n\n"
+    "Respond with a single JSON object (no markdown fences, no thinking tags) exactly matching this schema:\n"
+    '{\n'
+    '  "update_type": "param|memory_entry|phase_contract|code_file|none",\n'
+    '  "target": "rule_name_or_game_id_or_file",\n'
+    '  "reason": "why this update helps",\n'
+    '  "payload": {...},\n'
+    '  "confidence": 0.0-1.0\n'
+    '}\n\n'
+    "Examples:\n"
+    '- To change a knob: {"update_type":"param","target":"escape","reason":"hero is stuck too often","payload":{"stuck_escape_threshold":3},"confidence":0.85}\n'
+    '- To do nothing: {"update_type":"none","target":"","reason":"performance is acceptable","payload":{},"confidence":0.0}\n'
+    '- To update a config file: {"update_type":"code_file","target":"runtime_rules.json","reason":"reduce lock time","payload":{"file_path":"configs/runtime_rules.json","search":"\\\"target_lock_max_steps\\\": 8","replace":"\\\"target_lock_max_steps\\\": 5"},"confidence":0.9}\n\n'
+    "Rules:\n"
+    "1. update_type MUST be one of: param, memory_entry, phase_contract, code_file, none.\n"
+    "2. For param updates, payload is a flat dict of parameter names to numeric values.\n"
+    "3. Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
+    "4. Prefer small, verifiable parameter changes.\n"
+    "5. If no update is needed, return update_type=\"none\" with confidence 0.0."
 )
 
 _L1_SYSTEM = (
@@ -132,6 +139,7 @@ class HierarchicalPlanner:
             code_file_allowlist=rule_update_allowlist,
         )
         self._rule_trigger = RuleUpdateTrigger()
+        self._rule_watchdog = RuleUpdateWatchdog(self._rule_applier)
 
         # Call counters for metrics
         self.l0_calls: int = 0
@@ -148,8 +156,11 @@ class HierarchicalPlanner:
         # --- L2: Strategic planning (cloud API) ---
         phase = self._current_phase(state)
         need_l2 = (
-            step % self._l2_interval == 0
-            or phase != self._last_phase
+            self._l2_interval > 0
+            and (
+                (step > 0 and step % self._l2_interval == 0)
+                or phase != self._last_phase
+            )
         )
         if need_l2 and self._api_client is not None:
             self._last_phase = phase
@@ -203,6 +214,14 @@ class HierarchicalPlanner:
         elif self._macro_plan:
             action = dict(action)
             action["reason"] = f"{action.get('reason', '')}|L2:{self._macro_plan.get('reason', '')[:40]}"
+
+        # Watchdog: feed this step's composite to detect bad rule updates.
+        wm = getattr(ctx, "working_memory", None)
+        if wm is not None and hasattr(wm, "last_composite"):
+            composite = float(wm.last_composite(self._rule_watchdog._trial_window))
+        else:
+            composite = 0.0
+        self._rule_watchdog.observe(step, composite)
 
         return action
 
@@ -410,6 +429,13 @@ class HierarchicalPlanner:
                 applied = self._rule_applier.apply(request)
                 if applied:
                     logger.info("Applied rule update: %s", request.to_dict())
+                    wm = getattr(ctx, "working_memory", None)
+                    composite = (
+                        float(wm.last_composite(self._rule_watchdog._trial_window))
+                        if wm is not None and hasattr(wm, "last_composite")
+                        else 0.0
+                    )
+                    self._rule_watchdog.on_update_applied(ctx.step_number, composite)
                 else:
                     logger.warning("Rule update not applied: %s", request.to_dict())
             else:
@@ -489,4 +515,5 @@ class HierarchicalPlanner:
             "macro_plan": self._macro_plan,
             "rule_params": self._rule_params.to_dict(),
             "rule_update_history": self._rule_applier.history(),
+            "rule_update_rollbacks": self._rule_watchdog.rollbacks,
         }
