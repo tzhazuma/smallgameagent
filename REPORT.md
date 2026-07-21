@@ -1787,27 +1787,31 @@ config = BatchConfig(
 
 ### 33.1 已经验证的事情
 
-1. **三层架构合理**：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。
-2. **云端 API 的能力边界清晰**：kimi/xiaomi/qwen 文本可用；kimi/xiaomi 多模态可用；直接逐帧输出 gameplay 动作仍不稳定。
-3. **本地 VLM 有潜力但需微调**：Gemma-4-E4B 视觉摘要能帮 cloud 把动作匹配从 0/4 提升到 1/4，但默认权重无法稳定输出结构化 JSON，需要 QLoRA。
-4. **rule 仍是当前最强短程基线**：在 25 步 representative subset 上 rule mean composite=0.251，multi-bus-memory 0.218。
-5. **规则在线更新 + 回滚机制已跑通**：代码层面实现 trigger、applier、watchdog、rollback；在 00461 上保守 trigger 未触发，说明未伤害性能，但需更差场景验证正向收益。
-6. **00483 multi-bus activity=0 已定位并修复**：session 隔离后 multi-bus-memory 0.200，representative subset 15 runs 全部成功。
-7. **VLM 微调数据就绪**：15,083 样本，7 任务，22 游戏，可直接启动 QLoRA。
+1. **三层架构合理且机制闭环**：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。在线实验（§37.7）验证了「触发器 → L2 → 结构化 JSON → Applier → RuleEngine」全链路在真实浏览器中跑通。
+2. **触发器 + Watchdog 成熟**：相对下降触发、硬上限、cooldown、stall/activity 回滚信号均已实现并经过 22 游戏离线验证（§36.8, §36.12）。改进触发器把 L2 调用从 4–6 次压到 ≤2 次，composite 保持不变。
+3. **触发器参数持久化 + L2 可调**：trigger/watchdog 参数写入 `runtime_rules.json`，L2 可通过 param 更新即时调整或 code-file 更新持久调整（§36.10, §36.11）。
+4. **云端 API 能力边界清晰**：qwen 是唯一可靠输出规则更新 JSON 的 provider；xiaomi/opencodego 对复杂策略 prompt 返回空；kimi 配额耗尽（§37.6）。
+5. **搜索/规划变体对比**：hierarchical_long（8 意图）在 00461 上 type_match 比 rule 提升 +100%，在 00483 上提升 +77 倍。beam search 启发式改进后仍远落后于 L2 规划（§37）。
+6. **rule 仍是最稳短程基线**：22 游戏离线回放 mean composite 0.284；在线 15 步 run 中 rule activity 0.57–0.86，hierarchical(qwen) activity 0.00。
+7. **00483 multi-bus activity=0 已修复**：session 隔离后 multi-bus-memory 恢复到 0.200（§28）。
+8. **VLM 微调数据就绪**：15,083 样本，7 任务，22 游戏，可直接启动 QLoRA（§32）。
+9. **本地 VLM 基准完成**：Gemma-4-E4B 视觉摘要优于 Qwen3.5-4B，但默认权重无法稳定输出结构化 JSON（§26, §30）。
 
 ### 33.2 仍然存在的问题
 
-1. **本地 VLM 延迟 30–90s/帧**：不能每步调用，必须只在关键 step 触发。
-2. **L2 输出契约不够强**：MiMo-v2.5 仍输出 plan 而非 update JSON；需要 tool calling 或更强的 schema 约束。
-3. **在线规则更新的正向收益尚未验证**：需要找到 rule 明显落后的游戏/场景，展示 L2 更新能提升 composite。
-4. **Qwen vision API 格式未对齐**：需要调整 image content 格式以适配 qwen VL。
+1. **在线规则更新策略质量不足**：qwen 能输出格式正确的更新，但参数调整破坏了 rule engine 行为（activity 0.857→0.000）。L2 不知道当前游戏真正需要什么参数（§37.7）。
+2. **Watchdog 对 activity=0 不敏感**：当 baseline 和 trial 的 activity 都为 0 时，watchdog 无法区分「正常等待」和「坏参数卡死」。需要更细粒度的过程指标。
+3. **本地 VLM 延迟 7–90s/帧**：不能每步调用，必须只在关键 step 触发。QLoRA 微调待 5090 服务器可用。
+4. **xiaomi/opencodego 内容过滤**：对「游戏策略优化」类 prompt 返回空，需要更简短的 prompt 或 few-shot 模板规避。
+5. **beam search 启发式太弱**：2 步局部搜索无法替代 L2 长程规划；需要扩展 horizon 或引入 target 可交互性预测。
 
 ### 33.3 下一步实验计划
 
-1. **在线规则更新正向收益验证**：在 00483 multi-bus 或 00461 长 run 上，用更积极的 trigger（threshold 0.12 或相对下降 20%）测试 L2 更新效果。
-2. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」。
-3. **结构化视觉上下文微调**：5090 上 QLoRA 训练 Qwen3.5-4B/Gemma-4-E4B，输出 JSON 视觉摘要。
-4. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入轻量级 Critic 做最终决策。
-5. **多 provider 规则更新稳定性**：固定 prompt 和 schema，在 kimi/xiaomi/qwen 上批量跑 code-file 更新实验。
-6. **更多游戏 representative subset**：把 00483/00522 等游戏的 rule-update A/B 也跑起来。
+1. **L2 prompt 注入参数 schema**：在 rule-update prompt 中列出当前 rule engine 的参数含义、取值范围和当前值，让 L2 做出更合理的调整。
+2. **离线搜索有效更新**：用 mock L2 在 offline replay 中网格搜索「什么参数组合真正提升 composite」，把搜索结果作为 few-shot 示例喂给 qwen。
+3. **Watchdog 增加 warmup 期**：前 N 步不触发更新，让 rule engine 先建立 baseline；同时监控 activity 的绝对值而不仅是相对变化。
+4. **结构化视觉上下文微调**：5090 上 QLoRA 训练 Qwen3.5-4B/Gemma-4-E4B，输出 JSON 视觉摘要。
+5. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入轻量级 Critic 做最终决策。
+6. **扩展 beam search horizon**：从 2 步扩展到 4–5 步，或把 L2 输出的目标队列作为 beam search 的初始 plan。
+7. **xiaomi/opencodego prompt 工程**：尝试更简短的 prompt、few-shot 模板或 response_format 强制 JSON，规避内容过滤。
 
