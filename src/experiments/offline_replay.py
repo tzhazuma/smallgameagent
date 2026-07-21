@@ -30,20 +30,35 @@ state JSON string), and ``action`` (adapted true action JSON string).
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 import math
+import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from src.agent.context import AgentContext
-from src.agent.hierarchical_planner import HierarchicalPlanner
-from src.agent.rule_update import RuleParameters
-from src.engine.rules import RuleEngine
-from src.experiments.game_env import score_trajectory
+# Allow running this script directly from the repo root or src/experiments.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from src.agent.context import AgentContext  # noqa: E402
+from src.agent.hierarchical_planner import HierarchicalPlanner  # noqa: E402
+from src.agent.llm_agent import LLMAgent  # noqa: E402
+from src.agent.memory import EpisodicMemory, ProceduralMemory  # noqa: E402
+from src.agent.registry import DecisionRegistry  # noqa: E402
+from src.agent.rule_update import RuleParameters  # noqa: E402
+from src.agent.strategy_memory import StrategyMemory  # noqa: E402
+from src.engine.rules import RuleEngine  # noqa: E402
+from src.experiments.game_env import score_trajectory  # noqa: E402
+
+# Import decision makers to register ``multi-bus`` / ``multi-bus-memory``.
+import src.agent.decision_makers  # noqa: E402,F401
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +295,34 @@ class StepRecord:
     rule_update_applied: bool = False
 
 
+class _OfflineWorkingMemory:
+    """Lightweight working-memory stand-in for offline replay.
+
+    Satisfies the attribute-based accesses used by the verifier, procedural
+    memory, and LLM prompt builder without requiring a full game loop.
+    """
+
+    def __init__(
+        self,
+        *,
+        stuck_streak: int = 0,
+        stall_streak: int = 0,
+        conflict_streak: int = 0,
+        last_composite: float = 0.0,
+        step_count: int = 0,
+    ) -> None:
+        self.is_stuck = False
+        self.stuck_streak = stuck_streak
+        self.stall_streak = stall_streak
+        self.conflict_streak = conflict_streak
+        self.last_composite = last_composite
+        self.step_count = step_count
+        self.world_model = SimpleNamespace(stats=lambda: {"stale_events": 0})
+
+    def to_prompt_context(self, n: int = 5) -> str:
+        return "[]"
+
+
 def build_fake_context(
     step_number: int,
     state: dict[str, Any],
@@ -290,20 +333,21 @@ def build_fake_context(
     metadata: dict[str, Any] | None,
 ) -> AgentContext:
     """Create an ``AgentContext`` that satisfies hierarchical planner needs."""
-    wm = {
-        "stuck_streak": stall_streak,
-        "stall_streak": stall_streak,
-        "conflict_streak": conflict_streak,
-        "last_composite": last_composite,
-        "world_model": SimpleNamespace(stats=lambda: {"stale_events": 0}),
-    }
+    wm = _OfflineWorkingMemory(
+        stuck_streak=stall_streak,
+        stall_streak=stall_streak,
+        conflict_streak=conflict_streak,
+        last_composite=last_composite,
+        step_count=step_number,
+    )
+    meta = dict(metadata or {})
     return AgentContext(
         step_number=step_number,
         probe_state=state,
         working_memory=wm,
         screenshot=None,
         visual_struct=visual_struct,
-        metadata=metadata or {},
+        metadata=meta,
         errors=[],
     )
 
@@ -374,6 +418,124 @@ def _make_api_client(provider: str | None = None, mock: bool = False) -> Any:
     from src.agent.api_client import MultiProviderClient
 
     return MultiProviderClient(provider=provider)
+
+
+class MockActionClient:
+    """Deterministic API client that returns a JSON action for ``LLMAgent``.
+
+    The mock always proposes ``move`` toward the first active guide/target
+    candidate (screen-space direction) or ``wait`` when no candidate exists.
+    This keeps multi-bus replay reproducible and cheap.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.calls: list[list[dict[str, Any]]] = []
+
+    def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
+        self.calls.append(messages)
+        # Pull the most recent state from the conversation.
+        state: dict[str, Any] = {}
+        for msg in reversed(messages):
+            content = msg.get("content", "")
+            if isinstance(content, str) and "Current State" in content:
+                try:
+                    start = content.index("{")
+                    state = json.loads(content[start:])
+                except Exception:
+                    state = {}
+                break
+
+        action = self._deterministic_action(state)
+        content = json.dumps(action)
+
+        class _Message:
+            content: str = ""
+
+        msg = _Message()
+        msg.content = content
+
+        class _Choice:
+            message = msg
+
+        class _RespLocal:
+            choices = [_Choice()]
+
+        return _RespLocal()
+
+    def chat_with_vision(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
+        class _Message:
+            content: str = ""
+
+        msg = _Message()
+        msg.content = json.dumps({"has_arrow": False, "arrow_direction": "none"})
+
+        class _Choice:
+            message = msg
+
+        class _RespLocal:
+            choices = [_Choice()]
+
+        return _RespLocal()
+
+    @staticmethod
+    def _deterministic_action(state: dict[str, Any]) -> dict[str, Any]:
+        player = state.get("player") or {}
+        player_screen = player.get("screenPosition") or {}
+        candidates = state.get("guide_or_target_candidates") or []
+        for cand in candidates:
+            if not cand.get("active", True):
+                continue
+            screen = cand.get("screenPosition") or {}
+            if not screen or not player_screen:
+                continue
+            dx = float(screen.get("x", 0)) - float(player_screen.get("x", 0))
+            dy = float(screen.get("y", 0)) - float(player_screen.get("y", 0))
+            norm = math.hypot(dx, dy)
+            if norm == 0:
+                continue
+            return {
+                "action": "move",
+                "params": {"dx": round(dx / norm, 3), "dy": round(dy / norm, 3), "duration_ms": 320},
+                "reason": "mock:move_toward_first_candidate",
+            }
+        return {"action": "wait", "params": {"duration_ms": 500}, "reason": "mock:no_candidate"}
+
+
+def _make_llm_agent(provider: str | None, mock: bool) -> LLMAgent:
+    """Build an LLM agent for the multi-bus decision analyst."""
+    if mock:
+        return LLMAgent(api_client=MockActionClient())
+    from src.agent.api_client import MultiProviderClient
+
+    return LLMAgent(api_client=MultiProviderClient(provider=provider))
+
+
+def _make_memory_stores(game_id: str) -> dict[str, Any]:
+    """Create lightweight file-backed memory stores for ``multi-bus-memory``.
+
+    Semantic memory is intentionally omitted because it requires ``sqlite-vec``
+    and a sentence-transformer download; the other three stores exercise the
+    memory-curator code path without external dependencies.
+    """
+    tmp_root = Path(tempfile.gettempdir()) / "smallgameagent_offline_replay"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    db_path = tmp_root / f"{game_id}_episodic.db"
+    return {
+        "episodic_memory": EpisodicMemory(db_path=db_path),
+        "procedural_memory": ProceduralMemory(
+            json_path=tmp_root / f"{game_id}_procedural.json"
+        ),
+        "strategy_memory": StrategyMemory(
+            store_path=tmp_root / f"{game_id}_strategy.json"
+        ),
+        "semantic_memory": None,
+    }
+
+
+async def _async_decide(maker: Any, ctx: AgentContext) -> dict[str, Any]:
+    """Await an async decision maker and normalise the result."""
+    action = await maker.decide(ctx)
+    return normalize_action(action)
 
 
 def _api_action_direct(state: dict[str, Any], client: Any) -> dict[str, Any]:
@@ -502,6 +664,7 @@ def run_offline_replay(
     collect_dataset: bool = False,
     dataset_dir: Path | None = None,
     mock: bool = False,
+    max_rounds: int = 2,
 ) -> OfflineReplayResult:
     """Replay one processed run offline and score the decider."""
     result = OfflineReplayResult(game_id, mode)
@@ -523,6 +686,8 @@ def run_offline_replay(
     rule_engine = RuleEngine(game_id, rule_params=rule_params)
     planner: HierarchicalPlanner | None = None
     api_client: Any = None
+    multi_bus_maker: Any = None
+    memory_stores: dict[str, Any] | None = None
 
     if mode == "hierarchical":
         api_client = _make_api_client(provider=provider, mock=mock)
@@ -534,6 +699,19 @@ def run_offline_replay(
             stuck_threshold=stuck_threshold,
             rule_params=rule_params,
         )
+    elif mode in ("multi-bus", "multi-bus-memory"):
+        llm_agent = _make_llm_agent(provider=provider, mock=mock)
+        maker_kwargs: dict[str, Any] = {
+            "llm_agent": llm_agent,
+            "rule_engine": rule_engine,
+            "api_client": api_client,
+            "visual_analyzer": None,
+            "max_rounds": max_rounds,
+        }
+        if mode == "multi-bus-memory":
+            memory_stores = _make_memory_stores(game_id)
+            maker_kwargs.update(memory_stores)
+        multi_bus_maker = DecisionRegistry.create(mode, **maker_kwargs)
     elif mode == "api-rule":
         api_client = _make_api_client(provider=provider, mock=mock)
 
@@ -582,9 +760,20 @@ def run_offline_replay(
                     stall_streak=stall_streak,
                     conflict_streak=conflict_streak,
                     visual_struct=None,
-                    metadata={},
+                    metadata={"game_id": game_id},
                 )
                 pred_action = planner.step(ctx)
+            elif mode in ("multi-bus", "multi-bus-memory") and multi_bus_maker is not None:
+                ctx = build_fake_context(
+                    step_number=step_num,
+                    state=state,
+                    last_composite=last_composite,
+                    stall_streak=stall_streak,
+                    conflict_streak=conflict_streak,
+                    visual_struct=None,
+                    metadata={"game_id": game_id},
+                )
+                pred_action = asyncio.run(_async_decide(multi_bus_maker, ctx))
             elif mode == "api-rule":
                 if api_client is not None:
                     pred_action = _api_action_direct(state, api_client)
@@ -662,6 +851,13 @@ def run_offline_replay(
     finally:
         if dataset_file is not None:
             dataset_file.close()
+        if memory_stores is not None:
+            for store in memory_stores.values():
+                if store is not None and hasattr(store, "close"):
+                    try:
+                        store.close()
+                    except Exception:
+                        pass
 
     return result
 
@@ -692,11 +888,12 @@ def resolve_games(preferred: list[str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Offline replay evaluation on processed-runs trajectories.")
     parser.add_argument("--game", action="append", help="Game ID(s) to replay. Repeatable.")
-    parser.add_argument("--mode", choices=["rule", "hierarchical", "api-rule"], default="rule",
+    parser.add_argument("--mode", choices=["rule", "hierarchical", "api-rule", "multi-bus", "multi-bus-memory"], default="rule",
                         help="Decider mode.")
-    parser.add_argument("--provider", default=None, help="Cloud provider for hierarchical/api-rule (e.g. qwen).")
-    parser.add_argument("--mock", action="store_true", help="Use mock cloud client for hierarchical/api-rule.")
+    parser.add_argument("--provider", default=None, help="Cloud provider for hierarchical/api-rule/multi-bus (e.g. qwen).")
+    parser.add_argument("--mock", action="store_true", help="Use mock cloud client for hierarchical/api-rule/multi-bus.")
     parser.add_argument("--max-steps", type=int, default=None, help="Limit steps per game.")
+    parser.add_argument("--max-rounds", type=int, default=2, help="Max decision/verify rounds for multi-bus modes.")
     parser.add_argument("--l1-interval", type=int, default=0, help="L1 local VLM interval (0=disabled).")
     parser.add_argument("--l2-interval", type=int, default=15, help="L2 cloud API interval.")
     parser.add_argument("--stuck-threshold", type=int, default=3, help="Stuck streak threshold for L1/L2.")
@@ -728,6 +925,7 @@ def main() -> int:
                 collect_dataset=args.collect_dataset,
                 dataset_dir=args.dataset_dir,
                 mock=args.mock,
+                max_rounds=args.max_rounds,
             )
         except Exception as exc:
             logger.exception("Replay failed for %s", game_id)
@@ -742,7 +940,7 @@ def main() -> int:
             metrics["action_matches"], metrics["steps"],
             metrics["mean_latency_ms"],
         )
-        if args.mode == "hierarchical":
+        if args.mode in ("hierarchical", "multi-bus", "multi-bus-memory"):
             logger.info("  rule_update_count=%d", metrics["rule_update_count"])
         results.append(res.to_dict())
 

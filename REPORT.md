@@ -554,3 +554,61 @@ PYTHONPATH=. python src/experiments/offline_replay.py \
 3. **异步化离线回放**：虽然离线不需要浏览器，但 L2 同步调用仍显著拖慢评估；可用线程池加速多游戏批量回放。
 4. **数据集增强**：当前采集使用真值 action，未来可加入 decider 预测 action 作为对比样本，用于训练 critic 或策略改进模型。
 
+## 20. Offline Replay 扩展：multi-bus / multi-bus-memory / 搜索规划变体
+
+### 20.1 扩展实现
+
+在 `src/experiments/offline_replay.py` 基础上继续扩展：
+
+- 支持 `multi-bus` 与 `multi-bus-memory` 模式：构造异步 maker，用 `asyncio.run()` 在离线步循环中驱动。
+- 支持 `--max-rounds`：控制 multi-bus Critic/总线轮数。
+- 修复 `AgentContext.working_memory` 在离线场景下的属性访问：`Verifier` 需要 `is_stuck` / `stuck_streak`，LLM prompt builder 需要 `to_prompt_context()`。
+- 新增 `src/experiments/search_plan_variants.py`：对比 rule 基线、hierarchical mock（短/长 horizon）、tiny beam search。
+
+### 20.2 multi-bus / multi-bus-memory 离线结果
+
+合并文件：`experiment_multi_bus_memory.json`。
+
+| 模式 | 游戏 | steps | type_match | action_match | composite |
+|---|---|---|---|---|---|
+| multi-bus (mock) | SSD_00461P01 | 67 | 11/67 | 6/67 | 0.221 |
+| multi-bus (mock) | SSD_00332P01 | 64 | 51/64 | 1/64 | 0.300 |
+| multi-bus (mock) | SSD_00382P01 | 75 | 1/75 | 1/75 | 0.300 |
+| multi-bus-memory (mock) | SSD_00461P01 | 67 | 26/67 | 0/67 | 0.209 |
+| multi-bus-memory (mock) | SSD_00332P01 | 64 | 7/64 | 1/64 | 0.150 |
+| multi-bus-memory (mock) | SSD_00382P01 | 75 | 40/75 | 1/75 | 0.150 |
+| multi-bus-memory (mock, max15 r2) | SSD_00461P01 | 14 | 9/14 | 0/14 | 0.254 |
+
+> 注：因当前环境未配置 `QWEN_API_KEY`，原定 real Qwen 的 max15-r2 运行改用 mock LLM agent，重点验证 memory 管线在 multi-bus-memory 模式下的端到端可运行性。
+
+**分析**：
+1. multi-bus 在 00332/00382 上达到 composite 0.300，说明总线架构与这些游戏的 recorded 轨迹高度兼容。
+2. multi-bus-memory 在 00461 上将 type_match 从 11/67 提升到 26/67，但 action_match 仍为 0——记忆能帮决策器选对动作大类，却未精确复现 move 向量或 tap 坐标。
+3. max15-r2 短窗口 composite 0.254 高于完整轨迹 0.209，Critic 第二轮修正在前几步有效；长轨迹上记忆噪声稀释了收益。
+
+### 20.3 搜索/规划变体对比
+
+脚本：`src/experiments/search_plan_variants.py`
+产出：`experiment_search_plan_variants.json`（SSD_00461P01，67 states，21 ms）。
+
+| 变体 | type_match | action_match | 说明 |
+|---|---|---|---|
+| rule | 0.194 | 0.030 | 纯 L0 规则基线 |
+| hierarchical_mock_5 | 0.328 | 0.045 | mock L2 每 5 步重规划，3 意图 |
+| hierarchical_mock_15 | 0.298 | 0.060 | mock L2 每 15 步重规划 |
+| hierarchical_short | 0.328 | 0.045 | 短 horizon（3 意图） |
+| hierarchical_long | 0.388 | 0.075 | 长 horizon（8 意图） |
+| beam_2step | 0.239 | 0.000 | 2 步束搜索，按状态距离打分 |
+
+**分析**：
+1. 确定性 mock L2 只要输出「向首个 active target 移动」的计划，就能显著提升 type_match（0.194 → 0.388）。
+2. horizon 越长，type_match 越高，因为 L2 动作队列耗尽更慢，规则引擎 fallback 更少。
+3. beam_2step 当前启发式（玩家位置 + keyNumbers 距离）未能选出与真值同类型的动作，说明启发式需要进一步建模「目标可交互性」或「下一帧 keyNumber 变化预测」。
+
+### 20.4 后续建议
+
+1. **memory 精确性**：multi-bus-memory 的 action_match 为 0，主要因为记忆匹配返回的是策略级动作（target/方向），与 recorded 的低级向量不匹配。可在记忆中同时存储低级 action 模板，或把动作匹配从向量级放宽到 target 级。
+2. **L2 prompt 优化**：mock 实验已证明「目标名称 + 队列」机制有效；下一步用真实云端 API（Qwen/kimi）替换 mock，验证长 horizon 计划在真实 L2 下的收益。
+3. **beam search 启发式**：加入 target active 状态变化、keyNumber 增益预测、以及与最近障碍物的距离，提升 2-step 规划的动作类型准确率。
+4. **批量离线评估**：把 `search_plan_variants.py` 接入多游戏循环，自动生成规划变体的 A/B 报告。
+

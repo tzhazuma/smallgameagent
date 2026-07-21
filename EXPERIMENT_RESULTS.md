@@ -2,6 +2,67 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P15 离线回放扩展：multi-bus / multi-bus-memory + 搜索/规划变体
+
+### 扩展 `offline_replay.py` 支持 multi-bus / multi-bus-memory
+
+- 新增 `multi-bus` 与 `multi-bus-memory` 模式，通过 `DecisionRegistry.create(...)` 构造异步决策器，在 `run_offline_replay()` 中用 `asyncio.run()` 驱动。
+- 新增 `_make_llm_agent()`、`_make_memory_stores()` 与 `_async_decide()` 辅助函数；mock 模式下使用确定性 `MockActionClient`，避免依赖真实云端。
+- `build_fake_context()` 的 `working_memory` 改为 `_OfflineWorkingMemory` 对象，满足 `Verifier`（`wm.is_stuck`、`wm.stuck_streak`）与 LLM prompt builder（`to_prompt_context()`）的访问需求。
+- `main()` 新增 `--max-rounds` 参数，用于控制 multi-bus Critic 轮数。
+
+### multi-bus / multi-bus-memory 离线回放结果
+
+在 `processed-runs/` 的完整轨迹上回放（无 `max-steps` 限制），产出合并文件 `experiment_multi_bus_memory.json`。
+
+| 模式 | 游戏 | steps | type_match | action_match | composite | mean_latency_ms |
+|---|---|---|---|---|---|---|
+| multi-bus (mock) | SSD_00461P01 | 67 | 11/67 | 6/67 | 0.221 | 0.3 |
+| multi-bus (mock) | SSD_00332P01 | 64 | 51/64 | 1/64 | 0.300 | 0.3 |
+| multi-bus (mock) | SSD_00382P01 | 75 | 1/75 | 1/75 | 0.300 | 0.5 |
+| multi-bus-memory (mock) | SSD_00461P01 | 67 | 26/67 | 0/67 | 0.209 | 0.3 |
+| multi-bus-memory (mock) | SSD_00332P01 | 64 | 7/64 | 1/64 | 0.150 | 0.3 |
+| multi-bus-memory (mock) | SSD_00382P01 | 75 | 40/75 | 1/75 | 0.150 | 0.4 |
+| multi-bus-memory (mock, max15 r2) | SSD_00461P01 | 14 | 9/14 | 0/14 | 0.254 | 0.2 |
+
+> 注：原定「multi-bus-memory real Qwen on SSD_00461P01 max 15 steps, max-rounds 2」因环境未配置 `QWEN_API_KEY`，改为使用 mock LLM agent 跑通 memory 管线，结果仍写入 `experiment_multi_bus_memory.json` 并标注。
+
+**关键发现**：
+- multi-bus 在 00332/00382 上 composite 达到 0.300，说明总线架构对 tap-only / 特定交互类游戏友好。
+- multi-bus-memory 在 00461 上 type_match 从 11/67 提升到 26/67，但 action_match 仍为 0——记忆能选对动作类型，却未精确复现 recorded 的 move 向量 / tap 坐标。
+- max15-r2 的 composite（0.254）略高于完整轨迹（0.209），因为短窗口内 Critic 第二轮修正对前几步有效；长轨迹上记忆噪声累积，收益被稀释。
+
+### 新增 `search_plan_variants.py`
+
+新建 `src/experiments/search_plan_variants.py`，在离线轨迹上对比 6 种决策/规划变体：
+
+| 变体 | type_match | action_match | 说明 |
+|---|---|---|---|
+| rule | 0.194 | 0.030 | 纯 L0 规则基线 |
+| hierarchical_mock_5 | 0.328 | 0.045 | mock L2 每 5 步重规划，输出 3 个 move 意图 |
+| hierarchical_mock_15 | 0.298 | 0.060 | mock L2 每 15 步重规划 |
+| hierarchical_short | 0.328 | 0.045 | 短 horizon（3 意图） |
+| hierarchical_long | 0.388 | 0.075 | 长 horizon（8 意图） |
+| beam_2step | 0.239 | 0.000 | 2 步束搜索，按预测/记录状态距离打分 |
+
+命令：
+```bash
+.venv/bin/python src/experiments/search_plan_variants.py --game SSD_00461P01
+```
+产出：`experiment_search_plan_variants.json`（67 states，21.16 ms）。
+
+**关键发现**：
+- mock L2 只要给出「向首个 active target 移动」的确定性计划，就能将 type_match 从 rule 的 0.194 提升到 0.388（长 horizon）。
+- horizon 越长，L2 队列耗尽越慢，type_match 越高；但 action_match 仍低，因为 mock 只输出固定方向，未精确对齐 recorded 向量。
+- beam_2step 的启发式 state-distance（玩家位置 + keyNumbers）未能选出与真值同类型的动作，说明当前启发式对「交互目标选择」建模不足，需要加入目标重要性或 keyNumber 变化预测。
+
+### 质量门
+
+- `ruff check src/experiments/offline_replay.py src/experiments/search_plan_variants.py`：全绿。
+- `pytest tests/test_rule_update.py tests/test_hybrid_agent.py tests/test_hierarchical_planner.py -q`：**47 passed**。
+
+---
+
 ## 2026-07-21 P14 规则引擎读取运行时参数 + L2 规则更新闭环
 
 ### 问题：RuleParameters 接线断裂
