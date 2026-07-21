@@ -488,8 +488,8 @@ class RuleUpdateWatchdog:
     When an update is applied, the watchdog records a pre-update baseline
     (average composite over ``baseline_window`` steps).  It then watches the
     next ``trial_window`` steps.  If the post-update average composite is
-    strictly worse than the baseline, it asks the applier to roll back the
-    last update.
+    strictly worse than the baseline, **or** activity drops / stall increases
+    beyond configured margins, it asks the applier to roll back the last update.
 
     This implements the "flexible strategy rollback" requested for the
     three-layer architecture: L2 can experiment with rule knobs, but L0/L1
@@ -502,13 +502,21 @@ class RuleUpdateWatchdog:
         baseline_window: int = 3,
         trial_window: int = 3,
         min_composite_samples: int = 2,
+        activity_drop_margin: float = 0.15,
+        stall_increase_margin: int = 2,
     ) -> None:
         self._applier = applier
         self._baseline_window = baseline_window
         self._trial_window = trial_window
         self._min_composite_samples = min_composite_samples
+        self._activity_drop_margin = activity_drop_margin
+        self._stall_increase_margin = stall_increase_margin
         self._baseline_composites: list[float] = []
         self._trial_composites: list[float] = []
+        self._baseline_activities: list[float] = []
+        self._trial_activities: list[float] = []
+        self._baseline_stalls: list[int] = []
+        self._trial_stalls: list[int] = []
         self._trialing: bool = False
         self._rollbacks: int = 0
 
@@ -519,7 +527,11 @@ class RuleUpdateWatchdog:
     def on_update_applied(self, step: int, composite: float) -> None:
         """Call immediately after the applier applies an update."""
         self._baseline_composites = self._baseline_composites[-self._baseline_window :]
+        self._baseline_activities = self._baseline_activities[-self._baseline_window :]
+        self._baseline_stalls = self._baseline_stalls[-self._baseline_window :]
         self._trial_composites = []
+        self._trial_activities = []
+        self._trial_stalls = []
         self._trialing = True
         logger.info(
             "Watchdog started trial at step %d (baseline composites: %s)",
@@ -527,8 +539,14 @@ class RuleUpdateWatchdog:
             self._baseline_composites,
         )
 
-    def observe(self, step: int, composite: float) -> bool:
-        """Feed one step's composite score into the watchdog.
+    def observe(
+        self,
+        step: int,
+        composite: float,
+        activity: float | None = None,
+        stall: int | None = None,
+    ) -> bool:
+        """Feed one step's metrics into the watchdog.
 
         Returns ``True`` if a rollback was triggered this step.
         """
@@ -536,9 +554,21 @@ class RuleUpdateWatchdog:
             self._baseline_composites.append(composite)
             if len(self._baseline_composites) > self._baseline_window:
                 self._baseline_composites.pop(0)
+            if activity is not None:
+                self._baseline_activities.append(activity)
+                if len(self._baseline_activities) > self._baseline_window:
+                    self._baseline_activities.pop(0)
+            if stall is not None:
+                self._baseline_stalls.append(stall)
+                if len(self._baseline_stalls) > self._baseline_window:
+                    self._baseline_stalls.pop(0)
             return False
 
         self._trial_composites.append(composite)
+        if activity is not None:
+            self._trial_activities.append(activity)
+        if stall is not None:
+            self._trial_stalls.append(stall)
         if len(self._trial_composites) < self._trial_window:
             return False
 
@@ -552,18 +582,52 @@ class RuleUpdateWatchdog:
 
         baseline_avg = sum(self._baseline_composites) / len(self._baseline_composites)
         trial_avg = sum(self._trial_composites) / len(self._trial_composites)
+
+        rollback = False
+        reasons: list[str] = []
+
+        # Composite degradation.
         if trial_avg < baseline_avg:
+            reasons.append(f"composite {trial_avg:.3f} < baseline {baseline_avg:.3f}")
+            rollback = True
+
+        # Activity drop.
+        if (
+            self._baseline_activities
+            and self._trial_activities
+            and len(self._baseline_activities) >= self._min_composite_samples
+            and len(self._trial_activities) >= self._min_composite_samples
+        ):
+            base_act = sum(self._baseline_activities) / len(self._baseline_activities)
+            trial_act = sum(self._trial_activities) / len(self._trial_activities)
+            if base_act - trial_act >= self._activity_drop_margin:
+                reasons.append(f"activity drop {base_act:.2f}→{trial_act:.2f}")
+                rollback = True
+
+        # Stall increase.
+        if (
+            self._baseline_stalls
+            and self._trial_stalls
+            and len(self._baseline_stalls) >= self._min_composite_samples
+            and len(self._trial_stalls) >= self._min_composite_samples
+        ):
+            base_stall = sum(self._baseline_stalls) / len(self._baseline_stalls)
+            trial_stall = sum(self._trial_stalls) / len(self._trial_stalls)
+            if trial_stall - base_stall >= self._stall_increase_margin:
+                reasons.append(f"stall increase {base_stall:.1f}→{trial_stall:.1f}")
+                rollback = True
+
+        if rollback:
             logger.warning(
-                "Watchdog rollback triggered: trial avg %.3f < baseline avg %.3f",
-                trial_avg,
-                baseline_avg,
+                "Watchdog rollback triggered: %s",
+                "; ".join(reasons),
             )
             if self._applier.rollback_last(n=1):
                 self._rollbacks += 1
                 return True
         else:
             logger.info(
-                "Watchdog accepted update: trial avg %.3f >= baseline avg %.3f",
+                "Watchdog accepted update: trial composite %.3f >= baseline %.3f",
                 trial_avg,
                 baseline_avg,
             )

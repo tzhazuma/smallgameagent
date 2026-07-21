@@ -229,13 +229,14 @@ class HierarchicalPlanner:
             action = dict(action)
             action["reason"] = f"{action.get('reason', '')}|L2:{self._macro_plan.get('reason', '')[:40]}"
 
-        # Watchdog: feed this step's composite to detect bad rule updates.
+        # Watchdog: feed this step's metrics to detect bad rule updates.
         wm = getattr(ctx, "working_memory", None)
         if wm is not None and hasattr(wm, "last_composite"):
             composite = float(wm.last_composite(self._rule_watchdog._trial_window))
         else:
             composite = 0.0
-        self._rule_watchdog.observe(step, composite)
+        stall = int(getattr(wm, "stuck_streak", 0)) if wm is not None else 0
+        self._rule_watchdog.observe(step, composite, activity=None, stall=stall)
 
         return action
 

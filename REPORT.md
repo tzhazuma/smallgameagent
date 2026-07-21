@@ -1393,6 +1393,49 @@ python src/training/train_qwen35.py \
 目标：让本地 VLM 稳定输出结构化 JSON 视觉摘要，并提升 `next_probe_action` 与 `failure_recovery` 任务准确率。
 
 
+## 36. Watchdog 回滚机制增强：不止看 composite
+
+### 36.1 动机
+
+§34 中 qwen 的规则更新让 composite 从 0.143 掉到 0.090，但 watchdog 未能及时回滚。根因是旧版 watchdog **只比较 trial 与 baseline 的 composite 平均值**，而 qwen 的更新可能是「小幅参数调整」，单次 composite 变化不明显，但 stall 增加、activity 下降等信号已经被忽略。
+
+### 36.2 改进内容
+
+`RuleUpdateWatchdog.observe()` 现在接受三个指标：
+
+- `composite`：滚动综合得分（原有）
+- `activity`：近期有效动作比例（新增，可选）
+- `stall`：当前卡死步数（新增，可选）
+
+回滚条件（满足任一即触发）：
+
+1. **composite 下降**：trial avg < baseline avg（原有）
+2. **activity 下降**：baseline activity - trial activity ≥ `activity_drop_margin`（默认 0.15）
+3. **stall 增加**：trial stall - baseline stall ≥ `stall_increase_margin`（默认 2）
+
+`HierarchicalPlanner.step()` 现在把 `wm.stuck_streak` 传给 watchdog，让 stall 信号实时参与回滚决策。
+
+### 36.3 单元测试
+
+| 场景 | baseline | trial | 结果 |
+|---|---|---|---|
+| stall 增加触发 | composite=0.30, stall=0 | composite=0.30, stall=3 | ✅ 回滚（stall increase 0→3） |
+| 无变化不回滚 | composite=0.30, stall=0 | composite=0.30, stall=0 | ✅ 接受 |
+| composite 下降触发 | composite=0.30 | composite=0.20 | ✅ 回滚（原有逻辑） |
+
+### 36.4 意义
+
+- **更灵敏的坏更新检测**：即使 L2 的参数调整没有立刻拉低 composite，只要 stall 增加或 activity 下降，watchdog 就会回滚。
+- **为「灵活策略回退」提供多层安全网**：composite 是结果指标，activity/stall 是过程指标；过程指标恶化往往早于结果指标，提前回滚能减少无效步数。
+- **activity  tracking 预留接口**：当前 `activity=None`（待 WorkingMemory 暴露 per-step activity 后接入），stall 已生效。
+
+### 36.5 下一步
+
+1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
+2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。
+3. 把 watchdog 的 margin 参数也写进 `configs/runtime_rules.json`，允许 L2 调整回滚灵敏度。
+
+
 ## 35. 规则更新触发器改进：相对下降 + 硬上限
 
 ### 35.1 动机
