@@ -147,9 +147,45 @@ A 组整体平均：rule 0.209、multi-bus 0.217、multi-bus-memory 0.218。
 - 00496/00517/00736 的 multi-bus activity=0，driver 在这些游戏上选错动作，需要按游戏类型调优。
 - A_full 轨迹经 `trajectory_converter.py` 转换后新增 **4,076** 条 7 任务样本，存放于 `vlm-training-data-A-full/`。
 
-### B_tap 15 游戏矩阵
+### B_tap 15 游戏矩阵最终结果
 
-**进行中**，完成后补充。
+15 个 tap-only 游戏 × 2 模式 × 2 seeds = 60 runs：
+
+| 游戏 | rule | multi-bus-memory | 说明 |
+|---|---|---|---|
+| 00219 养牛卖奶 | 0.150 | 0.150 | activity=0 |
+| 00332 圣诞薅羊毛 | 0.150 | 0.150 | activity=0 |
+| 00342 建造合并 | 0.150 | 0.150 | activity=0 |
+| **00382 低坑杀鲨鱼** | **0.300** | **0.300** | activity=1.00 |
+| **00394 车 zip** | **0.300** | **0.300** | activity=1.00 |
+| 00427 淘金 | 0.150 | 0.150 | activity=0 |
+| 00434 选项卡捏 | 0.150 | 0.150 | activity=0 |
+| **00475 太空圈地** | **0.300** | **0.300** | activity=1.00 |
+| 00482 砍树扩地 | 0.150 | 0.150 | activity=0 |
+| **00526 通水洗地** | **0.300** | **0.300** | activity=1.00 |
+| **00532 瀑布巨木** | **0.300** | **0.300** | activity=1.00 |
+| **00594 破石收水** | **0.300** | **0.300** | activity=1.00 |
+| **00669 斜挖订单** | **0.300** | **0.300** | activity≈1.00 |
+| 00733 海洋回收 | 0.150 | 0.150 | activity=0 |
+| **00742 加油小镇** | **0.300** | **0.300** | activity=1.00 |
+
+- 8/15 游戏在 rule 和 multi-bus-memory 下均达 0.300。
+- 7/15 游戏 activity=0，需要进一步分析是 guide 目标选择、坐标映射还是交互方式（拖拽/长按）问题。
+- B 组整体平均：rule 0.230、multi-bus-memory 0.230、activity 0.533。
+- 全部 60 个轨迹 JSONL 已采集，转换后新增 4,385 条训练样本。
+
+### 训练数据合并更新
+
+```bash
+.venv/bin/python scripts/merge_vlm_datasets.py \
+  vlm-training-data-processed-runs \
+  vlm-training-data-representative \
+  vlm-training-data-A-full \
+  vlm-training-data-B-tap \
+  --output vlm-training-data-merged
+```
+
+合并后 `vlm-training-data-merged/dataset-manifest.json`：`total_samples = 27,693`，覆盖 7 个任务、22 个游戏、多种模式。
 
 ### 本地 VLM 推理准备（5060 Laptop 8 GB）
 

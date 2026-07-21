@@ -194,7 +194,28 @@ results = asyncio.run(run_batch(config))
 
 ### 6.2 B_tap（15 个 tap-only 游戏 × 2 模式 × 2 seeds = 60 runs）
 
-**进行中**；完成后补充完整结果。
+| 游戏 | rule | multi-bus-memory | 说明 |
+|---|---|---|---|
+| 00219 养牛卖奶 | 0.150 | 0.150 | activity=0，无有效 tap |
+| 00332 圣诞薅羊毛 | 0.150 | 0.150 | activity=0 |
+| 00342 建造合并 | 0.150 | 0.150 | activity=0 |
+| **00382 低坑杀鲨鱼** | **0.300** | **0.300** | activity=1.00，tap 24/25 |
+| **00394 车 zip** | **0.300** | **0.300** | activity=1.00，tap 25/25 |
+| 00427 淘金 | 0.150 | 0.150 | activity=0 |
+| 00434 选项卡捏 | 0.150 | 0.150 | activity=0 |
+| **00475 太空圈地** | **0.300** | **0.300** | activity=1.00 |
+| 00482 砍树扩地 | 0.150 | 0.150 | activity=0 |
+| **00526 通水洗地** | **0.300** | **0.300** | activity=1.00 |
+| **00532 瀑布巨木** | **0.300** | **0.300** | activity=1.00 |
+| **00594 破石收水** | **0.300** | **0.300** | activity=1.00 |
+| **00669 斜挖订单** | **0.300** | **0.300** | activity≈1.00，tap 24/25 |
+| 00733 海洋回收 | 0.150 | 0.150 | activity=0 |
+| **00742 加油小镇** | **0.300** | **0.300** | activity=1.00 |
+
+- **8/15 B 类游戏达 0.300**——tap-only 驱动对 guide 目标直接点击即可产生真实交互。
+- **7/15 B 类游戏 0.150**——agent 未能选中有效点击目标；可能原因：目标需要拖拽/滑动而非点按、guide 目标被 UI 遮挡、或 tap 坐标映射有偏差。
+- **multi-bus-memory 对 B 类无明显额外收益**：tap-only 游戏的规则驱动已足够，记忆读回主要在 A 类 joystick 游戏中体现价值。
+- **B 组整体平均**：rule 0.230、multi-bus-memory 0.230、activity 0.533；平均墙钟 rule 42.9s、multi-bus-memory 50.1s（multi-bus-memory 因 API 调用导致部分 run 延迟升高）。
 
 ## 7. 云端 API 策略生成 vs 纯 rule
 
@@ -346,20 +367,36 @@ results = asyncio.run(run_batch(config))
 
 **下一步**：为 hierarchical 模式禁用默认 L2 planning，只保留规则更新触发；或者让 L2 planning 输出目标名称而非坐标。
 
-## 17. 训练数据增量
+## 17. 训练数据增量（全矩阵后合并）
 
-新增 rule_update_ab_results 轨迹后，运行 `src/training/trajectory_converter.py` 生成新的 7 任务样本：
+对 A_full（42 runs）和 B_tap（60 runs）的轨迹分别运行 `src/training/trajectory_converter.py`，生成新的 7 任务样本：
 
-| 任务 | 本次新增 | 合并后总计 |
-|---|---|---|
-| probe_action_effect | +3,112 | 8,643 |
-| information_gain_judgment | +3,112 | 9,206 |
-| progression_grounding | +3,240 | 9,046 |
-| pulse_response_grounding | +181 | 1,775 |
-| failure_recovery | +9 | 32 |
-| **总计** | **+9,654** | **33,250** |
+| 任务 | A_full 新增 | B_tap 新增 | 合并后 vlm-training-data-merged |
+|---|---|---|---|
+| probe_action_effect | +1,272 | +1,440 | 6,935 |
+| information_gain_judgment | +1,272 | +1,440 | 7,309 |
+| progression_grounding | +1,325 | +1,500 | 6,265 |
+| pulse_response_grounding | +189 | +0 | 1,853 |
+| failure_recovery | +18 | +5 | 41 |
+| next_probe_action | — | — | 2,645 |
+| field_grounding | — | — | 2,645 |
+| **小计新增** | **+4,076** | **+4,385** | — |
+| **合并去重后总计** | — | — | **27,693** |
 
-数据覆盖 rule / multi-bus-memory / hierarchical 三种模式，可用于后续 QLoRA 微调。
+数据来源：`vlm-training-data-processed-runs/`（历史 processed-runs）、`vlm-training-data-representative/`（代表性子集）、`vlm-training-data-A-full/`、`vlm-training-data-B-tap/`。
+
+合并命令：
+
+```bash
+.venv/bin/python scripts/merge_vlm_datasets.py \
+  vlm-training-data-processed-runs \
+  vlm-training-data-representative \
+  vlm-training-data-A-full \
+  vlm-training-data-B-tap \
+  --output vlm-training-data-merged
+```
+
+数据覆盖 22 个游戏、rule / multi-bus-memory / multi-bus 等模式，可直接用于 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调。
 5. **批量实验自动化**：CI/CD 中跑 `exp_multi_game.py`，每次代码变更自动对比 composite。
 
 ## 18. 代表性游戏子集批量跑测

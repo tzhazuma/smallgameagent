@@ -326,7 +326,52 @@ C 类（probe 失败） & 0 & — & 全部 22 游戏 probe 均能 ready \\
 
 \subsubsection{6.2 B\_tap（15 个 tap-only 游戏 × 2 模式 × 2 seeds = 60 runs）}
 
-\_\_BOLD\_0000\_\_；完成后补充完整结果。\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+游戏 & rule & multi-bus-memory & 说明 \\
+\hline
+00219 养牛卖奶 & 0.150 & 0.150 & activity=0，无有效 tap \\
+\hline
+00332 圣诞薅羊毛 & 0.150 & 0.150 & activity=0 \\
+\hline
+00342 建造合并 & 0.150 & 0.150 & activity=0 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00，tap 24/25 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00，tap 25/25 \\
+\hline
+00427 淘金 & 0.150 & 0.150 & activity=0 \\
+\hline
+00434 选项卡捏 & 0.150 & 0.150 & activity=0 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00 \\
+\hline
+00482 砍树扩地 & 0.150 & 0.150 & activity=0 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity≈1.00，tap 24/25 \\
+\hline
+00733 海洋回收 & 0.150 & 0.150 & activity=0 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & activity=1.00 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_——tap-only 驱动对 guide 目标直接点击即可产生真实交互。
+  \item \_\_BOLD\_0000\_\_——agent 未能选中有效点击目标；可能原因：目标需要拖拽/滑动而非点按、guide 目标被 UI 遮挡、或 tap 坐标映射有偏差。
+  \item \_\_BOLD\_0000\_\_：tap-only 游戏的规则驱动已足够，记忆读回主要在 A 类 joystick 游戏中体现价值。
+  \item \_\_BOLD\_0000\_\_：rule 0.230、multi-bus-memory 0.230、activity 0.533；平均墙钟 rule 42.9s、multi-bus-memory 50.1s（multi-bus-memory 因 API 调用导致部分 run 延迟升高）。
+\end{itemize}
 
 \subsection{7. 云端 API 策略生成 vs 纯 rule}
 
@@ -563,33 +608,52 @@ hierarchical（规则更新开启） & 0.150 & 0.000 & 0 & 0 & 24 & 367.9 s \\
 
 \_\_BOLD\_0000\_\_：为 hierarchical 模式禁用默认 L2 planning，只保留规则更新触发；或者让 L2 planning 输出目标名称而非坐标。\\
 
-\subsection{17. 训练数据增量}
+\subsection{17. 训练数据增量（全矩阵后合并）}
 
-新增 rule\_update\_ab\_results 轨迹后，运行 \_\_CODE\_0000\_\_ 生成新的 7 任务样本：\\
+对 A\_full（42 runs）和 B\_tap（60 runs）的轨迹分别运行 \_\_CODE\_0000\_\_，生成新的 7 任务样本：\\
 
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{|l|l|l|}
+\begin{tabular}{|l|l|l|l|}
 \hline
-任务 & 本次新增 & 合并后总计 \\
+任务 & A\_full 新增 & B\_tap 新增 & 合并后 vlm-training-data-merged \\
 \hline
-probe\_action\_effect & +3,112 & 8,643 \\
+probe\_action\_effect & +1,272 & +1,440 & 6,935 \\
 \hline
-information\_gain\_judgment & +3,112 & 9,206 \\
+information\_gain\_judgment & +1,272 & +1,440 & 7,309 \\
 \hline
-progression\_grounding & +3,240 & 9,046 \\
+progression\_grounding & +1,325 & +1,500 & 6,265 \\
 \hline
-pulse\_response\_grounding & +181 & 1,775 \\
+pulse\_response\_grounding & +189 & +0 & 1,853 \\
 \hline
-failure\_recovery & +9 & 32 \\
+failure\_recovery & +18 & +5 & 41 \\
 \hline
-\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+next\_probe\_action & — & — & 2,645 \\
+\hline
+field\_grounding & — & — & 2,645 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & — \\
+\hline
+\_\_BOLD\_0000\_\_ & — & — & \_\_BOLD\_0000\_\_ \\
 \hline
 \end{tabular}
 \end{table}
 
-数据覆盖 rule / multi-bus-memory / hierarchical 三种模式，可用于后续 QLoRA 微调。\\
+数据来源：\_\_CODE\_0000\_\_（历史 processed-runs）、\_\_CODE\_0001\_\_（代表性子集）、\_\_CODE\_0002\_\_、\_\_CODE\_0003\_\_。\\
+
+合并命令：\\
+
+```bash\\
+.venv/bin/python scripts/merge\_vlm\_datasets.py \textbackslash{}\\
+vlm-training-data-processed-runs \textbackslash{}\\
+vlm-training-data-representative \textbackslash{}\\
+vlm-training-data-A-full \textbackslash{}\\
+vlm-training-data-B-tap \textbackslash{}\\
+--output vlm-training-data-merged\\
+```\\
+
+数据覆盖 22 个游戏、rule / multi-bus-memory / multi-bus 等模式，可直接用于 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调。\\
 5. \_\_BOLD\_0001\_\_：CI/CD 中跑 \_\_CODE\_0000\_\_，每次代码变更自动对比 composite。\\
 
 \subsection{18. 代表性游戏子集批量跑测}
