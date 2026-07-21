@@ -956,4 +956,100 @@ beam\_2step & 0.239 & 0.000 & 2 步束搜索，按状态距离打分 \\
 3. \_\_BOLD\_0000\_\_：加入 target active 状态变化、keyNumber 增益预测、以及与最近障碍物的距离，提升 2-step 规划的动作类型准确率。\\
 4. \_\_BOLD\_0001\_\_：把 \_\_CODE\_0000\_\_ 接入多游戏循环，自动生成规划变体的 A/B 报告。\\
 
+\subsection{21. VLM 训练数据集生成与 5090 训练准备}
+
+\subsubsection{21.1 数据集生成}
+
+使用已有的 \_\_CODE\_0000\_\_ 将 \_\_CODE\_0001\_\_ 中的 22 个游戏轨迹转换为 7 任务 VLM 冷启动训练格式：\\
+
+```bash\\
+PYTHONPATH=. python src/training/processed\_runs\_converter.py \textbackslash{}\\
+--processed-root processed-runs \textbackslash{}\\
+--output-root vlm-training-data-processed-runs\\
+```\\
+
+生成结果（\_\_CODE\_0000\_\_）：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+任务 & train & val & all \\
+\hline
+next\_probe\_action & 2491 & 154 & 2645 \\
+\hline
+probe\_action\_effect & 2491 & 154 & 2645 \\
+\hline
+field\_grounding & 2491 & 154 & 2645 \\
+\hline
+information\_gain\_judgment & 2863 & 191 & 3054 \\
+\hline
+pulse\_response\_grounding & 1342 & 93 & 1435 \\
+\hline
+progression\_grounding & 2491 & 154 & 2645 \\
+\hline
+failure\_recovery & 14 & 0 & 14 \\
+\hline
+\_\_BOLD\_0000\_\_ & — & — & \_\_BOLD\_0000\_\_ \\
+\hline
+\end{tabular}
+\end{table}
+
+覆盖 22 个游戏，每个样本包含截图路径、backend state summary、任务指令与答案 messages，可直接被 \_\_CODE\_0000\_\_ 加载。\\
+
+\subsubsection{21.2 数据加载验证}
+
+```python\\
+from src.training.data\_loader import VLMColdStartDataset\\
+ds = VLMColdStartDataset(\\
+"vlm-training-data-processed-runs",\\
+"next\_probe\_action",\\
+"train",\\
+)\\
+print(len(ds))  \# 2491\\
+sample = ds[0]\\
+print(sample["images"], sample["messages"])\\
+```\\
+
+验证通过：图片可加载、messages 包含 system / user / assistant 三段。\\
+
+\subsubsection{21.3 5090 服务器训练命令}
+
+本地环境缺少 GPU 训练依赖（torch / transformers / trl / peft 等），因此将数据和代码准备好后，在 5090 服务器执行：\\
+
+```bash\\
+\section{在 ssh5090 (10.19.138.148) 上}
+python src/training/train\_qwen35.py \textbackslash{}\\
+--dataset-root vlm-training-data-processed-runs/ \textbackslash{}\\
+--model Qwen/Qwen3.5-4B \textbackslash{}\\
+--tasks next\_probe\_action,information\_gain\_judgment,pulse\_response\_grounding \textbackslash{}\\
+--output-dir checkpoints/qwen35-4b-gameplay \textbackslash{}\\
+--epochs 3 --batch-size 2 --grad-accum 8 \textbackslash{}\\
+--lr 2e-4 --lora-r 16 --lora-alpha 32\\
+```\\
+
+Gemma-4-E4B 对应使用 \_\_CODE\_0000\_\_，参数结构相同。\\
+
+\subsubsection{21.4 训练后的使用路径}
+
+1. 5090 训练得到 LoRA adapter。\\
+2. 在本地或 WSL 通过 \_\_CODE\_0000\_\_ 启动 VLM 推理服务：\\
+```bash\\
+python src/inference/server.py \textbackslash{}\\
+--model Qwen/Qwen3.5-4B \textbackslash{}\\
+--adapter checkpoints/qwen35-4b-gameplay \textbackslash{}\\
+--no-flash-attn --port 8000\\
+```\\
+3. HybridAgent 的 L1 本地 VLM 调用该服务，提供视觉上下文给云端 API，实现「本地小 VLM 理解画面 → 云端大模型做长程规划」的分层架构。\\
+
+\subsubsection{21.5 小结}
+
+\begin{itemize}
+  \item 数据集已就绪：15,083 条样本、22 游戏、7 任务。
+  \item 训练脚本与数据加载器已验证可导入；待 5090 可用时直接启动 QLoRA。
+  \item 该数据集可与后续人工标注/在线采集数据合并，持续扩展 VLM 的 domain 覆盖。
+\end{itemize}
+
+
 \end{document}

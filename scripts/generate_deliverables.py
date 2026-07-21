@@ -644,20 +644,20 @@ def write_pptx() -> None:
 
     _add_bullet_slide(prs, "跑过的轨迹 = 可复用的训练数据", [
         "batch_runner 每步记录 state / action / keyNumbers / reason",
-        "trajectory_converter 离线生成 7 任务样本：next_probe_action、information_gain_judgment 等",
-        "已累积 27,693 条合并样本（去重后），覆盖 22 个游戏、rule / multi-bus-memory / multi-bus",
-        "可直接喂给 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调脚本",
+        "processed_runs_converter 从 22 个游戏的 processed-runs 生成 7 任务样本",
+        "当前数据集：15,083 条样本，覆盖 next_probe_action / information_gain_judgment 等任务",
+        "可直接喂给 Qwen3.5-4B/9B 与 Gemma-4-E4B 的 QLoRA 微调脚本（在 5090 服务器执行）",
     ])
 
     # ---- Section: Next ----
     _add_section_slide(prs, "09 下一步")
 
     _add_bullet_slide(prs, "接下来要攻的几件事", [
-        "把离线回放扩展到 multi-bus / multi-bus-memory，量化 Agent 通信与记忆的真实收益",
-        "在更多游戏上跑 Qwen L2，测试规则更新对 composite 的泛化提升",
+        "在更多游戏上跑真实 Qwen multi-bus-memory，量化通信/记忆成本与收益",
+        "尝试 L2 规则更新的 code_file 模式（allowlist + 高置信度 + 自动备份）",
         "让本地 VLM 常驻，验证 L1 战术修正对 joystick 游戏的收益",
-        "在 5090 服务器上跑 QLoRA 微调，把 VLM 变成专用画面理解器",
-        "完善 Critic → MemoryCurator 的闭环：规则更新提议需经评估再落地",
+        "在 5090 服务器上跑 QLoRA 微调，把本地 VLM 变成专用画面理解器",
+        "把离线回放集成到 CI：每次规则改动自动跑 5 游戏回归",
     ])
 
     # ---- Thanks ----

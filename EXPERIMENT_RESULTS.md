@@ -2,6 +2,66 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P16 VLM 训练数据集生成与 5090 训练准备
+
+### 使用 processed_runs_converter 生成 7 任务数据集
+
+命令：
+```bash
+PYTHONPATH=. python src/training/processed_runs_converter.py \
+  --processed-root processed-runs \
+  --output-root vlm-training-data-processed-runs
+```
+
+生成 `vlm-training-data-processed-runs/dataset-manifest.json`，统计如下：
+
+| 任务 | train | val | all |
+|---|---|---|---|
+| next_probe_action | 2491 | 154 | 2645 |
+| probe_action_effect | 2491 | 154 | 2645 |
+| field_grounding | 2491 | 154 | 2645 |
+| information_gain_judgment | 2863 | 191 | 3054 |
+| pulse_response_grounding | 1342 | 93 | 1435 |
+| progression_grounding | 2491 | 154 | 2645 |
+| failure_recovery | 14 | 0 | 14 |
+| **合计** | — | — | **15,083** |
+
+覆盖 22 个游戏，每个样本含截图路径、backend state summary、任务指令与答案 messages。
+
+### 数据加载器验证
+
+```python
+from src.training.data_loader import VLMColdStartDataset
+ds = VLMColdStartDataset("vlm-training-data-processed-runs", "next_probe_action", "train")
+print(len(ds))  # 2491
+sample = ds[0]
+assert sample["images"] and sample["messages"]
+```
+
+验证通过。
+
+### 5090 服务器训练命令
+
+本地未安装 torch/transformers/trl/peft，因此准备好数据和代码后，在 5090 执行：
+
+```bash
+python src/training/train_qwen35.py \
+  --dataset-root vlm-training-data-processed-runs/ \
+  --model Qwen/Qwen3.5-4B \
+  --tasks next_probe_action,information_gain_judgment,pulse_response_grounding \
+  --output-dir checkpoints/qwen35-4b-gameplay \
+  --epochs 3 --batch-size 2 --grad-accum 8 \
+  --lr 2e-4 --lora-r 16 --lora-alpha 32
+```
+
+Gemma-4-E4B 使用 `src/training/train_gemma4.py`，结构相同。
+
+### 结论
+
+- 15K 样本、7 任务、22 游戏的 VLM 冷启动数据集已生成并验证可加载。
+- 训练脚本就位，待 5090 可访问时即可启动 QLoRA 微调。
+- 微调后的 adapter 可通过 `src/inference/server.py` 部署为本地 VLM 服务，供 HybridAgent L1 使用。
+
 ## 2026-07-21 P15 离线回放扩展：multi-bus / multi-bus-memory + 搜索/规划变体
 
 ### 扩展 `offline_replay.py` 支持 multi-bus / multi-bus-memory
