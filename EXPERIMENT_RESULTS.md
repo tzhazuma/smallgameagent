@@ -2,6 +2,53 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P18 本地 VLM 画面理解 + 云端策略对比实验
+
+### 环境
+
+- 本地模型：Qwen3.5-4B-Q4_K_M.gguf + mmproj-F16.gguf
+- 推理后端：llama.cpp CUDA12（LM Studio 自带 backend）
+- GPU：NVIDIA RTX 5060 Laptop 8 GB
+- 云端模型：qwen3.7-max
+
+### 启动本地服务
+
+```bash
+LD_LIBRARY_PATH=/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0 \
+/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0/llama-server \
+  -m /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf \
+  --mmproj /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/mmproj-F16.gguf \
+  --host 127.0.0.1 --port 1234 -c 4096 -ngl 99
+```
+
+### 实验脚本
+
+```bash
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_local_vlm_cloud_context.py --provider qwen --num-steps 10
+```
+
+### 结果
+
+| 指标 | 数值 |
+|---|---|
+| 评估步数 | 9 |
+| 本地 VLM 平均延迟 | ~7.1s |
+| text-only 动作匹配 | 5/9 |
+| with-visual 动作匹配 | 3/9 |
+
+### 发现
+
+1. Qwen3.5-4B 视觉摘要不稳定：有的准确，有的输出大量 CoT 草稿，有的截断。
+2. 不准确的摘要会把云端策略带偏方向。
+3. text-only baseline 在 00461 前几步反而更稳。
+4. 本地 VLM 需要更严格的 prompt 或 QLoRA 微调才能可靠地辅助云端决策。
+
+### 质量门
+
+- `ruff check src/experiments/exp_local_vlm_cloud_context.py`：全绿。
+
+---
+
 ## 2026-07-21 P17 L2 代码文件级规则更新闭环
 
 ### 新增 `configs/runtime_rules.json`

@@ -796,4 +796,77 @@ PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.
 - 在真实游戏运行中触发 code-file 更新（而非离线静态 prompt），观察 L2 在动态 stall/composite 下的决策质量；
 - 接入版本控制：每次 code-file 更新生成一条 git-style diff 记录，方便回滚与审计。
 
+## 23. 本地小 VLM 作为画面理解层（L1）
+
+### 23.1 实验目的
+
+验证「本地小 VLM 理解画面 → 输出文本上下文 → 云端大模型做策略决策」的三层架构是否可行。本地模型用默认 4-bit GGUF（Qwen3.5-4B），云端用 qwen3.7-max。
+
+### 23.2 环境
+
+- 本地模型：Qwen3.5-4B-Q4_K_M.gguf + mmproj-F16.gguf
+- 推理后端：llama.cpp CUDA12（LM Studio 自带 backend）
+- GPU：NVIDIA RTX 5060 Laptop 8 GB
+- 启动命令：
+
+```bash
+LD_LIBRARY_PATH=/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0 \
+/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0/llama-server \
+  -m /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf \
+  --mmproj /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/mmproj-F16.gguf \
+  --host 127.0.0.1 --port 1234 -c 4096 -ngl 99
+```
+
+### 23.3 实验方法
+
+新建 `src/experiments/exp_local_vlm_cloud_context.py`：
+
+- 从 `processed-runs/SSD_00461P01` 取前 10 步；
+- 每一步把截图发给本地 VLM，要求输出「场景类型、玩家位置、可见敌人/物体、箭头/引导、UI 元素」的纯文本摘要；
+- 同一状态分别用两种方式请求云端 qwen：
+  1. 只看 probe state（text-only baseline）；
+  2. probe state + 本地 VLM 摘要（with-visual）；
+- 云端输出归一化 move 动作（dx/dy ∈ [-1,1]），与真值比较。
+
+### 23.4 结果
+
+| 指标 | 数值 |
+|---|---|
+| 评估步数 | 9（有截图的 step 2-10） |
+| 本地 VLM 平均延迟 | ~7.1s / 帧 |
+| text-only 动作匹配 | 5/9 |
+| with-visual 动作匹配 | 3/9 |
+
+**关键发现**：
+
+1. **默认 Qwen3.5-4B 的视觉摘要质量不稳定**：有的 step 能给出较准确的场景描述（step 2、5、7），有的会输出大量 chain-of-thought 草稿（step 3、4、6），有的严重截断（step 8 只有 "The scene is a top-down isometric view..."）。
+2. **视觉摘要会干扰云端的动作方向**：例如 step 3 真值向下移动，本地 VLM 描述「玩家在下部、敌人在底部、基地在上方」，云端据此改为向上移动；step 8 真值向左下，本地 VLM 摘要被截断，云端给出直上动作。
+3. **text-only baseline 反而更稳定**：因为 00461 的前几步主要是垂直方向移动，state 中的 `guide_or_target_candidates` 已足够。
+4. **该路径有潜力，但本地 VLM 必须更可靠**：当前未经微调的 4B 模型对「给策略 planner 看的摘要」这一任务不够稳定，需要：
+   - 更严格的 prompt（强制 JSON 输出，限制长度）；
+   - 或者 QLoRA 微调，让它学会输出结构化的视觉上下文。
+
+### 23.5 结论
+
+- **本地 VLM 可以跑在 8 GB 5060 上**，Qwen3.5-4B-Q4_K_M 推理延迟约 7s/帧，显存占用可控。
+- **当前默认模型还不足以提升云端策略质量**，甚至可能引入方向性错误。
+- **下一步**：用已生成的 15,083 条 processed-runs 数据做 QLoRA 微调，训练本地 VLM 输出「箭头方向 + 关键目标位置 + 障碍物」等结构化上下文，再与云端 API 组合验证。
+
+### 23.6 命令
+
+```bash
+# 启动本地 VLM 服务
+LD_LIBRARY_PATH=/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0 \
+/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0/llama-server \
+  -m /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_M.gguf \
+  --mmproj /home/azuma/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/mmproj-F16.gguf \
+  --host 127.0.0.1 --port 1234 -c 4096 -ngl 99
+
+# 运行对比实验
+. .env
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_local_vlm_cloud_context.py --provider qwen --num-steps 10
+```
+
+产出：`experiment_local_vlm_cloud_context_qwen_SSD_00461P01.json`
+
 
