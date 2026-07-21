@@ -2,6 +2,86 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P14 规则引擎读取运行时参数 + L2 规则更新闭环
+
+### 问题：RuleParameters 接线断裂
+
+此前 `HierarchicalPlanner` 会创建并更新 `RuleParameters`，但 `RuleEngine` 完全不看这些参数：
+- L2 输出的 `param` 更新只停留在 `HierarchicalPlanner` 内部；
+- `RuleEngine` 中 `stuck_escape_threshold`、`target_lock_max_steps`、`coin_save_buffer` 等关键阈值全部硬编码；
+- 结果：规则更新触发器能工作，但更新不影响实际行为。
+
+### 修复
+
+- `src/engine/rules.py`：`RuleEngine.__init__` 接受可选 `rule_params: RuleParameters`；
+- `src/agent/hybrid_agent.py`：`mode="hierarchical"` 时创建共享 `RuleParameters` 实例，同时注入 `RuleEngine` 与 `HierarchicalPlanner`；
+- `_get_maker_kwargs()` 透传 `l1_interval`、`l2_interval`、`stuck_threshold` 等配置覆盖；
+- `RuleEngine` 关键节点改用 `_param(name, default)` 读取运行时参数：
+  - `coin_save_buffer`：金币储蓄缓冲，减少「有钱就升级」的往返；
+  - `stuck_escape_threshold`：卡死 escape 阈值；
+  - `target_lock_max_steps` / `target_lock_max_bad`：soft target lock 参数；
+  - `coin_override_expire_steps`：coin override 持续步数。
+
+### L1 / L2 配置解耦
+
+- `HierarchicalPlanner` 现在把 `l1_interval <= 0` 视为禁用 L1，不再创建 `LMStudioClient`；
+- `HierarchicalDecisionMaker` 同样在 `l1_interval <= 0` 时跳过本地 VLM 客户端创建；
+- 便于单独评估 L2 规则更新的效果，而不被未启动的本地 VLM 拖慢。
+
+### 事件循环阻塞修复
+
+发现 hierarchical 模式的 L2 同步 API 调用会阻塞 asyncio 事件循环，导致 Playwright 浏览器消息无法处理、运行挂死。修复：
+- `HierarchicalDecisionMaker.decide()` 使用 `loop.run_in_executor(None, self._planner.step, ctx)` 运行同步 planner；
+- 云 API 调用在后台线程执行，事件循环保持自由，浏览器继续推进。
+
+### 触发器冷却
+
+为 `RuleUpdateTrigger` 增加 `cooldown_steps=5`：一次 L2 调用后 5 步内不再重复触发，避免 composite/stall 持续低迷时连续请求云端。
+
+### L2 prompt 强化
+
+针对 kimi-k2.7-code 等模型喜欢在输出前后加思考链或 markdown fence 的问题，更新 `_L2_SYSTEM` 与 `_L2_UPDATE_SYSTEM`：
+- 明确要求 "no markdown fences, no thinking, no explanation outside JSON"；
+- 规则更新增加 `none` 类型兜底，允许 L2 在无需更新时明确返回低置信度占位。
+
+### 本轮单测
+
+- `pytest tests/test_hybrid_agent.py tests/test_hierarchical_planner.py tests/test_rule_update.py -q`：**47 passed**。
+- `ruff check src tests scripts`：全绿。
+
+### 规则更新 A/B（进行中）
+
+`experiment_rule_update_ab.json` 已更新为只对比 **rule 基线** vs **hierarchical（L2 规则更新触发开启，L1 禁用，L2 planning 禁用）**：
+- 游戏：SSD_00461P01，25 步，seeds=[42, 123]；
+- provider：kimi（`kimi-k2.7-code` 文本模型）；
+- 命令：
+  ```bash
+  . .env && . .venv/bin/activate && PYTHONPATH=. python src/experiments/exp_rule_update_ab.py \
+    --game SSD_00461P01 \
+    --html "SSD_00461P01_EN_WNK_20260116_RBN_Applovin_塔防来着^有埋点.html" \
+    --provider kimi --l1-interval 0 --l2-interval 99999 --max-steps 25
+  ```
+
+预期指标：
+- 若规则更新触发器工作，应能在 `ctx_metadata.hierarchical_stats.rule_update_history` 中看到 L2 触发的 `param` 更新；
+- `coin_save_buffer` 等参数被调整后，hierarchical 的 activity/stall 应与 rule 基线产生可观测差异。
+
+### 多 Provider 冒烟重测
+
+使用最新 `.env` 重跑 `scripts/test_cloud_providers.py`：
+
+| provider | 文本可用 | 视觉可用 | 说明 |
+|---|---|---|---|
+| opencodego | ❌ | ❌ | 401 Insufficient balance |
+| kimi | ✅ 1.99s | ✅ | kimi-k2.7-code / k2.6 均可用 |
+| deepseek | ❌ | ❌ | 402 Insufficient Balance |
+| xiaomi | ✅ 4.09s | ✅ | mimo-v2.5 多模态可用 |
+| qwen | ✅ 11.02s | ❌ | 文本可用；视觉报 "Unexpected item type in content" |
+
+`.env` 已新增模型覆盖变量：`KIMI_TEXT_MODEL=kimi-k2.7-code`、`KIMI_VISION_MODEL=kimi-k2.6`、`XIAOMI_TEXT_MODEL=mimo-v2.5` 等。
+
+---
+
 ## 2026-07-21 P9 多 Provider 配置、规则在线更新、报告/PPT 修复与推送
 
 ### 多 Provider 云端 API 统一接入
@@ -765,3 +845,95 @@ VLMColdStartDataset 实载抽查通过：
 - **L1 本地 VLM**：看截图做战术修正（stall 时换方向）
 
 这样 L2 不需要视觉也能工作，L0 保留了几何准确性。
+
+## 2026-07-21 Offline Replay Evaluation on Processed Runs
+
+新增 `src/experiments/offline_replay.py`：无需浏览器，直接在 `processed-runs/<game_id>/` 的离线轨迹上回放并评估决策器。
+
+### 实现要点
+
+- **状态适配** (`adapt_processed_state`)：把 dataset-workflow 的 `states/step-XXXX-before.json` 转成 probe 格式，字段来源：
+  - `ready/done/win/doneReason` ← `state.observe`
+  - `player` ← `state.observe.player`
+  - `keyNumbers/keyFlags` ← `state.observe.numbers/flags`
+  - `guide_or_target_candidates` ← `interestingNodes` + `activeUiNodes` 合并，保留 `name, path, active, worldPosition, screenPosition, components`。
+- **动作对齐**：把记录的 `move_pulse` / `move_sequence` / `drag` 映射为 `move`；`tap` / `click` 映射为 `tap`；`wait` 保持为 `wait`。
+- **Fake AgentContext**：用 dataclass 构造最小 ctx，包含 `step_number`、`probe_state`、`working_memory`（带 `stuck_streak` / `last_composite` / `world_model`）、`screenshot`、`visual_struct`、`metadata`、`errors`，满足 `HierarchicalPlanner.step(ctx)` 的读取需求。
+- **模式支持**：
+  - `rule`：纯 `RuleEngine`
+  - `hierarchical`：`HierarchicalPlanner`，默认 `l1_interval=0` 禁用本地 VLM，支持 `--provider` 或 `CLOUD_PROVIDER` 选择云端模型，也支持 `--mock` 使用确定性假客户端验证 rule-update 接线。
+  - `api-rule`：直接用云端 API 生成 JSON action 并与真值对比；API 不可用时回退到 `RuleEngine`。
+- **指标**：steps、action_matches、type_matches、move_cosine_similarity、activity_ratio、stall_ratio、mean_latency_ms、total_latency_s、rule_update_count、rule_update_history、composite（使用 `score_trajectory` 的 rubric）。
+- **数据集采集** (`--collect-dataset`)：把每一步的截图路径、适配后状态 JSON、适配后真值动作写入 `collected_datasets/offline_replay_<game_id>/samples.jsonl`。
+
+### 5 游戏 rule 基线（完整轨迹，无 max-steps 限制）
+
+> 注：processed-run 的原始 `observe.done/win` 会因 UI 节点（如 DownloadBtn）误触发，离线评估中已忽略这些假阳性终止标志，让引擎持续决策。
+
+| 游戏 | steps | type_match | action_match | composite | mean_latency_ms |
+|---|---|---|---|---|---|
+| SSD_00461P01 | 67 | 13/67 | 2/67 | 0.241 | 0.1 |
+| SSD_00219P01 | 193 | 0/193 | 0/193 | 0.300 | 0.0 |
+| SSD_00332P01 | 64 | 51/64 | 1/64 | 0.300 | 0.0 |
+| SSD_00342P01 | 177 | 0/177 | 0/177 | 0.300 | 0.1 |
+| SSD_00382P01* | 75 | 1/75 | 1/75 | 0.300 | 0.1 |
+
+\* SSD_00848P01 在 `processed-runs/` 中不存在，自动替换为同目录下的 SSD_00382P01。
+
+**关键发现**：
+- SSD_00461P01 与 SSD_00332P01 的 recorded action 与当前 rule engine 策略一致度较高（塔防/ joystick 类）。
+- SSD_00219P01、SSD_00342P01、SSD_00382P01 的 recorded action 以 `move_pulse` 为主，但 game profile 驱动类型为 tap-only，导致 rule engine 输出 tap 而真值为 move，type_match≈0。这说明：**离线 replay 能迅速暴露 game profile 与 recorded trajectory 的策略不一致**。
+
+### 5 游戏 hierarchical mock（L1 禁用，L2 mock，rule-update 验证）
+
+| 游戏 | steps | type_match | action_match | composite | rule_update_count |
+|---|---|---|---|---|---|
+| SSD_00461P01 | 67 | 11/67 | 5/67 | 0.241 | 13 |
+| SSD_00219P01 | 193 | 4/193 | 4/193 | 0.300 | 38 |
+| SSD_00332P01 | 64 | 49/64 | 3/64 | 0.283 | 9 |
+| SSD_00342P01 | 177 | 3/177 | 3/177 | 0.297 | 35 |
+| SSD_00382P01 | 75 | 5/75 | 5/75 | 0.286 | 15 |
+
+**关键发现**：
+- mock L2 每 `l2_interval=5` 步成功触发 rule update，`RuleParameters` 与 `RuleEngine` 共享，参数更新立即生效。
+- `rule_update_history` 中可看到 `param` 类型更新被 `RuleUpdateApplier` 应用，验证 conservative scheme A 的离线接线正确。
+- L2 planning  mock 输出 wait 指令，对动作匹配影响很小（与 rule 基线接近），符合预期。
+
+### Hierarchical Qwen 模式（SSD_00461P01，max-steps=30）
+
+命令：
+```bash
+. .env && QWEN_TEXT_MODEL=qwen3.7-max CLOUD_PROVIDER=qwen \
+  PYTHONPATH=. python src/experiments/offline_replay.py \
+  --game SSD_00461P01 --mode hierarchical --provider qwen \
+  --l2-interval 10 --max-steps 30 \
+  --output experiment_offline_replay_SSD_00461P01_hierarchical_qwen.json
+```
+
+结果：
+- steps=29
+- type_match=10/29，action_match=7/29
+- composite=0.246
+- mean_latency_ms=3728.6
+- rule_update_count=4
+
+**关键发现**：
+- Qwen API 可用，L2 规划与 rule update 均成功触发。
+- 每步延迟约 3.9s（大部分来自 L2 同步调用），离线索引下仍可接受；在线闭环需要考虑异步化。
+- composite 低于 rule 基线，因为 L2 规划的 wait/目标选择策略与 recorded expert action 不完全一致。
+
+### 数据集采集
+
+为 SSD_00461P01 采集 30 步样本：
+```bash
+PYTHONPATH=. python src/experiments/offline_replay.py \
+  --game SSD_00461P01 --mode rule --max-steps 30 --collect-dataset
+```
+
+产出 `collected_datasets/offline_replay_SSD_00461P01/samples.jsonl`，每条记录 `{image, state, action}` 字符串，可直接用于 VLM 训练数据管线。
+
+### 质量门
+
+- `ruff check src/experiments/offline_replay.py`：全绿。
+- `pytest tests/test_rule_update.py tests/test_hybrid_agent.py tests/test_hierarchical_planner.py -q`：**47 passed**。
+

@@ -37,24 +37,25 @@ _L2_SYSTEM = (
     '{"action_hint": "wait", "duration_ms": <int>} — wait\n'
     "Output 3-8 intentions. Use target_name values that appear in the probe state's "
     "guide_or_target_candidates list (name or path fields). If no target is available, output wait. "
-    "No markdown fences, no explanation outside JSON."
+    "No markdown fences, no thinking, no explanation outside JSON."
 )
 
 _L2_UPDATE_SYSTEM = (
     "You are a strategy optimizer for a small-game-playing agent. "
     "The agent has three layers: L0 fast rule engine, L1 local VLM for visual hints, "
     "L2 cloud API for long-range planning and rule updates.\n\n"
-    "Output a single JSON object (no markdown fences) with this schema:\n"
-    '{"update_type": "param|memory_entry|phase_contract|code_file", '
+    "Output a single JSON object (no markdown fences, no thinking, no explanation) with this schema:\n"
+    '{"update_type": "param|memory_entry|phase_contract|code_file|none", '
     '"target": "rule_name_or_game_id_or_file", '
     '"reason": "why this update helps", '
     '"payload": {...}, '
     '"confidence": 0.0-1.0}\n\n'
-    "For update_type=param, payload is {\"param_name\": value}.\n"
+    "For update_type=param, payload maps parameter name to value, e.g. {\"coin_save_buffer\": 10, \"stuck_escape_threshold\": 3}.\n"
     "For update_type=memory_entry, payload is {\"game_id\", \"phase_id\", \"pattern\", \"success\", \"notes\"}.\n"
     "For update_type=code_file, payload is {\"file_path\", \"search\", \"replace\"}.\n"
     "Code-file updates only apply to allow-listed files; large or low-confidence patches are queued for review.\n"
-    "Prefer small, verifiable parameter changes."
+    "Prefer small, verifiable parameter changes. "
+    "If no update is needed, output {\"update_type\": \"none\", \"confidence\": 0.0}."
 )
 
 _L1_SYSTEM = (
@@ -112,7 +113,7 @@ class HierarchicalPlanner:
     ) -> None:
         self._rule_engine = rule_engine
         self._api_client = api_client
-        self._lmstudio_client = lmstudio_client
+        self._lmstudio_client = lmstudio_client if l1_interval > 0 else None
         self._l1_interval = l1_interval
         self._l2_interval = l2_interval
         self._stuck_threshold = stuck_threshold
@@ -161,10 +162,14 @@ class HierarchicalPlanner:
 
         # --- L1: Tactical correction (local VLM) ---
         need_l1 = (
-            step % self._l1_interval == 0
-            or stuck >= self._stuck_threshold
+            self._l1_interval > 0
+            and self._lmstudio_client is not None
+            and (
+                step % self._l1_interval == 0
+                or stuck >= self._stuck_threshold
+            )
         )
-        if need_l1 and self._lmstudio_client is not None and ctx.screenshot is not None:
+        if need_l1 and ctx.screenshot is not None:
             self._run_l1(ctx)
         elif not need_l1:
             self._tactical_override = None
@@ -397,7 +402,10 @@ class HierarchicalPlanner:
                 temperature=0.0,
             )
             text = resp.choices[0].message.content or ""
+            logger.info("L2 rule update raw response (%d chars): %s", len(text), text[:400])
+            print(f"[DEBUG] L2 raw text type={type(text)} len={len(text)} text={text[:200]!r}")
             request = parse_update_response(text)
+            print(f"[DEBUG] parsed request={request}")
             if request is not None:
                 applied = self._rule_applier.apply(request)
                 if applied:
@@ -407,7 +415,7 @@ class HierarchicalPlanner:
             else:
                 logger.warning("L2 rule update unparseable: %s", text[:120])
         except Exception as exc:
-            logger.warning("L2 rule update call failed: %s", exc)
+            logger.warning("L2 rule update call failed: %s", exc, exc_info=True)
 
     # ------------------------------------------------------------------
     # L1: Local VLM tactical correction

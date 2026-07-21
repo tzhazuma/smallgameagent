@@ -5,6 +5,7 @@ Wires the three-layer HierarchicalPlanner into the DecisionRegistry.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from src.agent.hierarchical_planner import HierarchicalPlanner
@@ -31,8 +32,9 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
         strategy_memory: Any = None,
         **kwargs: Any,
     ) -> None:
-        # If no lmstudio_client provided, try to create one
-        if lmstudio_client is None:
+        # If no lmstudio_client provided, try to create one only when L1 is enabled
+        l1_interval = kwargs.get("l1_interval", 5)
+        if lmstudio_client is None and l1_interval > 0:
             try:
                 from src.agent.lmstudio_client import LMStudioClient
                 lmstudio_client = LMStudioClient()
@@ -43,7 +45,7 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
             rule_engine=rule_engine,
             api_client=api_client,
             lmstudio_client=lmstudio_client,
-            l1_interval=kwargs.get("l1_interval", 5),
+            l1_interval=l1_interval,
             l2_interval=kwargs.get("l2_interval", 15),
             stuck_threshold=kwargs.get("stuck_threshold", 3),
             rule_params=rule_params,
@@ -51,6 +53,9 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
         )
 
     async def decide(self, ctx: "AgentContext") -> dict[str, Any]:
-        action = self._planner.step(ctx)
+        # Run the synchronous planner in a thread executor so that blocking
+        # cloud API calls do not freeze the Playwright event loop.
+        loop = asyncio.get_running_loop()
+        action = await loop.run_in_executor(None, self._planner.step, ctx)
         ctx.metadata["hierarchical_stats"] = self._planner.stats()
         return action

@@ -105,15 +105,18 @@ class RuleUpdateTrigger:
         stall_threshold: int = DEFAULT_STALL_THRESHOLD,
         conflict_threshold: int = DEFAULT_CONFLICT_THRESHOLD,
         composite_window: int = 5,
+        cooldown_steps: int = 5,
     ) -> None:
         self.composite_threshold = composite_threshold
         self.stall_threshold = stall_threshold
         self.conflict_threshold = conflict_threshold
         self.composite_window = composite_window
+        self.cooldown_steps = cooldown_steps
         self._composites: list[float] = []
         self._stall_streak: int = 0
         self._conflict_streak: int = 0
         self._last_step: int = -1
+        self._last_trigger_step: int = -cooldown_steps - 1
 
     def check(
         self,
@@ -125,6 +128,10 @@ class RuleUpdateTrigger:
         if step == self._last_step:
             return None
         self._last_step = step
+
+        # Cooldown: do not spam L2 with back-to-back calls.
+        if step - self._last_trigger_step < self.cooldown_steps:
+            return None
 
         wm = getattr(ctx, "working_memory", None) or {}
         composite = float(wm.get("last_composite", 0.0) if isinstance(wm, dict) else 0.0)
@@ -141,10 +148,13 @@ class RuleUpdateTrigger:
 
         avg_composite = sum(self._composites) / max(1, len(self._composites))
         if avg_composite < self.composite_threshold and len(self._composites) >= self.composite_window:
+            self._last_trigger_step = step
             return f"low_composite_avg_{avg_composite:.3f}"
         if self._stall_streak >= self.stall_threshold:
+            self._last_trigger_step = step
             return f"stall_streak_{self._stall_streak}"
         if self._conflict_streak >= self.conflict_threshold:
+            self._last_trigger_step = step
             return f"conflict_streak_{self._conflict_streak}"
 
         # World-model stale event trigger.
@@ -152,6 +162,7 @@ class RuleUpdateTrigger:
             stats = getattr(world_model, "stats", lambda: {})()
             if stats.get("stale_events", 0) > getattr(self, "_last_stale_events", 0):
                 self._last_stale_events = stats.get("stale_events", 0)
+                self._last_trigger_step = step
                 return "world_model_stale"
 
         return None
@@ -212,6 +223,9 @@ class RuleUpdateApplier:
             return True
         if request.update_type == "code_file":
             return self._apply_code_file(request)
+        if request.update_type == "none":
+            logger.debug("L2 returned no-op update: %s", request.reason)
+            return False
 
         logger.warning("Unsupported rule update type: %s", request.update_type)
         return False

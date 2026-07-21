@@ -33,6 +33,7 @@ from src.agent.llm_agent import LLMAgent
 from src.agent.memory import EpisodicMemory, WorkingMemory
 from src.agent.probe_adapter import ProbeAdapter
 from src.agent.registry import DecisionRegistry
+from src.agent.rule_update import RuleParameters
 from src.agent.visual_analyzer import VisualAnalyzer
 from src.agent.world_model import VersionedWorldModel
 from src.engine.rules import RuleEngine
@@ -132,12 +133,16 @@ class HybridAgent:
         self._llm_agent: LLMAgent | None = None
         self._rule_engine: RuleEngine | None = None
         self._visual_analyzer: VisualAnalyzer | None = None
+        # Shared runtime parameters for hierarchical / rule-update modes
+        self._rule_params: RuleParameters | None = None
+        if mode == "hierarchical":
+            self._rule_params = RuleParameters()
 
         if mode in ("api", "api-memory", "api-vlm-local") and api_client:
             self._llm_agent = LLMAgent(api_client, config)
 
-        if mode in ("rule", "vlm-rule", "api-rule", "multi", "multi-bus", "multi-bus-memory", "api-vlm-local") and game_id:
-            self._rule_engine = RuleEngine(game_id)
+        if mode in ("rule", "vlm-rule", "api-rule", "multi", "multi-bus", "multi-bus-memory", "api-vlm-local", "hierarchical") and game_id:
+            self._rule_engine = RuleEngine(game_id, rule_params=self._rule_params)
             self._visual_analyzer = VisualAnalyzer(api_client) if api_client else None
 
         # Attach a VersionedWorldModel to the rule engine: HybridAgent writes
@@ -406,7 +411,12 @@ class HybridAgent:
             "semantic_memory": self._semantic_memory,
             "procedural_memory": self._procedural_memory,
             "strategy_memory": self._strategy_memory,
+            "rule_params": self._rule_params,
         }
+        # Pass through interval/threshold overrides for hierarchical/makers.
+        for key in ("l1_interval", "l2_interval", "stuck_threshold"):
+            if key in self._config:
+                kwargs[key] = self._config[key]
         # Pass through max_rounds from config for multi-bus variants.
         if "max_rounds" in self._config:
             kwargs["max_rounds"] = self._config["max_rounds"]

@@ -16,6 +16,9 @@ from typing import Any
 
 from configs.game_profiles import get_profile, get_profile_or_generic
 
+# Optional runtime parameter store (injected by hierarchical agent)
+from src.agent.rule_update import RuleParameters
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -104,7 +107,7 @@ class RuleEngine:
     4. Computes pulse duration and dispatches a joystick action.
     """
 
-    def __init__(self, game_id: str) -> None:
+    def __init__(self, game_id: str, rule_params: RuleParameters | None = None) -> None:
         self.game_id = game_id
         self.is_generic = get_profile(game_id) is None
         profile = get_profile_or_generic(game_id)
@@ -116,6 +119,9 @@ class RuleEngine:
             )
         self.profile = profile
         self.driver_type: str = profile.get("driver_type", "follow-guide-audited")
+
+        # Runtime tunable parameters (shared with hierarchical planner updates)
+        self.rule_params = rule_params or RuleParameters()
 
         # State
         self.step_count: int = 0
@@ -155,6 +161,16 @@ class RuleEngine:
         # Coin demand override: when a station needs coins the player lacks,
         # force navigation to the coin table.
         self._coin_override: dict[str, Any] | None = None
+
+    def _param(self, name: str, default: Any) -> Any:
+        """Read a tunable parameter from the runtime store or fall back to default."""
+        if self.rule_params is None:
+            return default
+        return self.rule_params.get(name, default)
+
+    def set_rule_params(self, rule_params: RuleParameters) -> None:
+        """Replace the runtime parameter store (used by hierarchical updates)."""
+        self.rule_params = rule_params
 
     def step(self, state: dict[str, Any], visual: dict[str, Any] | None = None) -> dict[str, Any]:
         """Produce an action for the current *state*.
@@ -279,7 +295,8 @@ class RuleEngine:
         dist = math.hypot(dx_world, dz_world)
 
         # --- Stuck handling ---
-        if self.stuck_streak >= 5:
+        stuck_threshold = int(self._param("stuck_escape_threshold", 5))
+        if self.stuck_streak >= stuck_threshold:
             # Escape along the candidate direction that points away from the
             # densest cluster of learned obstacles (random when none known).
             esc_wx, esc_wz = self._escape_direction(px, pz)
@@ -386,7 +403,8 @@ class RuleEngine:
         self._register_target_plan(guide_candidates)
 
         # --- Stuck handling ---
-        if self.stuck_streak >= 5:
+        stuck_threshold = int(self._param("stuck_escape_threshold", 5))
+        if self.stuck_streak >= stuck_threshold:
             esc_wx, esc_wz = self._escape_direction(px, pz)
             dx_stick, dy_stick = solve_stick_for_world(basis, esc_wx, esc_wz)
             duration_ms = get_pulse_duration("follow-guide", 2.0, input_mode)
@@ -728,6 +746,9 @@ class RuleEngine:
         Returns the locked target if the lock is still valid, otherwise
         the freshly selected *target*.  Updates ``self._target_lock``.
         """
+        lock_max_steps = int(self._param("target_lock_max_steps", 8))
+        lock_max_bad = int(self._param("target_lock_max_bad", 2))
+
         lock = self._target_lock
         if lock is not None:
             lock["steps_remaining"] -= 1
@@ -738,7 +759,7 @@ class RuleEngine:
                 # Arrived — release lock
                 self._target_lock = None
                 return target
-            if lock["steps_remaining"] <= 0 or lock["bad_steps"] >= self._LOCK_MAX_BAD:
+            if lock["steps_remaining"] <= 0 or lock["bad_steps"] >= lock_max_bad:
                 self._target_lock = None
             else:
                 return lock["target"]
@@ -747,7 +768,7 @@ class RuleEngine:
         if target is not None:
             self._target_lock = {
                 "target": target,
-                "steps_remaining": self._LOCK_MAX_STEPS,
+                "steps_remaining": lock_max_steps,
                 "bad_steps": 0,
             }
         return target
@@ -758,6 +779,9 @@ class RuleEngine:
         """Coin demand override: if a station needs coins the player lacks,
         force navigation to the coin/money table.
 
+        The ``coin_save_buffer`` parameter lets the agent collect extra money
+        before returning to the upgrade station, reducing back-and-forth.
+
         Returns the coin-table world position if override is active, else None.
         """
         numbers = state.get("keyNumbers") or {}
@@ -765,14 +789,18 @@ class RuleEngine:
         if not isinstance(money, (int, float)):
             money = 0
 
+        save_buffer = float(self._param("coin_save_buffer", 0.0))
+        expire_steps = int(self._param("coin_override_expire_steps", 20))
+
         # Look for coin/money targets in guide candidates
         override = self._coin_override
         if override and override.get("active"):
             if override["expires_step"] <= self.step_count:
                 self._coin_override = None
                 return None
-            # Check if we now have enough coins
-            if money >= override.get("needed", 1):
+            # Check if we now have enough coins (plus optional save-up buffer)
+            needed = override.get("needed", 1)
+            if money >= needed + save_buffer:
                 self._coin_override = None
                 return None
             return override["target"]
@@ -792,7 +820,7 @@ class RuleEngine:
                         "active": True,
                         "target": (wp.get("x", 0), wp.get("z", 0)),
                         "needed": price,
-                        "expires_step": self.step_count + 20,
+                        "expires_step": self.step_count + expire_steps,
                     }
                     return self._coin_override["target"]
         return None

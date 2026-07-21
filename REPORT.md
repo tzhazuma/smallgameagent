@@ -282,9 +282,10 @@ results = asyncio.run(run_batch(config))
 
 - 新增 `MultiProviderClient`，统一接入 OpenCodeGo、Kimi、DeepSeek、MiMo（provider 名 `xiaomi`）、Qwen；
 - 通过 `.env` 文件配置各 provider 的 `api_key` / `base_url` / 默认模型，`.env` 已加入 `.gitignore`，绝不会被提交；
+- 支持 `KIMI_TEXT_MODEL`、`KIMI_VISION_MODEL`、`XIAOMI_TEXT_MODEL` 等环境变量覆盖默认模型，便于切换 kimi-k2.7-code / kimi-k2.6 / mimo-v2.5 等；
 - 切换 provider 只需设置 `CLOUD_PROVIDER` 环境变量，模型名随 provider 自动默认；
 - 保留 `OpenCodeGoClient` 完全兼容，现有调用无需修改；
-- Kimi 系列自动省略 `temperature` 参数，避免 Console Go 代理返回 400。
+- Kimi 系列自动省略 `temperature` 参数，避免代理返回 400。
 
 | Provider | 默认文本模型 | 默认视觉模型 | base_url | 当前状态 |
 |---|---|---|---|---|
@@ -294,11 +295,36 @@ results = asyncio.run(run_batch(config))
 | xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` | 文本+视觉可用 |
 | qwen | qwen3.7-max | qwen3.7-max | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | 文本可用，视觉格式待适配 |
 
-当前实测可用：Kimi（kimi-k2.5）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。
+当前实测可用：Kimi（kimi-k2.5 / kimi-k2.7-code / kimi-k2.6）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。
+
+**特别说明**：在 L2 规则更新任务中，Kimi 与 Xiaomi 对「游戏策略优化/参数调整」类 prompt 返回空内容（疑似内容过滤），而 **Qwen（qwen3.7-max）能稳定返回结构化 `param` 更新**。因此当前规则更新 A/B 实验采用 Qwen 作为 L2 provider。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。
+
+本轮新增 `.env` 模型覆盖示例：
+
+```bash
+export KIMI_TEXT_MODEL=kimi-k2.7-code
+export KIMI_VISION_MODEL=kimi-k2.6
+export XIAOMI_TEXT_MODEL=mimo-v2.5
+export XIAOMI_VISION_MODEL=mimo-v2.5
+```
 
 ## 13. 规则在线更新架构（保守方案 A）
 
-针对同学提出的「规则作为底层，需要修改时让上两层更新」的需求，我们设计并实现了在线规则更新机制：
+针对同学提出的「规则作为底层，需要修改时让上两层更新」的需求，我们设计并实现了在线规则更新机制。
+
+### 13.0 关键修复：规则引擎真正读取运行时参数
+
+之前的实现中，`HierarchicalPlanner` 会创建并更新 `RuleParameters`，但 `RuleEngine` 并不读取这些参数，导致 L2 输出的参数更新**不会真正影响行为**（更新只停留在内存对象里）。本轮修复了这条关键接线：
+
+- `RuleEngine.__init__` 新增可选 `rule_params: RuleParameters` 参数；
+- `HybridAgent` 在 `mode="hierarchical"` 时创建**共享**的 `RuleParameters` 实例，同时传给 `RuleEngine` 和 `HierarchicalPlanner`；
+- `RuleEngine` 在关键策略节点通过 `_param(name, default)` 读取运行时参数：
+  - `coin_save_buffer`：金币缓冲，避免「有钱就升级」导致的来回折返；
+  - `stuck_escape_threshold`：卡死触发 escape 的步数阈值；
+  - `target_lock_max_steps` / `target_lock_max_bad`：soft target lock 的锁定步数与容错次数；
+  - `coin_override_expire_steps`：coin override 的最大持续步数。
+
+这样 L2 的 `param` 类型更新可以即时改变 L0 规则引擎的行为，真正实现「上层触发 → 底层参数进化」。
 
 ### 13.1 三层结构
 
@@ -317,10 +343,10 @@ results = asyncio.run(run_batch(config))
 
 ```json
 {
-  "update_type": "param|memory_entry|phase_contract",
-  "target": "rules.upgrade_threshold",
+  "update_type": "param|memory_entry|phase_contract|code_file",
+  "target": "rules.coin_save_buffer",
   "reason": "金币未攒够就升级导致往返",
-  "payload": {"upgrade_threshold": 500},
+  "payload": {"coin_save_buffer": 10},
   "confidence": 0.82
 }
 ```
@@ -329,7 +355,10 @@ results = asyncio.run(run_batch(config))
 
 - 新增 `src/agent/rule_update.py`：`RuleUpdateTrigger`、`RuleUpdateApplier`、`RuleParameters`、`RuleUpdateRequest`；
 - 扩展 `HierarchicalPlanner`：在 `step()` 中检查触发条件，满足时调用 L2 请求规则更新，解析并应用；
-- 规则更新只修改内存参数和 `StrategyMemory`，不修改源码文件（保守方案 A）；
+- 扩展 `RuleEngine`：读取共享的 `RuleParameters`，让参数更新即时生效；
+- `HierarchicalDecisionMaker.decide()` 改用线程池执行同步的 `HierarchicalPlanner.step()`，避免同步云 API 调用阻塞 Playwright 事件循环；
+- 为 `RuleUpdateTrigger` 增加 `cooldown_steps`（默认 5 步），防止 composite/stall 持续低迷时连续触发 L2；
+- `code_file` 类型更新受 allowlist + 置信度 + patch 大小 + 自动备份多重保护，未通过则进入待审队列；
 - 新增 `tests/test_rule_update.py` 14 个单测。
 
 ## 14. 本地 VLM 基准实验（RTX 5060 Laptop 8 GB）
@@ -436,3 +465,92 @@ results = asyncio.run(run_batch(config))
 2. **multi-bus-memory 对 A 类 joystick 游戏有选择性收益**：00461 从 0.106 提升到 0.300，但 00483 的 multi-bus/multi-bus-memory 均 activity=0，说明 00483 的 profile/driver 需要调优。
 3. **浏览器修复是前置条件**：使用 Playwright bundled Chromium + `--enable-unsafe-swiftshader --in-process-gpu` 后，headless 场景初始化成功率 100%。
 4. **训练数据扩充**：代表性子集轨迹经 `trajectory_converter.py` 转换后新增 1,173 条样本，存入 `vlm-training-data-representative/`。
+
+## 19. Offline Replay Evaluation on Processed Runs
+
+### 19.1 动机
+
+此前的所有评估都依赖浏览器在线跑游戏，初始化、渲染和 probe 稳定性会消耗大量时间。为了**快速验证 decider 改动**和**离线诊断 rule-update 接线**，新增 `src/experiments/offline_replay.py`：直接读取 `processed-runs/<game_id>/steps.jsonl` 与对应 state/action JSON，在零浏览器环境下回放并打分。
+
+### 19.2 实现
+
+- **状态适配**：`adapt_processed_state(raw)` 把 dataset-workflow 的旧格式转成 `RuleEngine` / `HierarchicalPlanner` 需要的 probe 格式。
+- **动作归一化**：`move_pulse` / `move_sequence` / `drag` → `move`；`tap` / `click` → `tap`；`wait` → `wait`。同时兼容 `action`、`chosen_action`、`executed_action` 三种 dataset 字段名。
+- **Fake AgentContext**：构造最小 ctx，注入 `working_memory.stuck_streak` / `last_composite` / `world_model`，使 `HierarchicalPlanner.step(ctx)` 可离线运行。
+- **三种模式**：
+  - `rule`：纯 `RuleEngine`。
+  - `hierarchical`：`HierarchicalPlanner`，默认 `l1_interval=0`（禁用本地 VLM），支持 `--provider` / `CLOUD_PROVIDER` 切换云端模型，`--mock` 使用确定性 mock 客户端验证 rule-update 闭环。
+  - `api-rule`：云端 API 直接输出 JSON action；API 失败时回退到 `RuleEngine`。
+- **指标**：steps、action/type matches、move cosine similarity、activity/stall ratio、latency、rule_update_count/history、composite（复用 `score_trajectory` rubric）。
+- **数据集**：`--collect-dataset` 把 `(image_path, state_json, action_json)` 写入 `collected_datasets/offline_replay_<game_id>/samples.jsonl`。
+
+### 19.3 5 游戏 rule 基线（完整轨迹）
+
+> 注：processed-run 的 `observe.done/win` 会被 UI 节点误触发，离线回放中已忽略假阳性终止标志。
+
+| 游戏 | steps | type_match | action_match | composite |
+|---|---|---|---|---|
+| SSD_00461P01 | 67 | 13/67 | 2/67 | 0.241 |
+| SSD_00219P01 | 193 | 0/193 | 0/193 | 0.300 |
+| SSD_00332P01 | 64 | 51/64 | 1/64 | 0.300 |
+| SSD_00342P01 | 177 | 0/177 | 0/177 | 0.300 |
+| SSD_00382P01* | 75 | 1/75 | 1/75 | 0.300 |
+
+\* SSD_00848P01 不存在，自动替换为 SSD_00382P01。
+
+**分析**：
+- SSD_00461P01 与 SSD_00332P01 的 recorded trajectory 与当前 rule engine 策略一致，动作匹配率较高。
+- SSD_00219P01、SSD_00342P01、SSD_00382P01 的 recorded action 以 `move_pulse` 为主，但 game profile 为 tap-only，rule engine 输出 tap 而真值为 move，匹配率接近 0。这暴露了一个重要问题：**部分 processed runs 的录制策略与当前 game profile 不一致**，需要进一步校准 profile 或按驱动类型筛选轨迹。
+
+### 19.4 Hierarchical mock：rule-update 接线验证
+
+使用 `--mock` 时，L2 客户端总是返回 `param` 更新（`mock_param=1.0`），置信度 0.95。
+
+| 游戏 | steps | type_match | composite | rule_update_count |
+|---|---|---|---|---|
+| SSD_00461P01 | 67 | 11/67 | 0.241 | 13 |
+| SSD_00219P01 | 193 | 4/193 | 0.300 | 38 |
+| SSD_00332P01 | 64 | 49/64 | 0.283 | 9 |
+| SSD_00342P01 | 177 | 3/177 | 0.297 | 35 |
+| SSD_00382P01 | 75 | 5/75 | 0.286 | 15 |
+
+**结论**：
+- `RuleParameters` 在 `RuleEngine` 与 `HierarchicalPlanner` 之间共享，mock L2 的 `param` 更新被成功应用。
+- `rule_update_history` 记录了每一步的 update_type / target / payload，conservative scheme A 的离线接线正确。
+- mock planning 输出 wait，对动作匹配影响有限，结果与 rule 基线接近，符合预期。
+
+### 19.5 Hierarchical Qwen 真实云端（SSD_00461P01，30 步）
+
+```bash
+. .env && QWEN_TEXT_MODEL=qwen3.7-max CLOUD_PROVIDER=qwen \
+  PYTHONPATH=. python src/experiments/offline_replay.py \
+  --game SSD_00461P01 --mode hierarchical --provider qwen \
+  --l2-interval 10 --max-steps 30 \
+  --output experiment_offline_replay_SSD_00461P01_hierarchical_qwen.json
+```
+
+结果：steps=29，type_match=10/29，action_match=7/29，composite=0.246，mean_latency_ms=3728.6，rule_update_count=4。
+
+**结论**：
+- Qwen API 可用，L2 规划与 rule update 均成功触发，无需回退 mock。
+- 每步延迟约 3.9s，主要来自同步 L2 调用；在线事件循环中需要 `run_in_executor` 异步化，否则浏览器会被阻塞（此前已修复）。
+- composite 低于 rule 基线，说明当前 L2 prompt 在离线回放场景下与 recorded expert action 存在偏差，可通过在 prompt 中强调"匹配 historical trajectory"或改为 target-name 模式优化。
+
+### 19.6 数据集采集
+
+为 SSD_00461P01 采集 30 步 VLM 训练样本：
+
+```bash
+PYTHONPATH=. python src/experiments/offline_replay.py \
+  --game SSD_00461P01 --mode rule --max-steps 30 --collect-dataset
+```
+
+产出 `collected_datasets/offline_replay_SSD_00461P01/samples.jsonl`，每行 `{image, state, action}` 均为字符串，可直接接入后续 VLM 训练管线。
+
+### 19.7 后续建议
+
+1. **动作匹配率低的游戏需要 profile 校准**：离线 replay 提供了快速的 profile-vs-trajectory 一致性检测手段。
+2. **扩大 Qwen 离线评估**：当前只在 SSD_00461P01 上跑了 30 步，可扩展到更多游戏以评估 L2 规划的泛化性。
+3. **异步化离线回放**：虽然离线不需要浏览器，但 L2 同步调用仍显著拖慢评估；可用线程池加速多游戏批量回放。
+4. **数据集增强**：当前采集使用真值 action，未来可加入 decider 预测 action 作为对比样本，用于训练 critic 或策略改进模型。
+

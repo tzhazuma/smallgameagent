@@ -18,6 +18,8 @@ processed-runs.rar
 processed-runs/
 vlm-training-data-processed-runs/
 vlm-training-data-*/
+games/
+collected_datasets/
 
 # Reference documents (binary, not tracked)
 *.pdf

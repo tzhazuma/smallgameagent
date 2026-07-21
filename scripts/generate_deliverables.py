@@ -345,18 +345,129 @@ def _add_bullet_slide(prs, title: str, bullets: list[str]) -> tuple:
 
 def _add_title_slide(prs, title: str, subtitle: str) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    # Background gradient-ish using two rectangles
+    # Deep indigo background
     bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
     _set_fill(bg, _C_PRIMARY)
+    # Decorative accent bar at bottom
     accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(5.6), _W, Inches(1.9))
     _set_fill(accent, _C_SECONDARY)
+    # Thin orange line
+    line = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(4.5), Inches(5.5), Inches(4.33), Inches(0.05))
+    _set_fill(line, _C_ACCENT)
 
     tb = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), Inches(12.3), Inches(1.4))
     _set_text_style(tb.text_frame.paragraphs[0], title, Pt(48), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
     tb2 = slide.shapes.add_textbox(Inches(0.5), Inches(3.8), Inches(12.3), Inches(1))
     _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(24), color=_C_LIGHT, align=PP_ALIGN.CENTER)
     tb3 = slide.shapes.add_textbox(Inches(0.5), Inches(6.15), Inches(12.3), Inches(0.6))
-    _set_text_style(tb3.text_frame.paragraphs[0], "smallgameagent 项目组 · 2026-07", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+    _set_text_style(tb3.text_frame.paragraphs[0], "smallgameagent 项目组 · 分层多 Agent + 在线规则更新", Pt(16), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+
+def _add_two_column_slide(prs, title: str, left_title: str, left_bullets: list[str], right_title: str, right_bullets: list[str]) -> None:
+    """A slide with two cards side by side."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, title)
+    _card(slide, 0.5, 1.4, 6.0, 5.4, left_title, left_bullets, _C_SECONDARY)
+    _card(slide, 6.8, 1.4, 6.0, 5.4, right_title, right_bullets, _C_ACCENT)
+    return slide
+
+
+def _add_rule_wiring_slide(prs) -> None:
+    """Visual slide showing RuleParameters shared between L2 and L0."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "规则在线更新：L2 的参数能真正改变 L0")
+
+    # L2 box
+    l2 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(1.6), Inches(4.0), Inches(1.4))
+    _set_fill(l2, _C_PRIMARY)
+    _set_text_style(l2.text_frame.paragraphs[0], "L2 云端 API\n检测触发条件，输出 param 更新", Pt(14), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Arrow down
+    arrow = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(2.6), Inches(3.1), Inches(0.8), Inches(0.7))
+    _set_fill(arrow, _C_MUTED)
+
+    # Shared parameter store
+    store = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(3.9), Inches(4.0), Inches(1.0))
+    _set_fill(store, _C_SECONDARY)
+    _set_text_style(store.text_frame.paragraphs[0], "共享 RuleParameters\ncoin_save_buffer / stuck_escape_threshold / ...", Pt(13), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Arrow down
+    arrow2 = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(2.6), Inches(4.95), Inches(0.8), Inches(0.7))
+    _set_fill(arrow2, _C_MUTED)
+
+    # L0 box
+    l0 = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.0), Inches(5.75), Inches(4.0), Inches(1.2))
+    _set_fill(l0, _C_ACCENT)
+    _set_text_style(l0.text_frame.paragraphs[0], "L0 规则引擎\n每步读取参数，执行 move / tap", Pt(14), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Side note card
+    _card(slide, 6.5, 1.6, 6.3, 5.35, "本次修复的关键点", [
+        "之前 L2 的 param 更新只停留在 HierarchicalPlanner 内部",
+        "RuleEngine 用硬编码默认值，导致更新无效",
+        "现在 HybridAgent 创建共享 RuleParameters，同时注入 L2 和 L0",
+        "L2 更新 → 共享参数 → L0 即时生效，形成完整闭环",
+    ], _C_SUCCESS)
+
+
+def _add_agent_comm_slide(prs) -> None:
+    """Agent communication and memory strategies slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "Agent 通信与记忆：从单兵到协作")
+
+    _card(slide, 0.4, 1.4, 4.0, 2.3, "记忆三层", [
+        "Episodic：逐步 state / action / reward",
+        "Semantic：游戏类型、目标语义向量",
+        "Procedural：成功策略、失败模式",
+    ], _C_PRIMARY)
+
+    _card(slide, 4.7, 1.4, 4.0, 2.3, "AgentBus 消息", [
+        "OBSERVATION / STATE_UPDATE",
+        "DECISION_PROPOSAL / CRITIQUE",
+        "RULE_UPDATE / MEMORY_WRITE",
+    ], _C_SECONDARY)
+
+    _card(slide, 9.0, 1.4, 4.0, 2.3, "协作流程", [
+        "Observer 采集 probe 状态",
+        "DecisionAnalyst 生成候选动作",
+        "Critic 评估一致性风险",
+        "MemoryCurator 归档有用模式",
+    ], _C_ACCENT)
+
+    # Bottom insight
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.4), Inches(4.0), Inches(12.5), Inches(1.1))
+    _set_fill(insight, _C_LIGHT)
+    _set_text_style(insight.text_frame.paragraphs[0],
+        "核心思路：不要把所有决策压给一个模型。让云端 API 做长程规划，本地 VLM 做画面理解，规则引擎做零延迟执行，记忆层负责跨 episode 复用。",
+        Pt(14), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
+def _add_provider_slide(prs) -> None:
+    """Updated multi-provider slide."""
+    _add_table_slide(prs, "云端多 Provider 实测状态",
+        ["Provider", "文本模型", "视觉模型", "状态"],
+        [
+            ["Kimi", "kimi-k2.7-code / k2.5", "kimi-k2.6 / k2.5", "✅ 可用"],
+            ["MiMo (xiaomi)", "mimo-v2.5", "mimo-v2.5", "✅ 可用"],
+            ["Qwen", "qwen3.7-max", "qwen3.7-max", "文本 ✅ / 视觉 ⚠️"],
+            ["OpenCodeGo", "deepseek-v4-flash", "mimo-v2.5", "❌ 余额不足"],
+            ["DeepSeek", "deepseek-chat", "deepseek-chat", "❌ 余额不足"],
+        ])
+
+
+def _add_section_slide(prs, title: str, subtitle: str = "") -> None:
+    """A full-bleed section divider with a dark background."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
+    _set_fill(bg, _C_PRIMARY)
+
+    tb = slide.shapes.add_textbox(Inches(0.6), Inches(2.7), Inches(12.1), Inches(1.2))
+    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(44), bold=True, color=_C_LIGHT)
+    if subtitle:
+        tb2 = slide.shapes.add_textbox(Inches(0.6), Inches(4.0), Inches(12.1), Inches(0.8))
+        _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(22), color=_C_LIGHT)
+
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(4.0 if not subtitle else 4.7), Inches(2), Inches(0.08))
+    _set_fill(accent, _C_ACCENT)
 
 
 def _add_architecture_slide(prs) -> None:
@@ -398,22 +509,6 @@ def _add_architecture_slide(prs) -> None:
     _set_text_style(tb.text_frame.paragraphs[0], "AgentBus · Observer → StateMapper → DecisionAnalyst → Verifier → Critic → MemoryCurator", Pt(12), color=_C_LIGHT, align=PP_ALIGN.CENTER)
 
 
-def _add_section_slide(prs, title: str, subtitle: str = "") -> None:
-    """A full-bleed section divider with a dark background."""
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), _W, _H)
-    _set_fill(bg, _C_PRIMARY)
-
-    tb = slide.shapes.add_textbox(Inches(0.6), Inches(2.7), Inches(12.1), Inches(1.2))
-    _set_text_style(tb.text_frame.paragraphs[0], title, Pt(44), bold=True, color=_C_LIGHT)
-    if subtitle:
-        tb2 = slide.shapes.add_textbox(Inches(0.6), Inches(4.0), Inches(12.1), Inches(0.8))
-        _set_text_style(tb2.text_frame.paragraphs[0], subtitle, Pt(22), color=_C_LIGHT)
-
-    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(4.0 if not subtitle else 4.7), Inches(2), Inches(0.08))
-    _set_fill(accent, _C_ACCENT)
-
-
 def write_pptx() -> None:
     prs = Presentation()
     prs.slide_width = _W
@@ -428,6 +523,7 @@ def write_pptx() -> None:
         "我们的解法：三层快慢分离架构",
         "云端多模型 API 与本地 VLM 的落地配置",
         "规则在线更新：让底层规则也能「进化」",
+        "Agent 通信与记忆策略",
         "最新实验结果与训练数据管线",
         "下一步我们要攻什么？",
     ])
@@ -435,7 +531,7 @@ def write_pptx() -> None:
     # ---- Section: Problem ----
     _add_section_slide(prs, "01 我们在解决什么问题？")
 
-    _add_bullet_slide(prs, "小游戏可玩广告，自动化起来并不 trivial", [
+    _add_bullet_slide(prs, "小游戏可玩广告，自动化并不 trivial", [
         "空间一致性：场景会随进度改变，云端模型容易「记错」障碍物位置",
         "时间一致性：后续策略会反向改写前面的行为语义，导致推进失败",
         "策略短视：有钱就去升级，而不是攒够再升级，效率很低",
@@ -450,24 +546,28 @@ def write_pptx() -> None:
 
     _add_bullet_slide(prs, "慢思考 + 快执行，各司其职", [
         "L0 规则引擎：每步 ~0 ms，负责 move / tap 的零延迟执行",
-        "L1 本地 VLM：看截图判断当前状态，每 5 步或卡住时做战术修正",
-        "L2 云端 API：看 probe state 做长程规划与规则更新，每 15 步或阶段切换触发",
+        "L1 本地 VLM：看截图判断当前状态，每 N 步或卡住时做战术修正",
+        "L2 云端 API：看 probe state 做长程规划与规则更新，每 M 步或阶段切换触发",
         "核心思路：把贵且慢的调用摊到多步，单步延迟压到接近 0",
     ])
 
     # ---- Section: Cloud API ----
     _add_section_slide(prs, "03 云端多 Provider API")
 
+    _add_provider_slide(prs)
+
     _add_bullet_slide(prs, "一个客户端，切换多家云模型", [
         "统一接入 OpenCodeGo / MiMo、Kimi、DeepSeek、Xiaomi、Qwen",
         ".env 集中管理 key 与 base_url，provider 用 CLOUD_PROVIDER 环境变量切换",
-        "当前实测可用：Kimi / xiaomi 文本+多模态；Qwen 文本可用；OpenCodeGo / DeepSeek 余额不足",
-        "修复 Kimi base_url 需加 /v1，Qwen 默认模型改为 qwen3.7-max",
+        "支持 KIMI_TEXT_MODEL / KIMI_VISION_MODEL 等覆盖默认模型",
+        "当前实测可用：Kimi / Xiaomi 文本+多模态；Qwen 文本可用；OpenCodeGo / DeepSeek 余额不足",
         "Kimi 系列自动省略 temperature，避免代理返回 400",
     ])
 
     # ---- Section: Rule update ----
     _add_section_slide(prs, "04 规则在线更新")
+
+    _add_rule_wiring_slide(prs)
 
     _add_bullet_slide(prs, "规则不是写死的，触发后才让上层改", [
         "触发器监控：composite 持续低迷 / stall 计数 / L0-L2 冲突 / 世界模型 stale",
@@ -477,8 +577,28 @@ def write_pptx() -> None:
         "目标：把「拿到钱就升级」的短视行为，改成「攒够再升级」的长程最优策略",
     ])
 
+    # ---- Section: Agent communication ----
+    _add_section_slide(prs, "05 Agent 通信与记忆")
+
+    _add_agent_comm_slide(prs)
+
+    _add_two_column_slide(prs, "通信与记忆的设计取舍",
+        "记忆读回的优势",
+        [
+            "00461 multi-bus-memory 0.106 → 0.300",
+            "00736 multi-bus-memory 0.269 → 0.300",
+            "跨 episode 复用成功模式",
+            "减少重复探索带来的 stall",
+        ],
+        "仍需解决的问题",
+        [
+            "00483 / 00517 multi-bus activity=0：driver 不匹配",
+            "strategy_memory 需要预热，冷启动时可能反噬",
+            "多 Agent 冲突时需要更严格的仲裁机制",
+        ])
+
     # ---- Section: Local VLM ----
-    _add_section_slide(prs, "05 本地 VLM：把 8 GB 显存用到极限")
+    _add_section_slide(prs, "06 本地 VLM：把 8 GB 显存用到极限")
 
     _add_bullet_slide(prs, "小模型 + 重量化 = 可落地的视觉层", [
         "基线：4-bit NF4 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
@@ -489,38 +609,38 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Results ----
-    _add_section_slide(prs, "06 实验结果")
+    _add_section_slide(prs, "07 实验结果")
 
-    _add_table_slide(prs, "B 类 15 款 tap-only 游戏：8 款稳定满分，7 款待诊断",
-        ["游戏", "rule", "multi-bus-memory", "状态"],
+    _add_table_slide(prs, "离线回放：rule 基线 vs 在线规则更新（5 款游戏）",
+        ["游戏", "rule composite", "hierarchical(mock)", "rule updates"],
         [
-            ["00219 养牛卖奶", "0.150", "0.150", "待诊断"],
-            ["00332 圣诞薅羊毛", "0.150", "0.150", "待诊断"],
-            ["00342 建造合并", "0.150", "0.150", "待诊断"],
-            ["00382 低坑杀鲨鱼", "0.300", "0.300", "✅ 满分"],
-            ["00394 车 zip", "0.300", "0.300", "✅ 满分"],
-            ["00427 淘金", "0.150", "0.150", "待诊断"],
-            ["00434 选项卡捏", "0.150", "0.150", "待诊断"],
-            ["00475 太空圈地", "0.300", "0.300", "✅ 满分"],
-            ["00482 砍树扩地", "0.150", "0.150", "待诊断"],
-            ["00526 通水洗地", "0.300", "0.300", "✅ 满分"],
-            ["00532 瀑布巨木", "0.300", "0.300", "✅ 满分"],
-            ["00594 破石收水", "0.300", "0.300", "✅ 满分"],
-            ["00669 斜挖订单", "0.300", "0.300", "✅ 满分"],
-            ["00733 海洋回收", "0.150", "0.150", "待诊断"],
-            ["00742 加油小镇", "0.300", "0.300", "✅ 满分"],
+            ["00461 塔防", "0.241", "0.241", "13"],
+            ["00219 养牛卖奶", "0.300", "0.300", "38"],
+            ["00332 圣诞薅羊毛", "0.300", "0.283", "9"],
+            ["00342 建造合并", "0.300", "0.297", "35"],
+            ["00382 低坑杀鲨鱼", "0.300", "0.286", "15"],
+        ])
+
+    _add_table_slide(prs, "Qwen L2 真实云端：SSD_00461P01（29 步）",
+        ["指标", "数值"],
+        [
+            ["type_match", "10/29"],
+            ["action_match", "7/29"],
+            ["composite", "0.246"],
+            ["mean_latency_ms", "3728.6"],
+            ["rule_update_count", "4"],
         ])
 
     _add_bullet_slide(prs, "关键发现", [
-        "A 类 joystick：00461 / 00483 / 00522 在 multi-bus* 下稳定 0.300，记忆读回是决定性收益",
-        "A 类短板：00496 / 00517 / 00736 的 multi-bus activity=0，driver 需要按游戏类型再调优",
-        "B 类 tap-only：8/15 游戏 rule 即可 0.300，说明点击目标屏幕坐标的策略本身可行",
-        "B 类待诊断：7/15 游戏 0.150（activity=0），可能是目标被遮挡、需要拖拽，或坐标映射偏差",
-        "22 游戏全部可驱动、可采集轨迹，为后续 QLoRA 提供了 27,693 条合并样本",
+        "离线回放无需浏览器即可快速验证 decider 改动，5 款游戏 rule/hierarchical 跑通",
+        "00332/00382 等 tap-only 游戏与 rule engine 策略一致，joystick 游戏仍有优化空间",
+        "Qwen API 成功触发 L2 规划与 rule update，但单步延迟约 3.7s，在线需异步化",
+        "memory / multi-bus 模式可接入同一离线回放框架，下一步批量对比",
+        "已采集 SSD_00461P01 的 VLM 训练样本，可直接接入 QLoRA 微调管线",
     ])
 
     # ---- Section: Data ----
-    _add_section_slide(prs, "07 训练数据管线")
+    _add_section_slide(prs, "08 训练数据管线")
 
     _add_bullet_slide(prs, "跑过的轨迹 = 可复用的训练数据", [
         "batch_runner 每步记录 state / action / keyNumbers / reason",
@@ -530,13 +650,14 @@ def write_pptx() -> None:
     ])
 
     # ---- Section: Next ----
-    _add_section_slide(prs, "08 下一步")
+    _add_section_slide(prs, "09 下一步")
 
     _add_bullet_slide(prs, "接下来要攻的几件事", [
-        "跑完 B 组 15 游戏 × 2 模式 × 2 seeds，拿到完整 22 游戏矩阵",
-        "定位并修复 00483 multi-bus / multi-bus-memory activity=0 的问题",
-        "让本地 VLM 常驻，验证 hierarchical 三层协同的真实收益",
-        "在 5090 服务器上跑 QLoRA 微调，把 VLM 变成专用的画面理解器",
+        "把离线回放扩展到 multi-bus / multi-bus-memory，量化 Agent 通信与记忆的真实收益",
+        "在更多游戏上跑 Qwen L2，测试规则更新对 composite 的泛化提升",
+        "让本地 VLM 常驻，验证 L1 战术修正对 joystick 游戏的收益",
+        "在 5090 服务器上跑 QLoRA 微调，把 VLM 变成专用画面理解器",
+        "完善 Critic → MemoryCurator 的闭环：规则更新提议需经评估再落地",
     ])
 
     # ---- Thanks ----

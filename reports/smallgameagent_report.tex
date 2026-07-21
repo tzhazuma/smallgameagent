@@ -482,9 +482,10 @@ multi\_bus\_memory & 0.134 & 0 & 0.88s \\
 \begin{itemize}
   \item 新增 \_\_CODE\_0000\_\_，统一接入 OpenCodeGo、Kimi、DeepSeek、MiMo（provider 名 \_\_CODE\_0001\_\_）、Qwen；
   \item 通过 \_\_CODE\_0000\_\_ 文件配置各 provider 的 \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_ / 默认模型，\_\_CODE\_0003\_\_ 已加入 \_\_CODE\_0004\_\_，绝不会被提交；
+  \item 支持 \_\_CODE\_0000\_\_、\_\_CODE\_0001\_\_、\_\_CODE\_0002\_\_ 等环境变量覆盖默认模型，便于切换 kimi-k2.7-code / kimi-k2.6 / mimo-v2.5 等；
   \item 切换 provider 只需设置 \_\_CODE\_0000\_\_ 环境变量，模型名随 provider 自动默认；
   \item 保留 \_\_CODE\_0000\_\_ 完全兼容，现有调用无需修改；
-  \item Kimi 系列自动省略 \_\_CODE\_0000\_\_ 参数，避免 Console Go 代理返回 400。
+  \item Kimi 系列自动省略 \_\_CODE\_0000\_\_ 参数，避免代理返回 400。
 \end{itemize}
 
 \begin{table}[htbp]
@@ -507,11 +508,38 @@ qwen & qwen3.7-max & qwen3.7-max & \_\_CODE\_0000\_\_ & 文本可用，视觉格
 \end{tabular}
 \end{table}
 
-当前实测可用：Kimi（kimi-k2.5）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。\\
+当前实测可用：Kimi（kimi-k2.5 / kimi-k2.7-code / kimi-k2.6）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。\\
+
+\_\_BOLD\_0001\_\_：在 L2 规则更新任务中，Kimi 与 Xiaomi 对「游戏策略优化/参数调整」类 prompt 返回空内容（疑似内容过滤），而 \_\_BOLD\_0002\_\_。因此当前规则更新 A/B 实验采用 Qwen 作为 L2 provider。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。\\
+
+本轮新增 \_\_CODE\_0000\_\_ 模型覆盖示例：\\
+
+```bash\\
+export KIMI\_TEXT\_MODEL=kimi-k2.7-code\\
+export KIMI\_VISION\_MODEL=kimi-k2.6\\
+export XIAOMI\_TEXT\_MODEL=mimo-v2.5\\
+export XIAOMI\_VISION\_MODEL=mimo-v2.5\\
+```\\
 
 \subsection{13. 规则在线更新架构（保守方案 A）}
 
-针对同学提出的「规则作为底层，需要修改时让上两层更新」的需求，我们设计并实现了在线规则更新机制：\\
+针对同学提出的「规则作为底层，需要修改时让上两层更新」的需求，我们设计并实现了在线规则更新机制。\\
+
+\subsubsection{13.0 关键修复：规则引擎真正读取运行时参数}
+
+之前的实现中，\_\_CODE\_0000\_\_ 会创建并更新 \_\_CODE\_0001\_\_，但 \_\_CODE\_0002\_\_ 并不读取这些参数，导致 L2 输出的参数更新\_\_BOLD\_0003\_\_（更新只停留在内存对象里）。本轮修复了这条关键接线：\\
+
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 新增可选 \_\_CODE\_0001\_\_ 参数；
+  \item \_\_CODE\_0000\_\_ 在 \_\_CODE\_0001\_\_ 时创建\_\_BOLD\_0005\_\_的 \_\_CODE\_0002\_\_ 实例，同时传给 \_\_CODE\_0003\_\_ 和 \_\_CODE\_0004\_\_；
+  \item \_\_CODE\_0000\_\_ 在关键策略节点通过 \_\_CODE\_0001\_\_ 读取运行时参数：
+  \item \_\_CODE\_0000\_\_：金币缓冲，避免「有钱就升级」导致的来回折返；
+  \item \_\_CODE\_0000\_\_：卡死触发 escape 的步数阈值；
+  \item \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_：soft target lock 的锁定步数与容错次数；
+  \item \_\_CODE\_0000\_\_：coin override 的最大持续步数。
+\end{itemize}
+
+这样 L2 的 \_\_CODE\_0000\_\_ 类型更新可以即时改变 L0 规则引擎的行为，真正实现「上层触发 → 底层参数进化」。\\
 
 \subsubsection{13.1 三层结构}
 
@@ -534,10 +562,10 @@ qwen & qwen3.7-max & qwen3.7-max & \_\_CODE\_0000\_\_ & 文本可用，视觉格
 
 ```json\\
 \{\\
-"update\_type": "param|memory\_entry|phase\_contract",\\
-"target": "rules.upgrade\_threshold",\\
+"update\_type": "param|memory\_entry|phase\_contract|code\_file",\\
+"target": "rules.coin\_save\_buffer",\\
 "reason": "金币未攒够就升级导致往返",\\
-"payload": \{"upgrade\_threshold": 500\},\\
+"payload": \{"coin\_save\_buffer": 10\},\\
 "confidence": 0.82\\
 \}\\
 ```\\
@@ -547,7 +575,10 @@ qwen & qwen3.7-max & qwen3.7-max & \_\_CODE\_0000\_\_ & 文本可用，视觉格
 \begin{itemize}
   \item 新增 \_\_CODE\_0000\_\_：\_\_CODE\_0001\_\_、\_\_CODE\_0002\_\_、\_\_CODE\_0003\_\_、\_\_CODE\_0004\_\_；
   \item 扩展 \_\_CODE\_0000\_\_：在 \_\_CODE\_0001\_\_ 中检查触发条件，满足时调用 L2 请求规则更新，解析并应用；
-  \item 规则更新只修改内存参数和 \_\_CODE\_0000\_\_，不修改源码文件（保守方案 A）；
+  \item 扩展 \_\_CODE\_0000\_\_：读取共享的 \_\_CODE\_0001\_\_，让参数更新即时生效；
+  \item \_\_CODE\_0000\_\_ 改用线程池执行同步的 \_\_CODE\_0001\_\_，避免同步云 API 调用阻塞 Playwright 事件循环；
+  \item 为 \_\_CODE\_0000\_\_ 增加 \_\_CODE\_0001\_\_（默认 5 步），防止 composite/stall 持续低迷时连续触发 L2；
+  \item \_\_CODE\_0000\_\_ 类型更新受 allowlist + 置信度 + patch 大小 + 自动备份多重保护，未通过则进入待审队列；
   \item 新增 \_\_CODE\_0000\_\_ 14 个单测。
 \end{itemize}
 
@@ -717,4 +748,125 @@ SSD\_00742P01 & multi-bus-memory & 0.300 & 1.000 & 0 & 15.8s \\
 2. \_\_BOLD\_0000\_\_：00461 从 0.106 提升到 0.300，但 00483 的 multi-bus/multi-bus-memory 均 activity=0，说明 00483 的 profile/driver 需要调优。\\
 3. \_\_BOLD\_0001\_\_：使用 Playwright bundled Chromium + \_\_CODE\_0000\_\_ 后，headless 场景初始化成功率 100\%。\\
 4. \_\_BOLD\_0002\_\_：代表性子集轨迹经 \_\_CODE\_0000\_\_ 转换后新增 1,173 条样本，存入 \_\_CODE\_0001\_\_。\\
+
+\subsection{19. Offline Replay Evaluation on Processed Runs}
+
+\subsubsection{19.1 动机}
+
+此前的所有评估都依赖浏览器在线跑游戏，初始化、渲染和 probe 稳定性会消耗大量时间。为了\_\_BOLD\_0002\_\_和\_\_BOLD\_0003\_\_，新增 \_\_CODE\_0000\_\_：直接读取 \_\_CODE\_0001\_\_ 与对应 state/action JSON，在零浏览器环境下回放并打分。\\
+
+\subsubsection{19.2 实现}
+
+\begin{itemize}
+  \item \_\_BOLD\_0003\_\_：\_\_CODE\_0000\_\_ 把 dataset-workflow 的旧格式转成 \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_ 需要的 probe 格式。
+  \item \_\_BOLD\_0012\_\_：\_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_ → \_\_CODE\_0003\_\_；\_\_CODE\_0004\_\_ / \_\_CODE\_0005\_\_ → \_\_CODE\_0006\_\_；\_\_CODE\_0007\_\_ → \_\_CODE\_0008\_\_。同时兼容 \_\_CODE\_0009\_\_、\_\_CODE\_0010\_\_、\_\_CODE\_0011\_\_ 三种 dataset 字段名。
+  \item \_\_BOLD\_0004\_\_：构造最小 ctx，注入 \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_，使 \_\_CODE\_0003\_\_ 可离线运行。
+  \item \_\_BOLD\_0000\_\_：
+  \item \_\_CODE\_0000\_\_：纯 \_\_CODE\_0001\_\_。
+  \item \_\_CODE\_0000\_\_：\_\_CODE\_0001\_\_，默认 \_\_CODE\_0002\_\_（禁用本地 VLM），支持 \_\_CODE\_0003\_\_ / \_\_CODE\_0004\_\_ 切换云端模型，\_\_CODE\_0005\_\_ 使用确定性 mock 客户端验证 rule-update 闭环。
+  \item \_\_CODE\_0000\_\_：云端 API 直接输出 JSON action；API 失败时回退到 \_\_CODE\_0001\_\_。
+  \item \_\_BOLD\_0001\_\_：steps、action/type matches、move cosine similarity、activity/stall ratio、latency、rule\_update\_count/history、composite（复用 \_\_CODE\_0000\_\_ rubric）。
+  \item \_\_BOLD\_0003\_\_：\_\_CODE\_0000\_\_ 把 \_\_CODE\_0001\_\_ 写入 \_\_CODE\_0002\_\_。
+\end{itemize}
+
+\subsubsection{19.3 5 游戏 rule 基线（完整轨迹）}
+
+> 注：processed-run 的 \_\_CODE\_0000\_\_ 会被 UI 节点误触发，离线回放中已忽略假阳性终止标志。\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+游戏 & steps & type\_match & action\_match & composite \\
+\hline
+SSD\_00461P01 & 67 & 13/67 & 2/67 & 0.241 \\
+\hline
+SSD\_00219P01 & 193 & 0/193 & 0/193 & 0.300 \\
+\hline
+SSD\_00332P01 & 64 & 51/64 & 1/64 & 0.300 \\
+\hline
+SSD\_00342P01 & 177 & 0/177 & 0/177 & 0.300 \\
+\hline
+SSD\_00382P01* & 75 & 1/75 & 1/75 & 0.300 \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbackslash{}* SSD\_00848P01 不存在，自动替换为 SSD\_00382P01。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item SSD\_00461P01 与 SSD\_00332P01 的 recorded trajectory 与当前 rule engine 策略一致，动作匹配率较高。
+  \item SSD\_00219P01、SSD\_00342P01、SSD\_00382P01 的 recorded action 以 \_\_CODE\_0000\_\_ 为主，但 game profile 为 tap-only，rule engine 输出 tap 而真值为 move，匹配率接近 0。这暴露了一个重要问题：\_\_BOLD\_0001\_\_，需要进一步校准 profile 或按驱动类型筛选轨迹。
+\end{itemize}
+
+\subsubsection{19.4 Hierarchical mock：rule-update 接线验证}
+
+使用 \_\_CODE\_0000\_\_ 时，L2 客户端总是返回 \_\_CODE\_0001\_\_ 更新（\_\_CODE\_0002\_\_），置信度 0.95。\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+游戏 & steps & type\_match & composite & rule\_update\_count \\
+\hline
+SSD\_00461P01 & 67 & 11/67 & 0.241 & 13 \\
+\hline
+SSD\_00219P01 & 193 & 4/193 & 0.300 & 38 \\
+\hline
+SSD\_00332P01 & 64 & 49/64 & 0.283 & 9 \\
+\hline
+SSD\_00342P01 & 177 & 3/177 & 0.297 & 35 \\
+\hline
+SSD\_00382P01 & 75 & 5/75 & 0.286 & 15 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 在 \_\_CODE\_0001\_\_ 与 \_\_CODE\_0002\_\_ 之间共享，mock L2 的 \_\_CODE\_0003\_\_ 更新被成功应用。
+  \item \_\_CODE\_0000\_\_ 记录了每一步的 update\_type / target / payload，conservative scheme A 的离线接线正确。
+  \item mock planning 输出 wait，对动作匹配影响有限，结果与 rule 基线接近，符合预期。
+\end{itemize}
+
+\subsubsection{19.5 Hierarchical Qwen 真实云端（SSD\_00461P01，30 步）}
+
+```bash\\
+. .env \&\& QWEN\_TEXT\_MODEL=qwen3.7-max CLOUD\_PROVIDER=qwen \textbackslash{}\\
+PYTHONPATH=. python src/experiments/offline\_replay.py \textbackslash{}\\
+--game SSD\_00461P01 --mode hierarchical --provider qwen \textbackslash{}\\
+--l2-interval 10 --max-steps 30 \textbackslash{}\\
+--output experiment\_offline\_replay\_SSD\_00461P01\_hierarchical\_qwen.json\\
+```\\
+
+结果：steps=29，type\_match=10/29，action\_match=7/29，composite=0.246，mean\_latency\_ms=3728.6，rule\_update\_count=4。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item Qwen API 可用，L2 规划与 rule update 均成功触发，无需回退 mock。
+  \item 每步延迟约 3.9s，主要来自同步 L2 调用；在线事件循环中需要 \_\_CODE\_0000\_\_ 异步化，否则浏览器会被阻塞（此前已修复）。
+  \item composite 低于 rule 基线，说明当前 L2 prompt 在离线回放场景下与 recorded expert action 存在偏差，可通过在 prompt 中强调"匹配 historical trajectory"或改为 target-name 模式优化。
+\end{itemize}
+
+\subsubsection{19.6 数据集采集}
+
+为 SSD\_00461P01 采集 30 步 VLM 训练样本：\\
+
+```bash\\
+PYTHONPATH=. python src/experiments/offline\_replay.py \textbackslash{}\\
+--game SSD\_00461P01 --mode rule --max-steps 30 --collect-dataset\\
+```\\
+
+产出 \_\_CODE\_0000\_\_，每行 \_\_CODE\_0001\_\_ 均为字符串，可直接接入后续 VLM 训练管线。\\
+
+\subsubsection{19.7 后续建议}
+
+1. \_\_BOLD\_0000\_\_：离线 replay 提供了快速的 profile-vs-trajectory 一致性检测手段。\\
+2. \_\_BOLD\_0000\_\_：当前只在 SSD\_00461P01 上跑了 30 步，可扩展到更多游戏以评估 L2 规划的泛化性。\\
+3. \_\_BOLD\_0000\_\_：虽然离线不需要浏览器，但 L2 同步调用仍显著拖慢评估；可用线程池加速多游戏批量回放。\\
+4. \_\_BOLD\_0000\_\_：当前采集使用真值 action，未来可加入 decider 预测 action 作为对比样本，用于训练 critic 或策略改进模型。\\
+
 \end{document}
