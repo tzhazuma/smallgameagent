@@ -461,8 +461,8 @@ def write_pptx() -> None:
     _add_bullet_slide(prs, "一个客户端，切换多家云模型", [
         "统一接入 OpenCodeGo / MiMo、Kimi、DeepSeek、Xiaomi、Qwen",
         ".env 集中管理 key 与 base_url，provider 用 CLOUD_PROVIDER 环境变量切换",
-        "当前实测可用：Xiaomi / mimo-v2.5（文本 + 多模态）",
-        "OpenCodeGo、DeepSeek 余额不足；Kimi、Qwen 需确认模型名后重测",
+        "当前实测可用：Kimi / xiaomi 文本+多模态；Qwen 文本可用；OpenCodeGo / DeepSeek 余额不足",
+        "修复 Kimi base_url 需加 /v1，Qwen 默认模型改为 qwen3.7-max",
         "Kimi 系列自动省略 temperature，避免代理返回 400",
     ])
 

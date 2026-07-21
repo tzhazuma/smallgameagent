@@ -27,9 +27,9 @@ PROVIDER_CONFIGS: dict[str, dict[str, str]] = {
         "vision_model": "mimo-v2.5",
     },
     "kimi": {
-        "base_url": "https://api.kimi.com/coding",
-        "text_model": "kimi-k2.7-code",
-        "vision_model": "kimi-k2.6",
+        "base_url": "https://api.kimi.com/coding/v1",
+        "text_model": "kimi-k2.5",
+        "vision_model": "kimi-k2.5",
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com",
@@ -43,8 +43,8 @@ PROVIDER_CONFIGS: dict[str, dict[str, str]] = {
     },
     "qwen": {
         "base_url": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-        "text_model": "qwen-coder-plus",
-        "vision_model": "qwen-vl-plus",
+        "text_model": "qwen3.7-max",
+        "vision_model": "qwen3.7-max",
     },
 }
 

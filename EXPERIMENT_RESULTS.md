@@ -85,19 +85,19 @@
 
 已添加 `.env.example` 记录上述配置；`.env` 已本地更新并 gitignored。
 
-### 多 Provider 可用性冒烟（2026-07-21）
+### 多 Provider 可用性冒烟（2026-07-21 更新）
 
-对每个 provider 发送一条简单 JSON 结构化 prompt，测试连通性与余额：
+对每个 provider 发送一条 JSON 结构化 prompt 并尝试多模态 vision 请求：
 
-| provider | model | 结果 | 延迟 |
-|---|---|---|---|
-| opencodego | mimo-v2.5 | 401 Insufficient balance | 2.42s |
-| kimi | kimi-k2.7-code | 404 Resource not found | 0.13s |
-| deepseek | deepseek-chat | 402 Insufficient Balance | 0.41s |
-| xiaomi | mimo-v2.5 | ✅ JSON 解析成功 | 0.76s |
-| qwen | qwen-coder-plus | 404 Model not exist | 0.16s |
+| provider | 文本模型 | 文本可用 | 文本延迟 | 视觉可用 | 视觉延迟 | 说明 |
+|---|---|---|---|---|---|---|
+| opencodego | mimo-v2.5 | ❌ | — | ❌ | — | 401 Insufficient balance |
+| kimi | kimi-k2.5 | ✅ | 4.23s | ✅ | 7.22s | 需 base_url 为 /coding/v1 |
+| deepseek | deepseek-chat | ❌ | — | ❌ | — | 402 Insufficient Balance |
+| xiaomi | mimo-v2.5 | ✅ | 2.88s | ✅ | 3.86s | 多模态可用 |
+| qwen | qwen3.7-max | ✅ | 16.32s | ❌ | — | 文本可用，vision 格式待适配 |
 
-结论：当前仅有 xiaomi/MiMo 可用。OpenCodeGo 与 DeepSeek 余额不足；Kimi/Qwen 需要确认模型名/接口权限。后续 hierarchical / 规则更新实验默认使用 xiaomi/mimo-v2.5。
+结论：当前可用文本 provider 为 **kimi / xiaomi / qwen**，可用多模态为 **kimi / xiaomi**。OpenCodeGo 与 DeepSeek 余额不足。`src/agent/api_client.py` 已更新 Kimi base_url（`/coding/v1`）与 Qwen 默认模型（`qwen3.7-max`）。
 
 ### 代表性游戏子集跑测（representative_results/）
 

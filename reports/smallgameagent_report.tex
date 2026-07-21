@@ -490,24 +490,24 @@ multi\_bus\_memory & 0.134 & 0 & 0.88s \\
 \begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{|l|l|l|l|}
+\begin{tabular}{|l|l|l|l|l|}
 \hline
-Provider & 默认文本模型 & 默认视觉模型 & base\_url \\
+Provider & 默认文本模型 & 默认视觉模型 & base\_url & 当前状态 \\
 \hline
-opencodego & deepseek-v4-flash & mimo-v2.5 & \_\_CODE\_0000\_\_ \\
+opencodego & deepseek-v4-flash & mimo-v2.5 & \_\_CODE\_0000\_\_ & 余额不足 \\
 \hline
-kimi & kimi-k2.7-code & kimi-k2.6 & \_\_CODE\_0000\_\_ \\
+kimi & kimi-k2.5 & kimi-k2.5 & \_\_CODE\_0000\_\_ & 文本+视觉可用 \\
 \hline
-deepseek & deepseek-chat & deepseek-chat & \_\_CODE\_0000\_\_ \\
+deepseek & deepseek-chat & deepseek-chat & \_\_CODE\_0000\_\_ & 余额不足 \\
 \hline
-xiaomi & mimo-v2.5 & mimo-v2.5 & \_\_CODE\_0000\_\_ \\
+xiaomi & mimo-v2.5 & mimo-v2.5 & \_\_CODE\_0000\_\_ & 文本+视觉可用 \\
 \hline
-qwen & qwen-coder-plus & qwen-vl-plus & \_\_CODE\_0000\_\_ \\
+qwen & qwen3.7-max & qwen3.7-max & \_\_CODE\_0000\_\_ & 文本可用，视觉格式待适配 \\
 \hline
 \end{tabular}
 \end{table}
 
-新增 \_\_CODE\_0000\_\_ 单测覆盖 provider 路由、env 读取、参数覆盖、认证文件 fallback。\\
+当前实测可用：Kimi（kimi-k2.5）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。\\
 
 \subsection{13. 规则在线更新架构（保守方案 A）}
 

@@ -286,15 +286,15 @@ results = asyncio.run(run_batch(config))
 - 保留 `OpenCodeGoClient` 完全兼容，现有调用无需修改；
 - Kimi 系列自动省略 `temperature` 参数，避免 Console Go 代理返回 400。
 
-| Provider | 默认文本模型 | 默认视觉模型 | base_url |
-|---|---|---|---|
-| opencodego | deepseek-v4-flash | mimo-v2.5 | `https://opencode.ai/zen/go/v1` |
-| kimi | kimi-k2.7-code | kimi-k2.6 | `https://api.kimi.com/coding` |
-| deepseek | deepseek-chat | deepseek-chat | `https://api.deepseek.com` |
-| xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` |
-| qwen | qwen-coder-plus | qwen-vl-plus | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| Provider | 默认文本模型 | 默认视觉模型 | base_url | 当前状态 |
+|---|---|---|---|---|
+| opencodego | deepseek-v4-flash | mimo-v2.5 | `https://opencode.ai/zen/go/v1` | 余额不足 |
+| kimi | kimi-k2.5 | kimi-k2.5 | `https://api.kimi.com/coding/v1` | 文本+视觉可用 |
+| deepseek | deepseek-chat | deepseek-chat | `https://api.deepseek.com` | 余额不足 |
+| xiaomi | mimo-v2.5 | mimo-v2.5 | `https://api.xiaomimimo.com/v1` | 文本+视觉可用 |
+| qwen | qwen3.7-max | qwen3.7-max | `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` | 文本可用，视觉格式待适配 |
 
-新增 `tests/test_api_client.py` 单测覆盖 provider 路由、env 读取、参数覆盖、认证文件 fallback。
+当前实测可用：Kimi（kimi-k2.5）、Xiaomi（mimo-v2.5）文本+多模态均可用；Qwen（qwen3.7-max）文本可用。OpenCodeGo、DeepSeek 因余额不足暂时无法调用。
 
 ## 13. 规则在线更新架构（保守方案 A）
 
