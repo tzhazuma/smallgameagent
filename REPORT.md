@@ -1572,7 +1572,31 @@ param_schema = {
 - confidence 0.85，接近自动应用阈值。
 - 没有盲目调整不相关的参数（如 coin_save_buffer），说明 schema 中的 meaning 字段帮助 L2 聚焦于问题相关的旋钮。
 
-### 37.10 对架构的启示
+### 37.10 在线验证 v2（全量 Schema + 驱动类型保护）
+
+用扩展后的 13 参数 schema + driver_type 在 SSD_00461P01（tap-guide）上重跑在线 A/B：
+
+| Mode | Composite | Activity | Move | Tap | Stall | Elapsed |
+|---|---|---|---|---|---|---|
+| rule | 0.129 | 0.857 | 2 | 12 | 2 | 9.8s |
+| hierarchical (qwen, full schema) | 0.150 | **0.000** | **14** | **0** | 14 | 211.6s |
+
+**根因分析**：
+- rule baseline 有 12 个 tap 步和 2 个 move 步，activity 正常。
+- hierarchical 有 14 个 move 步和 0 个 tap 步，全部 stall。
+- L2 的 `stuck_escape_threshold: 5→3` 更新让 rule engine 的 escape 逻辑过于频繁地触发 move，**覆盖了 tap-guide 机制**。对于 tap-guide 游戏，escape 参数不应该被修改。
+
+**修复**：在 `_L2_UPDATE_SYSTEM` prompt 中新增 **CRITICAL SAFETY RULES**：
+- For `tap-guide` games: Do NOT change `stuck_escape_threshold` or `escape_score_radius`（这些是 joystick 参数，改了会破坏 tap-guide 机制）。
+- For `joystick` games: 这些参数是主要旋钮。
+- Trigger/watchdog parameters are always safe to adjust.
+
+**结论**：
+1. L2 策略质量不足的根因不是 prompt 不够好，而是 **L2 不知道哪些参数对当前游戏类型是安全的**。
+2. 驱动类型保护是必要的安全层：即使 L2 输出格式正确，如果改错了参数，会破坏 rule engine 的行为平衡。
+3. Qwen 配额已耗尽（429），下次重测需等到配额刷新。
+
+### 37.11 对架构的启示
 
 - **L2 规划必须输出结构化目标队列**（target_name + action_hint），而不是自然语言描述。
 - **horizon 越长越好**，但需要配合更频繁的重规划（建议 5–8 步）。

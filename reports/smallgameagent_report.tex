@@ -2284,7 +2284,44 @@ reason & 泛泛而谈 & 「agent is stuck on suboptimal targets; reducing lock t
   \item 没有盲目调整不相关的参数（如 coin\_save\_buffer），说明 schema 中的 meaning 字段帮助 L2 聚焦于问题相关的旋钮。
 \end{itemize}
 
-\subsubsection{37.10 对架构的启示}
+\subsubsection{37.10 在线验证 v2（全量 Schema + 驱动类型保护）}
+
+用扩展后的 13 参数 schema + driver\_type 在 SSD\_00461P01（tap-guide）上重跑在线 A/B：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+Mode & Composite & Activity & Move & Tap & Stall & Elapsed \\
+\hline
+rule & 0.129 & 0.857 & 2 & 12 & 2 & 9.8s \\
+\hline
+hierarchical (qwen, full schema) & 0.150 & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 14 & 211.6s \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item rule baseline 有 12 个 tap 步和 2 个 move 步，activity 正常。
+  \item hierarchical 有 14 个 move 步和 0 个 tap 步，全部 stall。
+  \item L2 的 \_\_CODE\_0000\_\_ 更新让 rule engine 的 escape 逻辑过于频繁地触发 move，\_\_BOLD\_0001\_\_。对于 tap-guide 游戏，escape 参数不应该被修改。
+\end{itemize}
+
+\_\_BOLD\_0001\_\_：在 \_\_CODE\_0000\_\_ prompt 中新增 \_\_BOLD\_0002\_\_：\\
+\begin{itemize}
+  \item For \_\_CODE\_0000\_\_ games: Do NOT change \_\_CODE\_0001\_\_ or \_\_CODE\_0002\_\_（这些是 joystick 参数，改了会破坏 tap-guide 机制）。
+  \item For \_\_CODE\_0000\_\_ games: 这些参数是主要旋钮。
+  \item Trigger/watchdog parameters are always safe to adjust.
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+1. L2 策略质量不足的根因不是 prompt 不够好，而是 \_\_BOLD\_0000\_\_。\\
+2. 驱动类型保护是必要的安全层：即使 L2 输出格式正确，如果改错了参数，会破坏 rule engine 的行为平衡。\\
+3. Qwen 配额已耗尽（429），下次重测需等到配额刷新。\\
+
+\subsubsection{37.11 对架构的启示}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_（target\_name + action\_hint），而不是自然语言描述。
