@@ -154,11 +154,13 @@ class RuleUpdateTrigger:
             return None
 
         wm = getattr(ctx, "working_memory", None) or {}
-        if hasattr(wm, "last_composite"):
+        if hasattr(wm, "last_composite") and callable(wm.last_composite):
             composite = float(wm.last_composite(self.composite_window))
+        elif isinstance(wm, dict):
+            composite = float(wm.get("last_composite", 0.0))
         else:
-            composite = float(wm.get("last_composite", 0.0) if isinstance(wm, dict) else 0.0)
-        stall = int(wm.get("stall_streak", 0) if isinstance(wm, dict) else 0)
+            composite = float(getattr(wm, "last_composite", 0.0))
+        stall = int(wm.get("stall_streak", 0) if isinstance(wm, dict) else getattr(wm, "stuck_streak", 0))
         conflict = int(wm.get("conflict_streak", 0) if isinstance(wm, dict) else 0)
 
         self._composites.append(composite)

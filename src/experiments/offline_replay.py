@@ -665,6 +665,11 @@ def run_offline_replay(
     dataset_dir: Path | None = None,
     mock: bool = False,
     max_rounds: int = 2,
+    composite_threshold: float = 0.15,
+    conflict_threshold: int = 3,
+    cooldown_steps: int = 8,
+    relative_decrease_pct: float | None = None,
+    max_updates_per_run: int = 3,
 ) -> OfflineReplayResult:
     """Replay one processed run offline and score the decider."""
     result = OfflineReplayResult(game_id, mode)
@@ -698,6 +703,11 @@ def run_offline_replay(
             l2_interval=l2_interval,
             stuck_threshold=stuck_threshold,
             rule_params=rule_params,
+            composite_threshold=composite_threshold,
+            conflict_threshold=conflict_threshold,
+            cooldown_steps=cooldown_steps,
+            relative_decrease_pct=relative_decrease_pct,
+            max_updates_per_run=max_updates_per_run,
         )
     elif mode in ("multi-bus", "multi-bus-memory"):
         llm_agent = _make_llm_agent(provider=provider, mock=mock)
@@ -897,6 +907,11 @@ def main() -> int:
     parser.add_argument("--l1-interval", type=int, default=0, help="L1 local VLM interval (0=disabled).")
     parser.add_argument("--l2-interval", type=int, default=15, help="L2 cloud API interval.")
     parser.add_argument("--stuck-threshold", type=int, default=3, help="Stuck streak threshold for L1/L2.")
+    parser.add_argument("--composite-threshold", type=float, default=0.15, help="Absolute composite trigger threshold.")
+    parser.add_argument("--conflict-threshold", type=int, default=3, help="L0/L2 conflict streak threshold.")
+    parser.add_argument("--cooldown-steps", type=int, default=8, help="Cooldown steps between rule-update triggers.")
+    parser.add_argument("--relative-decrease-pct", type=float, default=None, help="Relative decrease from peak to trigger (e.g. 0.25).")
+    parser.add_argument("--max-updates-per-run", type=int, default=3, help="Hard cap on rule-update L2 calls per run.")
     parser.add_argument("--collect-dataset", action="store_true", help="Write VLM training samples JSONL.")
     parser.add_argument("--dataset-dir", type=Path, default=None, help="Override dataset output directory.")
     parser.add_argument("--output", type=Path, default=None, help="Override aggregate JSON output path.")
@@ -926,6 +941,11 @@ def main() -> int:
                 dataset_dir=args.dataset_dir,
                 mock=args.mock,
                 max_rounds=args.max_rounds,
+                composite_threshold=args.composite_threshold,
+                conflict_threshold=args.conflict_threshold,
+                cooldown_steps=args.cooldown_steps,
+                relative_decrease_pct=args.relative_decrease_pct,
+                max_updates_per_run=args.max_updates_per_run,
             )
         except Exception as exc:
             logger.exception("Replay failed for %s", game_id)

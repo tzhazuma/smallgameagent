@@ -231,8 +231,10 @@ class HierarchicalPlanner:
 
         # Watchdog: feed this step's metrics to detect bad rule updates.
         wm = getattr(ctx, "working_memory", None)
-        if wm is not None and hasattr(wm, "last_composite"):
+        if wm is not None and hasattr(wm, "last_composite") and callable(wm.last_composite):
             composite = float(wm.last_composite(self._rule_watchdog._trial_window))
+        elif wm is not None:
+            composite = float(getattr(wm, "last_composite", 0.0))
         else:
             composite = 0.0
         stall = int(getattr(wm, "stuck_streak", 0)) if wm is not None else 0
@@ -445,11 +447,12 @@ class HierarchicalPlanner:
                 if applied:
                     logger.info("Applied rule update: %s", request.to_dict())
                     wm = getattr(ctx, "working_memory", None)
-                    composite = (
-                        float(wm.last_composite(self._rule_watchdog._trial_window))
-                        if wm is not None and hasattr(wm, "last_composite")
-                        else 0.0
-                    )
+                    if wm is not None and hasattr(wm, "last_composite") and callable(wm.last_composite):
+                        composite = float(wm.last_composite(self._rule_watchdog._trial_window))
+                    elif wm is not None:
+                        composite = float(getattr(wm, "last_composite", 0.0))
+                    else:
+                        composite = 0.0
                     self._rule_watchdog.on_update_applied(ctx.step_number, composite)
                 else:
                     logger.warning("Rule update not applied: %s", request.to_dict())

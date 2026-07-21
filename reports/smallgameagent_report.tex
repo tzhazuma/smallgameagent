@@ -2099,7 +2099,48 @@ Watchdog 回滚 & 2 次（step 8、step 16），均因 composite 低于 baseline
 
 在 SSD\_00461P01 上尝试了 rule vs hierarchical（qwen + 改进触发器）的 25 步在线 A/B，但 qwen 单次 L2 调用延迟过高（>70s），导致 25 步 run 超过 8 分钟仍未完成，已终止。这再次验证了 §34 的结论：\_\_BOLD\_0000\_\_。改进触发器的机制正确性已由 §36.5 的合成数据测试充分验证；在线正向收益需要在延迟更低的 provider（如 kimi 配额恢复后）或离线回放中进一步确认。\\
 
-\subsubsection{36.7 下一步}
+\subsubsection{36.7 离线回放验证（offline\_replay + mock L2）}
+
+把改进触发器接入 \_\_CODE\_0000\_\_ 后，在 SSD\_00461P01 的 processed-run（29 步）上对比旧/新触发配置：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+配置 & rule\_update\_count & composite & type\_match & action\_match \\
+\hline
+rule 基线 & 0 & 0.257 & 5/29 & 3/29 \\
+\hline
+旧触发（threshold=0.15, unlimited, cooldown=5） & 4 & 0.257 & 5/29 & 2/29 \\
+\hline
+\_\_BOLD\_0000\_\_（threshold=0.10, relative=0.25, max=2, cooldown=10） & \_\_BOLD\_0000\_\_ & 0.257 & 5/29 & 2/29 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. 改进触发器把 L2 调用从 4 次减少到 2 次（-50\%），composite 保持不变。\\
+2. 旧触发器在 composite  already 高于阈值（0.257 > 0.15）的情况下仍触发了 4 次更新，说明绝对阈值在离线回放场景下过于敏感。\\
+3. 改进触发器的 \_\_CODE\_0000\_\_ 只有在 composite 从峰值下降 25\% 以上时才触发，避免了无意义的 L2 调用。\\
+4. mock L2 的更新对性能无影响（composite 相同），但真实云端 L2 的更新可能有害（见 §34），因此减少调用次数本身就是收益。\\
+
+命令：\\
+
+```bash\\
+\section{改进触发器}
+python -B src/experiments/offline\_replay.py \textbackslash{}\\
+--game SSD\_00461P01 --mode hierarchical --mock --l2-interval 99999 \textbackslash{}\\
+--composite-threshold 0.10 --relative-decrease-pct 0.25 \textbackslash{}\\
+--max-updates-per-run 2 --cooldown-steps 10\\
+
+\section{旧触发器}
+python -B src/experiments/offline\_replay.py \textbackslash{}\\
+--game SSD\_00461P01 --mode hierarchical --mock --l2-interval 99999 \textbackslash{}\\
+--composite-threshold 0.15 --max-updates-per-run 999 --cooldown-steps 5\\
+```\\
+
+\subsubsection{36.8 下一步}
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。\\
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。\\
