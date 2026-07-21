@@ -1,13 +1,13 @@
 {
-  "tested_at": "2026-07-21T10:43:06",
+  "tested_at": "2026-07-21T12:45:34",
   "providers": [
     {
       "provider": "opencodego",
       "configured": true,
       "text_ok": false,
-      "text_latency_s": null,
-      "text_error": "Error code: 401 - {'type': 'error', 'error': {'type': 'CreditsError', 'message': 'Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01KQ2TXV5XKT5CSNCJPQ2HS9FS/billing'}",
-      "text_raw": "",
+      "text_latency_s": 3.55,
+      "text_error": "no valid JSON dict (length=10)",
+      "text_raw": "{\"provider",
       "vision_ok": false,
       "vision_latency_s": null,
       "vision_error": "",
@@ -17,13 +17,13 @@
       "provider": "kimi",
       "configured": true,
       "text_ok": true,
-      "text_latency_s": 4.23,
+      "text_latency_s": 1.49,
       "text_error": "",
-      "text_raw": "```json\n{\n  \"provider_name\": \"xiaomi\",\n  \"status\": \"ok\"\n}\n```",
-      "vision_ok": true,
-      "vision_latency_s": 7.22,
-      "vision_error": "",
-      "vision_raw": "```json\n{\n  \"objects\": [],\n  \"color\": \"black\"\n}\n```"
+      "text_raw": "```json\n{\"provider_name\":\"xiaomi\",\"status\":\"ok\"}\n```",
+      "vision_ok": false,
+      "vision_latency_s": 4.09,
+      "vision_error": "no valid JSON dict",
+      "vision_raw": ""
     },
     {
       "provider": "deepseek",
@@ -41,21 +41,21 @@
       "provider": "xiaomi",
       "configured": true,
       "text_ok": true,
-      "text_latency_s": 2.88,
+      "text_latency_s": 1.45,
       "text_error": "",
-      "text_raw": "```json\n{\n  \"provider_name\": \"xiaomi\",\n  \"status\": \"ok\"\n}\n```",
+      "text_raw": "```json\n{\"provider_name\":\"xiaomi\",\"status\":\"ok\"}\n```",
       "vision_ok": true,
-      "vision_latency_s": 3.86,
+      "vision_latency_s": 3.97,
       "vision_error": "",
-      "vision_raw": "```json\n{\n  \"objects\": [],\n  \"color\": \"red\"\n}\n```"
+      "vision_raw": "{\n  \"objects\": [\"rectangle\", \"stripe\"],\n  \"color\": \"red\"\n}"
     },
     {
       "provider": "qwen",
       "configured": true,
       "text_ok": true,
-      "text_latency_s": 16.32,
+      "text_latency_s": 6.74,
       "text_error": "",
-      "text_raw": "{\n  \"provider_name\": \"xiaomi\",\n  \"status\": \"ok\"\n}",
+      "text_raw": "{\"provider_name\":\"xiaomi\",\"status\":\"ok\"}",
       "vision_ok": false,
       "vision_latency_s": null,
       "vision_error": "Error code: 400 - {'error': {'code': 'invalid_parameter_error', 'param': None, 'message': 'The provided messages input is invalid. The error info is [Unexpected item type in content.].', 'type': 'inva",
@@ -68,7 +68,6 @@
     "qwen"
   ],
   "available_vision": [
-    "kimi",
     "xiaomi"
   ]
 }

@@ -1134,17 +1134,61 @@ python src/inference/server.py \textbackslash{}\\
 \end{tabular}
 \end{table}
 
-\subsubsection{22.4 关键发现}
+\subsubsection{22.4 真实云端 L2 实验}
+
+新建 \_\_CODE\_0000\_\_，对 qwen / kimi / xiaomi 三家云模型直接下发 code-file 更新请求，验证它们能否正确生成可应用的 JSON patch。\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+Provider & 模型 & 延迟 & 结果 & 说明 \\
+\hline
+qwen & qwen3.7-max & 7.83s & ✅ 应用成功 & JSON 格式完整，置信度 0.95 \\
+\hline
+kimi & kimi-k2.7-code & 3.32s & ✅ 应用成功 & 需显式指定 \_\_CODE\_0000\_\_ \\
+\hline
+xiaomi & mimo-v2.5 & 6.18s & ✅ 应用成功 & 需提供完整 JSON 模板作为 few-shot，否则会截断或返回空 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+
+1. \_\_BOLD\_0000\_\_，只要 system prompt 明确说明 schema，就能输出完整可解析的 code-file update。\\
+2. \_\_BOLD\_0000\_\_，直接把 prompt\_ctx 序列化为 JSON 会导致空输出；改为在 user message 中给出完整 JSON 模板（few-shot）后，输出稳定且可应用。\\
+3. 三家模型都选择了把 \_\_CODE\_0000\_\_ 从 5 改为 3，并给出合理的策略解释，说明 L2 能够理解「卡死阈值」与「escape 行为」的因果关系。\\
+
+命令：\\
+
+```bash\\
+. .env\\
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp\_code\_file\_rule\_update\_real.py --provider qwen\\
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp\_code\_file\_rule\_update\_real.py --provider kimi\\
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp\_code\_file\_rule\_update\_real.py --provider xiaomi\\
+```\\
+
+产出：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_
+  \item \_\_CODE\_0000\_\_
+  \item \_\_CODE\_0000\_\_
+\end{itemize}
+
+\subsubsection{22.5 关键发现}
 
 1. \_\_BOLD\_0001\_\_：mock L2 输出结构化 JSON，\_\_CODE\_0000\_\_ 通过全部安全门，配置文件被修改，规则引擎在下一步即读取到新阈值。\\
-2. \_\_BOLD\_0000\_\_：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。\\
-3. \_\_BOLD\_0003\_\_：\_\_CODE\_0000\_\_（内存）适合高频小调，\_\_CODE\_0001\_\_（配置文件）适合需要持久化的引擎旋钮；两者共享同一 \_\_CODE\_0002\_\_ 读取路径，优先级为内存 > 文件 > 默认值。\\
+2. \_\_BOLD\_0000\_\_：qwen/kimi/xiaomi 均成功，验证了多 provider 下的可行性。\\
+3. \_\_BOLD\_0000\_\_：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。\\
+4. \_\_BOLD\_0003\_\_：\_\_CODE\_0000\_\_（内存）适合高频小调，\_\_CODE\_0001\_\_（配置文件）适合需要持久化的引擎旋钮；两者共享同一 \_\_CODE\_0002\_\_ 读取路径，优先级为内存 > 文件 > 默认值。\\
+5. \_\_BOLD\_0000\_\_：qwen/kimi 适合开放式 schema 描述；xiaomi 更适合 few-shot 模板。\\
 
-\subsubsection{22.5 后续工作}
+\subsubsection{22.6 后续工作}
 
 \begin{itemize}
-  \item 在真实云端 API（kimi / qwen / mimo）上触发 code-file 更新，观察模型对「哪些参数该改、改多少」的决策质量；
-  \item 把 \_\_CODE\_0000\_\_ 的 schema 写入 L2 prompt，限制可改字段与取值范围；
+  \item 把 \_\_CODE\_0000\_\_ 的 schema 写进 L2 prompt，约束可改字段与取值范围；
+  \item 在真实游戏运行中触发 code-file 更新（而非离线静态 prompt），观察 L2 在动态 stall/composite 下的决策质量；
   \item 接入版本控制：每次 code-file 更新生成一条 git-style diff 记录，方便回滚与审计。
 \end{itemize}
 

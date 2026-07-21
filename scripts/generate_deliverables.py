@@ -429,11 +429,48 @@ def _add_code_file_update_slide(prs) -> None:
         "实验结束后配置文件自动恢复",
     ], _C_ACCENT)
 
-    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(4.2), Inches(12.3), Inches(1.0))
+    # Provider table
+    n_rows = 4
+    n_cols = 4
+    left = Inches(0.5)
+    top = Inches(4.25)
+    width = Inches(12.3)
+    height = Inches(1.6)
+    table = slide.shapes.add_table(n_rows, n_cols, left, top, width, height).table
+    headers = ["Provider", "模型", "延迟", "结果"]
+    rows = [
+        ["qwen", "qwen3.7-max", "7.83s", "✅ 应用成功"],
+        ["kimi", "kimi-k2.7-code", "3.32s", "✅ 应用成功"],
+        ["xiaomi", "mimo-v2.5", "6.18s", "✅ 应用成功"],
+    ]
+    for j, h in enumerate(headers):
+        cell = table.cell(0, j)
+        cell.text = h
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = _C_PRIMARY
+        for paragraph in cell.text_frame.paragraphs:
+            paragraph.font.size = Pt(11)
+            paragraph.font.bold = True
+            paragraph.font.color.rgb = _C_LIGHT
+            paragraph.font.name = "Microsoft YaHei"
+            paragraph.alignment = PP_ALIGN.CENTER
+    for i, row in enumerate(rows):
+        for j, val in enumerate(row):
+            cell = table.cell(i + 1, j)
+            cell.text = str(val)
+            if i % 2 == 0:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = _C_LIGHT
+            for paragraph in cell.text_frame.paragraphs:
+                paragraph.font.size = Pt(11)
+                paragraph.font.name = "Microsoft YaHei"
+                paragraph.alignment = PP_ALIGN.CENTER
+
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(6.0), Inches(12.3), Inches(0.6))
     _set_fill(insight, _C_LIGHT)
     _set_text_style(insight.text_frame.paragraphs[0],
-        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」。重启后仍然生效，且风险被限制在单一配置文件中。",
-        Pt(14), color=_C_DARK, align=PP_ALIGN.CENTER)
+        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」，且 qwen/kimi/xiaomi 三家都能正确生成可应用的 JSON patch。",
+        Pt(12), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
 def _add_agent_comm_slide(prs) -> None:

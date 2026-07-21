@@ -63,9 +63,30 @@ PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update.py
 - 规则引擎无需重启即可读取新参数，说明「云端模型调引擎旋钮」的路径可行。
 - 安全门（allowlist + 高置信度 + 自动备份）把风险控制在单一配置文件内，未通过则进入待审队列，避免误改源码。
 
+### 真实云端 L2 实验（P17.1）
+
+新增 `src/experiments/exp_code_file_rule_update_real.py`：
+
+```bash
+. .env
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider qwen
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider kimi
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider xiaomi
+```
+
+| Provider | 模型 | 延迟 | 结果 | 说明 |
+|---|---|---|---|---|
+| qwen | qwen3.7-max | 7.83s | ✅ 应用成功 | 开放式 schema 即可 |
+| kimi | kimi-k2.7-code | 3.32s | ✅ 应用成功 | 需 `KIMI_TEXT_MODEL=kimi-k2.7-code` |
+| xiaomi | mimo-v2.5 | 6.18s | ✅ 应用成功 | 需 few-shot JSON 模板 |
+
+**Prompt 工程发现**：
+- qwen/kimi 对「schema 描述 + user JSON context」效果好；
+- xiaomi/mimo 对长 JSON user message 会返回空，需把期望输出的完整 JSON 模板直接写在 user message 里。
+
 ### 质量门
 
-- `ruff check src/engine/rules.py src/agent/hybrid_agent.py src/agent/decision_makers/hierarchical_maker.py src/experiments/exp_code_file_rule_update.py`：全绿。
+- `ruff check src/engine/rules.py src/agent/hybrid_agent.py src/agent/decision_makers/hierarchical_maker.py src/experiments/exp_code_file_rule_update.py src/experiments/exp_code_file_rule_update_real.py`：全绿。
 - `pytest tests/test_rule_update.py tests/test_hybrid_agent.py tests/test_hierarchical_planner.py -q`：**47 passed**。
 
 ---

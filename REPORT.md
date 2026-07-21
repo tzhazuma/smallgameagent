@@ -752,16 +752,48 @@ Gemma-4-E4B 对应使用 `src/training/train_gemma4.py`，参数结构相同。
 | 自动备份 | ✅ |
 | 实验后恢复 | ✅ |
 
-### 22.4 关键发现
+### 22.4 真实云端 L2 实验
+
+新建 `src/experiments/exp_code_file_rule_update_real.py`，对 qwen / kimi / xiaomi 三家云模型直接下发 code-file 更新请求，验证它们能否正确生成可应用的 JSON patch。
+
+| Provider | 模型 | 延迟 | 结果 | 说明 |
+|---|---|---|---|---|
+| qwen | qwen3.7-max | 7.83s | ✅ 应用成功 | JSON 格式完整，置信度 0.95 |
+| kimi | kimi-k2.7-code | 3.32s | ✅ 应用成功 | 需显式指定 `KIMI_TEXT_MODEL=kimi-k2.7-code` |
+| xiaomi | mimo-v2.5 | 6.18s | ✅ 应用成功 | 需提供完整 JSON 模板作为 few-shot，否则会截断或返回空 |
+
+**关键发现**：
+
+1. **qwen 和 kimi 对开放式 JSON schema 接受度最好**，只要 system prompt 明确说明 schema，就能输出完整可解析的 code-file update。
+2. **xiaomi/mimo-v2.5 对长 JSON user message 敏感**，直接把 prompt_ctx 序列化为 JSON 会导致空输出；改为在 user message 中给出完整 JSON 模板（few-shot）后，输出稳定且可应用。
+3. 三家模型都选择了把 `stuck_escape_threshold` 从 5 改为 3，并给出合理的策略解释，说明 L2 能够理解「卡死阈值」与「escape 行为」的因果关系。
+
+命令：
+
+```bash
+. .env
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider qwen
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider kimi
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update_real.py --provider xiaomi
+```
+
+产出：
+- `experiment_code_file_rule_update_real_qwen.json`
+- `experiment_code_file_rule_update_real_kimi.json`
+- `experiment_code_file_rule_update_real_xiaomi.json`
+
+### 22.5 关键发现
 
 1. **code-file 更新在离线实验中成功闭环**：mock L2 输出结构化 JSON，`RuleUpdateApplier` 通过全部安全门，配置文件被修改，规则引擎在下一步即读取到新阈值。
-2. **安全门有效**：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。
-3. **与内存参数更新的关系**：`RuleParameters`（内存）适合高频小调，`code_file`（配置文件）适合需要持久化的引擎旋钮；两者共享同一 `_param()` 读取路径，优先级为内存 > 文件 > 默认值。
+2. **真实云端 L2 也能生成正确的 code-file update**：qwen/kimi/xiaomi 均成功，验证了多 provider 下的可行性。
+3. **安全门有效**：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。
+4. **与内存参数更新的关系**：`RuleParameters`（内存）适合高频小调，`code_file`（配置文件）适合需要持久化的引擎旋钮；两者共享同一 `_param()` 读取路径，优先级为内存 > 文件 > 默认值。
+5. **不同模型需要不同 prompt 工程**：qwen/kimi 适合开放式 schema 描述；xiaomi 更适合 few-shot 模板。
 
-### 22.5 后续工作
+### 22.6 后续工作
 
-- 在真实云端 API（kimi / qwen / mimo）上触发 code-file 更新，观察模型对「哪些参数该改、改多少」的决策质量；
-- 把 `runtime_rules.json` 的 schema 写入 L2 prompt，限制可改字段与取值范围；
+- 把 `runtime_rules.json` 的 schema 写进 L2 prompt，约束可改字段与取值范围；
+- 在真实游戏运行中触发 code-file 更新（而非离线静态 prompt），观察 L2 在动态 stall/composite 下的决策质量；
 - 接入版本控制：每次 code-file 更新生成一条 git-style diff 记录，方便回滚与审计。
 
 
