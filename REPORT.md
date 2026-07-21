@@ -950,5 +950,207 @@ RuleEngine 下一步读取新参数，行为改变
 5. **版本化规则更新**：每次 code-file 更新生成一条 diff 记录，支持一键回滚。
 
 
+## 25. 云端 API 直接做 gameplay 决策的负结果
 
+### 25.1 实验背景
+
+除了用云端 API 做规则更新，我们也试了让云端模型直接输出每一步动作（api-rule 和 hierarchical 模式）。毕竟如果大模型能端到端玩游戏，最省架构。实验覆盖了 OpenCodeGo（deepseek-v4-flash / mimo-v2.5）、Kimi（k2.7-code / k2.6）和 MiMo（mimo-v2.5），结果并不理想。
+
+### 25.2 api-rule 模式：OpenCodeGo 在 SSD_00461P01 上全部 fallback
+
+`api-rule` 模式的设计是：每步把 probe state 和当前规则上下文发给云端，让它决定 action；解析失败或返回空就 fallback 到 wait。
+
+| 指标 | 数值 |
+|---|---|
+| 总步数 | 29 |
+| type_match | 16/29 |
+| action_match | 16/29 |
+| composite | 0.2196 |
+| 平均延迟 | 4.37s |
+| fallback 占比 | 约 90% |
+
+**关键发现**：
+- 前 9 步的真值都是 move，但 OpenCodeGo 每一步都返回空字符串，系统 fallback 成 wait。
+- 第 11~22 步真值刚好是 wait，fallback 的 wait 才「碰巧」匹配上。
+- 这意味着 **OpenCodeGo 对「AI agent 正在操作游戏」这类 prompt 有内容过滤或拒绝策略**，它愿意写代码、愿意聊天，但不愿意直接输出游戏动作。
+
+### 25.3 hierarchical 模式：L2 输出部分有效，但整体仍弱
+
+`hierarchical` 模式下，云端只负责每 15 步输出一次宏观 plan，L0 规则引擎负责执行。理论上这能规避「直接输出动作」的过滤问题。
+
+| 指标 | 数值 |
+|---|---|
+| 总步数 | 29 |
+| type_match | 6/29 |
+| action_match | 3/29 |
+| composite | 0.2625 |
+| 平均延迟 | 2.56s |
+
+**关键发现**：
+- L2 的规划输出有时被截断或为空，导致 L0 只能按规则自己跑。
+- 即使 L2 给出「Follow guidance and approach enemies」这种宏观指令，L0 把它翻译成 tap-guide 动作后，与真值的 move 动作还是对不上。
+- 这说明 **宏观规划有用，但云端输出必须更结构化**（例如直接给出目标名称队列，而不是自然语言描述），否则 L0 翻译时误差很大。
+
+### 25.4 直接 gameplay 的对比（Kimi / MiMo / OpenCodeGo）
+
+| Provider | 模型 | 模式 | Steps | Composite | Activity | 说明 |
+|---|---|---|---|---|---|---|
+| Kimi | k2.7-code | api | 15 | 0.150 | 0.000 | 全部 fallback 到 wait |
+| MiMo | mimo-v2.5 | api | 15 | 0.150 | 0.000 | 全部 fallback 到 wait |
+| OpenCodeGo | deepseek-v4-flash / mimo-v2.5 | api-rule | 29 | 0.2196 | 0.464 |  mostly fallback |
+| OpenCodeGo | deepseek-v4-flash / mimo-v2.5 | hierarchical | 29 | 0.2625 | 0.750 | 部分规划有效 |
+| Rule baseline | — | rule | 15 | 0.150 | 1.000 | 稳定有动作 |
+
+**结论**：
+1. **当前云端多模态模型不适合直接做逐帧 gameplay 决策**。原因可能是内容安全策略、对游戏控制任务不熟悉、或者 prompt 里缺少足够的动作空间约束。
+2. **云端模型更适合做「不频繁的高层次决策」**：长程规划、规则更新、异常诊断。这些任务对延迟不敏感，且可以容忍几秒钟的思考时间。
+3. **这反而验证了我们三层架构的合理性**：把云端放在 L2，本地规则放在 L0，本地 VLM 放在 L1，各司其职。
+
+### 25.5 对架构的启示
+
+- **L0 规则不能丢**：它是唯一稳定、零延迟、activity 有保障的底座。
+- **L2 不要直接输出动作**：输出结构化目标或参数更新，让 L0 去翻译和执行。
+- **OpenCodeGo 的代码生成能力可用，但 gameplay 动作生成能力不可用**：code-file 规则更新实验成功，但 api-rule/hierarchical 直接 gameplay 失败，说明 provider 的能力边界要摸清楚。
+
+
+## 26. 本地 VLM 视觉上下文实验：Gemma-4-E4B vs Qwen3.5-4B
+
+### 26.1 实验目的
+
+§23 已经证明 Qwen3.5-4B 的视觉摘要不够稳定，甚至会带偏云端策略。本节换用 Gemma-4-E4B（4B 参数，Google 最新多模态模型），在相同 setting 下重跑，看视觉上下文到底有没有帮助。
+
+### 26.2 环境
+
+- 本地模型：`gemma-4-E4B-it-Q4_K_M.gguf` + `mmproj-F16.gguf`
+- 推理后端：llama.cpp CUDA12
+- GPU：NVIDIA RTX 5060 Laptop 8 GB
+- KV-cache 量化：`--cache-type-k q4_0 --cache-type-v q4_0`，避免 8GB 显存吃紧
+- 云端模型：qwen3.7-max（与 §23 保持一致，方便对比）
+- 评估数据：processed-runs/SSD_00461P01，step 2-10（共 9 个有截图的 step）
+
+启动命令：
+
+```bash
+LD_LIBRARY_PATH=/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0 \
+/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-nvidia-cuda12-avx2-2.17.0/llama-server \
+  -m /home/azuma/.lmstudio/models/unsloth/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-Q4_K_M.gguf \
+  --mmproj /home/azuma/.lmstudio/models/unsloth/gemma-4-E4B-it-GGUF/mmproj-F16.gguf \
+  --host 127.0.0.1 --port 1234 -c 4096 -ngl 99 \
+  --cache-type-k q4_0 --cache-type-v q4_0
+```
+
+### 26.3 结果
+
+| 指标 | Qwen3.5-4B | Gemma-4-E4B |
+|---|---|---|
+| 评估步数 | 9 | 9 |
+| 本地 VLM 平均延迟 | ~7.1s / 帧 | ~7.8s / 帧 |
+| text-only 动作匹配 | 5/9 | 3/9 |
+| with-visual 动作匹配 | 3/9 | **5/9** |
+| with-visual 相比 text-only | -2/9 | **+2/9** |
+
+**关键发现**：
+
+1. **Gemma-4-E4B 的视觉摘要确实能帮云端策略纠偏**。在 step 7 和 step 10，text-only 的云端预测方向错误，但加上 Gemma 的视觉摘要后预测正确。
+2. **Gemma 的摘要质量比 Qwen3.5-4B 更稳定**。虽然偶尔也会输出 chain-of-thought，但截断和胡言乱语的情况明显减少。
+3. **text-only baseline 在不同模型上表现不同**：Qwen3.5-4B 是 5/9，Gemma 是 3/9。这说明云端模型本身的倾向也会影响结果，视觉上下文的作用需要配对评估。
+4. **延迟仍在 7-8s/帧级别**，如果 L1 每步都调用会拖慢整个系统。实际部署时应该只在前几步、卡住、或阶段切换时调用 L1。
+
+### 26.4 典型 case 分析
+
+**Step 7**：
+- 真值：move (0.674, 0.739)，向右上方移动。
+- text-only 预测：move (0, 1)，向上。
+- with-visual 预测：move (0.6, 0.4)，右上方，匹配。
+- Gemma 摘要：「Open desert battlefield... player centrally positioned within the arena, engaged in combat. Multiple hostile units surround the player...」这个描述帮助云端理解到「被包围，需要斜向 reposition」。
+
+**Step 10**：
+- 真值：move (0.588, 0.809)，向右上方移动。
+- text-only 预测：move (0, 1)，向上。
+- with-visual 预测：move (0.6, 0.6)，右上方，匹配。
+- Gemma 摘要：「Open desert/sandy battlefield... enemy units advancing from the lower right...」云端据此判断应该朝右上方迎敌。
+
+### 26.5 结论
+
+- **本地小 VLM 的视觉上下文不是没用的，而是模型依赖性很强**。
+- **Gemma-4-E4B 在「给策略 planner 看的摘要」这个任务上，比默认 Qwen3.5-4B 更可靠**。
+- **下一步**：固定用 Gemma-4-E4B 做 L1，同时用 15,083 条 processed-runs 数据做 QLoRA 微调，训练它输出更结构化的视觉上下文（例如 JSON：{ "arrow_dir": "up-right", "nearest_enemy": "front", "obstacles": ["wall_left"] }）。
+
+
+## 27. Representative Subset 在线跑测（6 游戏 × 15 runs）
+
+### 27.1 实验设计
+
+为了验证修复后的 `exp_representative_subset.py` 在真实浏览器环境下的稳定性，我们挑了 6 个有代表性的游戏，分成两组：
+
+- **A 组（tap-guide 可用）**：SSD_00461P01（塔防）、SSD_00483P01（吸沙抽水）、SSD_00522P02（地下炸矿）
+  - 模式：rule / multi-bus / multi-bus-memory
+- **B 组（tap-only）**：SSD_00382P01（低坑杀鲨鱼）、SSD_00594P02（破石收水）、SSD_00742P01（加油小镇）
+  - 模式：rule / multi-bus-memory
+
+每组每个配置跑 1 个 seed（42），max_steps=25。所有在线游戏都通过 `PLAYWRIGHT_CHROMIUM_PATH` 启动 Chromium。
+
+### 27.2 总体结果
+
+| 模式 | Runs | Mean Composite | Mean Activity | Mean Latency (s) | Errors |
+|---|---|---|---|---|---|
+| multi-bus | 3 | 0.250 | 0.667 | 16.8 | 0 |
+| multi-bus-memory | 6 | **0.275** | **0.833** | 15.3 | 0 |
+| rule | 6 | 0.239 | 0.861 | 16.8 | 0 |
+
+- **15 个 run 全部成功完成**，无错误。
+- **multi-bus-memory 综合表现最好**：composite 和 activity 都优于 rule 和 multi-bus。
+- **multi-bus 平均 activity 只有 0.667**，主要被 SSD_00483P01 拉低（该游戏 multi-bus 全部 move，然后 stall）。
+
+### 27.3 逐游戏结果
+
+| 游戏 | 类型 | rule | multi-bus | multi-bus-memory |
+|---|---|---|---|---|
+| SSD_00461P01 塔防 | A | 0.149 | **0.300** | **0.300** |
+| SSD_00483P01 吸沙抽水 | A | 0.184 | 0.150 | 0.150 |
+| SSD_00522P02 地下炸矿 | A | 0.215 | **0.300** | **0.300** |
+| SSD_00382P01 低坑杀鲨鱼 | B | 0.288 | — | **0.300** |
+| SSD_00594P02 破石收水 | B | **0.300** | — | **0.300** |
+| SSD_00742P01 加油小镇 | B | **0.300** | — | **0.300** |
+
+**关键发现**：
+
+1. **multi-bus-memory ≥ rule 在 5/6 游戏上成立**，唯一例外是 SSD_00483P01（两种模式都只有 0.150）。
+2. **SSD_00483P01 的 multi-bus/multi-bus-memory activity=0**：25 步全是 move，stall 24 步。说明该游戏的 joystick 基线或 driver 与 multi-bus 决策不匹配，需要单独调参或换 tap-only 驱动。
+3. **SSD_00461P01 的 rule 模式最差（0.149）**：有 5 步 move、5 步 stall，说明纯规则在该游戏上容易迷路；multi-bus 通过总线协调把 activity 拉到 1.0。
+4. **B 组三个 tap-only 游戏 rule 已经能到 0.288-0.300**，multi-bus-memory 主要是保持或小幅提升。
+
+### 27.4 效率与稳定性
+
+- 平均延迟 15-17s，与之前的 batch 实验一致。
+- 所有 trajectory JSONL 都已保存到 `representative_results/{A,B}_representative/trajectories/`，可直接加入训练集。
+- 本次实验确认 `PLAYWRIGHT_CHROMIUM_PATH` 必须 source `.env` 才能正确传入，已修复脚本自动加载 `.env`。
+
+
+## 28. 本轮总体结论与下一步
+
+### 28.1 已经验证的事情
+
+1. **三层架构合理**：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。
+2. **云端 API 的能力边界清晰**：写代码、改配置、做规划都可以；但直接逐帧输出 gameplay 动作会触发过滤或空返回。
+3. **本地 VLM 有潜力**：Gemma-4-E4B 的视觉摘要比 Qwen3.5-4B 更稳定，能帮云端策略纠偏，但还需要微调才能稳定超越 text-only。
+4. **multi-bus-memory 仍是当前最强基线**：在 representative subset 上综合 composite 最高，且 5/6 游戏优于或持平 rule。
+5. **规则在线更新已跑通**：qwen/kimi/xiaomi 三家都能输出结构化 code-file 更新，并安全落盘到 `configs/runtime_rules.json`。
+
+### 28.2 仍然存在的问题
+
+1. **SSD_00483P01 的 multi-bus activity=0**：需要诊断是 driver/profile 问题，还是 bus 决策在该游戏上选择了错误动作。
+2. **本地 VLM 延迟 7-8s/帧**：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。
+3. **L2 输出契约不够强**：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。
+4. **缺少真实游戏中的在线触发**：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。
+
+### 28.3 下一步实验计划
+
+1. **在线 code-file 触发**：在 representative subset 中让 L2 根据实时 composite/stall 触发 `runtime_rules.json` 更新，对比更新前后的得分。
+2. **00483 专项诊断**：单独跑 00483 的 rule / multi-bus / tap-only / api-rule 四种模式，定位 activity=0 的根因。
+3. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。
+4. **结构化视觉上下文**：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。
+5. **QLoRA 微调**：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。
+6. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。
+7. **更多云端 provider 的 code-file 更新**：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。
 

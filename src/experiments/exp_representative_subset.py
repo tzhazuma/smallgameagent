@@ -10,14 +10,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from configs.game_profiles import get_driver_for_type, get_game_type
-from src.experiments.analyze_batch import analyze
-from src.experiments.batch_runner import BatchConfig, run_batch
+# Best-effort load .env so that PLAYWRIGHT_CHROMIUM_PATH and API keys are
+# available when the script is launched without sourcing .env first.
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
+if _ENV_FILE.is_file():
+    for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        if key and val and key not in os.environ:
+            os.environ[key] = val.strip('\"').strip("'")
+
+from configs.game_profiles import get_driver_for_type, get_game_type  # noqa: E402
+from src.experiments.analyze_batch import analyze  # noqa: E402
+from src.experiments.batch_runner import BatchConfig, run_batch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 GAMES_DIR = ROOT / "_extracted" / "games"

@@ -9,15 +9,20 @@ import pytest
 from src.agent.lmstudio_client import LMStudioClient
 
 
+@pytest.fixture(autouse=True)
+def _clear_lmstudio_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent real LMSTUDIO_MODEL / LMSTUDIO_BASE_URL from leaking into tests."""
+    monkeypatch.delenv("LMSTUDIO_MODEL", raising=False)
+    monkeypatch.delenv("LMSTUDIO_BASE_URL", raising=False)
+
+
 @pytest.fixture
 def client() -> LMStudioClient:
     return LMStudioClient(model="qwen35-4b")
 
 
 class TestConfig:
-    def test_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("LMSTUDIO_BASE_URL", raising=False)
-        monkeypatch.delenv("LMSTUDIO_MODEL", raising=False)
+    def test_defaults(self) -> None:
         c = LMStudioClient()
         assert c._base_url == LMStudioClient.DEFAULT_BASE_URL
         assert c._model is None

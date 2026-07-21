@@ -17,6 +17,12 @@ from src.agent.api_client import MultiProviderClient, OpenCodeGoClient
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _clear_opencodego_env(monkeypatch) -> None:
+    """Prevent real OPENCODEGO_API_KEY from leaking into unit tests."""
+    monkeypatch.delenv("OPENCODEGO_API_KEY", raising=False)
+
+
 def _make_minimal_png() -> bytes:
     """Return the bytes of a valid 1×1 solid-blue PNG (minimal valid PNG)."""
 

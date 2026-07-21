@@ -10,8 +10,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 6,
-        "successes": 6,
+        "attempts": 13,
+        "successes": 13,
         "failures": 0,
         "notes": ""
       }
@@ -26,8 +26,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 44,
-        "successes": 44,
+        "attempts": 62,
+        "successes": 62,
         "failures": 0,
         "notes": ""
       }
@@ -42,8 +42,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 50,
-        "successes": 50,
+        "attempts": 75,
+        "successes": 75,
         "failures": 0,
         "notes": ""
       }
@@ -58,8 +58,8 @@
             "duration_ms": 120
           }
         },
-        "attempts": 28,
-        "successes": 28,
+        "attempts": 53,
+        "successes": 53,
         "failures": 0,
         "notes": ""
       }

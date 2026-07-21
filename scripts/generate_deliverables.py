@@ -742,17 +742,17 @@ def _add_local_vlm_slide(prs) -> None:
     _add_content_bg(slide)
 
     _card(slide, 0.65, 1.45, 6.0, 2.8, "当前能跑通什么？", [
-        "4-bit NF4 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
+        "4-bit 量化加载 Qwen3.5-4B/9B、Gemma-4-E4B",
         "KV-cache 量化进一步压低显存",
-        "RTX 5060 8GB 上 Qwen3.5-4B 约 7s/帧",
-        "gemma-4-E4B 格式最稳定，延迟约 4.4s",
+        "RTX 5060 8GB 上 Qwen3.5-4B 约 7s/帧，Gemma-4-E4B 约 7.8s/帧",
+        "Gemma-4-E4B 视觉摘要比 Qwen3.5-4B 更稳定",
     ], _C_SECONDARY)
 
-    _card(slide, 6.95, 1.45, 6.0, 2.8, "当前问题是什么？", [
-        "默认模型视觉摘要不稳定",
-        "有时会输出大量 chain-of-thought 草稿",
-        "有时会截断，导致云端策略方向错误",
-        "text-only 反而比加 VLM 上下文更稳",
+    _card(slide, 6.95, 1.45, 6.0, 2.8, "视觉上下文有没有用？", [
+        "Qwen3.5-4B：text-only 5/9，with-visual 3/9",
+        "Gemma-4-E4B：text-only 3/9，with-visual 5/9",
+        "说明模型选对很重要，视觉摘要能帮云端纠偏",
+        "下一步：QLoRA 微调，输出结构化视觉上下文",
     ], _C_ACCENT)
 
     insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(4.45), Inches(12.3), Inches(1.8))
@@ -760,7 +760,7 @@ def _add_local_vlm_slide(prs) -> None:
     tf = insight.text_frame
     tf.word_wrap = True
     points = [
-        "结论：本地 VLM 可以跑，但默认模型还不足以提升云端策略质量。",
+        "结论：本地 VLM 可以跑，但默认模型还不足以稳定提升云端策略质量。",
         "方向：用 15,083 条 processed-runs 样本做 QLoRA 微调，让模型学会输出「箭头方向 + 关键目标 + 障碍物」的结构化上下文。",
         "部署：微调后通过 llama.cpp server 常驻，L1 每 N 步或卡住时提供视觉证据。",
     ]
@@ -778,20 +778,77 @@ def _add_key_findings_slide(prs) -> None:
     _add_content_bg(slide)
 
     findings = [
-        ("✅ 有效", "multi-bus-memory 在 00461/00483/00522 稳定 0.300；B 类 tap-only 中 8/15 达 0.300。", _C_SUCCESS),
-        ("✅ 有效", "L2 code-file 更新在 qwen/kimi/xiaomi 均成功，云端模型确实能改持久化规则旋钮。", _C_SUCCESS),
-        ("⚠️ 待优化", "hierarchical 模式 activity=0：L2 输出被思考链截断，L1 本地 VLM 未启动。", _C_WARN),
-        ("⚠️ 待优化", "本地 VLM 默认模型不稳定，有时会带偏云端方向，需要 QLoRA 微调。", _C_WARN),
-        ("📌 方向", "把 L2 输出从抽象 plan 改成目标名称队列，让 L0 用 probe 映射坐标；本地 VLM 只做证据。", _C_SECONDARY),
+        ("✅ 有效", "multi-bus-memory 在 representative subset 上 mean composite 0.275，5/6 游戏优于或持平 rule。", _C_SUCCESS),
+        ("✅ 有效", "L2 code-file 更新在 qwen/kimi/xiaomi/opencodego 均成功，云端模型确实能改持久化规则旋钮。", _C_SUCCESS),
+        ("✅ 有效", "Gemma-4-E4B 视觉上下文让云端动作匹配从 3/9 提升到 5/9，本地 VLM 有潜力。", _C_SUCCESS),
+        ("⚠️ 待优化", "OpenCodeGo / MiMo / Kimi 直接做 gameplay 动作时大量空返回或 fallback，云端不适合逐帧控制。", _C_WARN),
+        ("⚠️ 待优化", "SSD_00483P01 的 multi-bus activity=0，driver/profile 需要单独诊断。", _C_WARN),
+        ("📌 方向", "把云端放在 L2 做规划与规则更新，L0 规则负责执行，L1 VLM 只做视觉证据。", _C_SECONDARY),
     ]
 
     for idx, (badge, text, color) in enumerate(findings):
-        top = 1.45 + idx * 1.05
+        top = 1.45 + idx * 0.85
         badge_shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.75), Inches(top), Inches(1.3), Inches(0.42))
         _set_fill(badge_shape, color)
         _set_text_style(badge_shape.text_frame.paragraphs[0], badge, Pt(12), bold=True, color=_C_LIGHT, align=PP_ALIGN.CENTER)
         tb = slide.shapes.add_textbox(Inches(2.2), Inches(top), Inches(10.5), Inches(0.9))
-        _set_text_style(tb.text_frame.paragraphs[0], text, Pt(16), color=_C_DARK)
+        _set_text_style(tb.text_frame.paragraphs[0], text, Pt(15), color=_C_DARK)
+
+
+def _add_representative_results_slide(prs) -> None:
+    """Representative subset online results slide."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "Representative Subset：6 游戏在线跑测")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    _add_table_slide_raw(slide, 0.65, 1.45, 12.3, 4.8,
+        ["游戏", "类型", "rule", "multi-bus", "multi-bus-memory"],
+        [
+            ["SSD_00461P01 塔防", "A", "0.149", "0.300", "0.300"],
+            ["SSD_00483P01 吸沙抽水", "A", "0.184", "0.150", "0.150"],
+            ["SSD_00522P02 地下炸矿", "A", "0.215", "0.300", "0.300"],
+            ["SSD_00382P01 低坑杀鲨鱼", "B", "0.288", "—", "0.300"],
+            ["SSD_00594P02 破石收水", "B", "0.300", "—", "0.300"],
+            ["SSD_00742P01 加油小镇", "B", "0.300", "—", "0.300"],
+        ])
+
+    note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.35), Inches(12.3), Inches(0.7))
+    _set_fill(note, _C_LIGHT)
+    _set_text_style(note.text_frame.paragraphs[0],
+        "15 runs 全部成功，multi-bus-memory 综合 mean composite 0.275，activity 0.833。唯一例外 00483 需要 driver 诊断。",
+        Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
+# ---------------------------------------------------------------------------
+# Internal table helper (positionable)
+# ---------------------------------------------------------------------------
+def _add_table_slide_raw(slide, left: float, top: float, width: float, height: float,
+                         headers: list[str], rows: list[list[str]]) -> None:
+    """Add a simple table at a fixed position on an existing slide."""
+    n_cols = len(headers)
+    n_rows = len(rows)
+    table = slide.shapes.add_table(n_rows + 1, n_cols, Inches(left), Inches(top), Inches(width), Inches(height)).table
+    # Header
+    for c, h in enumerate(headers):
+        cell = table.cell(0, c)
+        cell.text = h
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = _C_PRIMARY
+        paragraph = cell.text_frame.paragraphs[0]
+        paragraph.font.size = Pt(12)
+        paragraph.font.bold = True
+        paragraph.font.color.rgb = _C_LIGHT
+        paragraph.alignment = PP_ALIGN.CENTER
+    # Rows
+    for r, row in enumerate(rows, start=1):
+        for c, val in enumerate(row):
+            cell = table.cell(r, c)
+            cell.text = val
+            paragraph = cell.text_frame.paragraphs[0]
+            paragraph.font.size = Pt(11)
+            paragraph.font.color.rgb = _C_DARK
+            paragraph.alignment = PP_ALIGN.CENTER
 
 
 def _add_next_steps_slide(prs) -> None:
@@ -941,6 +998,8 @@ def write_pptx() -> None:
         ])
 
     _add_key_findings_slide(prs)
+
+    _add_representative_results_slide(prs)
 
     # ---- Section: Data ----
     _add_section_slide(prs, "08", "训练数据管线")
