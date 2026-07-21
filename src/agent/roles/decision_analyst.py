@@ -51,6 +51,10 @@ class DecisionAnalyst(BaseAgentRole):
         """Evaluate available decision sources and select action.
 
         Precedence: procedural memory → strategy memory → rule engine → API LLM → fallback wait.
+        A diversity guard prevents strategy_memory from trapping the agent in a
+        same-action loop within a single session (e.g. repeated move on
+        SSD_00483P01): when memory recommends repeating a move and the rule
+        engine suggests a different action type, the rule engine wins.
         """
         action: dict[str, Any] | None = None
         source = "none"
@@ -69,12 +73,16 @@ class DecisionAnalyst(BaseAgentRole):
             except Exception:
                 pass
 
-        # 1b. StrategyMemory readback — use high-success-rate patterns
+        # 2. StrategyMemory readback — use high-success-rate patterns, but exclude
+        #    entries recorded in the current run to avoid online self-reinforcement.
         if action is None and self._strategy_memory is not None:
             try:
                 game_id = ctx.metadata.get("game_id", "unknown")
                 phase = self._strategy_memory.phase_id(ctx.probe_state)
-                patterns = self._strategy_memory.lookup(game_id, phase, top_k=1, min_attempts=2)
+                patterns = self._strategy_memory.lookup(
+                    game_id, phase, top_k=1, min_attempts=2,
+                    exclude_session_id=ctx.metadata.get("run_id"),
+                )
                 if patterns:
                     pat = patterns[0]
                     attempts = pat.get("attempts", 1)
@@ -93,7 +101,26 @@ class DecisionAnalyst(BaseAgentRole):
             except Exception:
                 pass
 
-        # 2. Rule engine (local, zero-latency)
+        # 2b. Diversity guard: break same-action loops if memory somehow still
+        #     recommends repeating move while the rule engine wants something else.
+        if action is not None and self._rule_engine is not None and ctx.working_memory is not None:
+            try:
+                recent = ctx.working_memory.recent_actions(3)
+                recent_types = [r.action.get("action") for r in recent if getattr(r, "action", None)]
+                memory_type = action.get("action")
+                if (
+                    memory_type == "move"
+                    and len(recent_types) >= 2
+                    and all(t == "move" for t in recent_types)
+                ):
+                    rule_action = self._rule_engine.step(ctx.probe_state, ctx.visual_struct)
+                    if rule_action and rule_action.get("action") not in ("move", None):
+                        action = rule_action
+                        source = "rule_engine_diversity_override"
+            except Exception:
+                pass
+
+        # 3. Rule engine (local, zero-latency)
         if action is None and self._rule_engine is not None:
             try:
                 action = self._rule_engine.step(ctx.probe_state, ctx.visual_struct)
@@ -101,7 +128,7 @@ class DecisionAnalyst(BaseAgentRole):
             except Exception:
                 pass
 
-        # 3. API LLM (DeepSeek, high-latency)
+        # 4. API LLM (DeepSeek, high-latency)
         if action is None and self._llm_agent is not None:
             try:
                 action = await self._llm_agent._think_text(ctx.probe_state, ctx=ctx)
@@ -109,7 +136,7 @@ class DecisionAnalyst(BaseAgentRole):
             except Exception:
                 pass
 
-        # 4. Fallback
+        # 5. Fallback
         if action is None:
             action = {
                 "action": "wait",

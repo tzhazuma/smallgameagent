@@ -1,0 +1,22 @@
+[
+  {
+    "game_id": "SSD_00483P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.24375,
+    "activity": 0.625,
+    "elapsed_s": 20.2,
+    "details": {
+      "steps": 25,
+      "move_steps": 10,
+      "tap_steps": 15,
+      "transitions": 0,
+      "stall_steps": 9,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/diagnosis_00483_results/rule/trajectories/SSD_00483P01_rule_seed42.jsonl",
+    "error": ""
+  }
+]

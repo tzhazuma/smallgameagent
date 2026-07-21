@@ -1,0 +1,22 @@
+[
+  {
+    "game_id": "SSD_00483P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.2,
+    "activity": 0.33333333333333337,
+    "elapsed_s": 22.9,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 8,
+      "transitions": 0,
+      "stall_steps": 16,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/diagnosis_00483_results/multi-bus-memory_clean-memory/trajectories/SSD_00483P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  }
+]

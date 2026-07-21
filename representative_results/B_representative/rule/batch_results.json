@@ -1,0 +1,62 @@
+[
+  {
+    "game_id": "SSD_00382P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 12.9,
+    "details": {
+      "steps": 25,
+      "move_steps": 0,
+      "tap_steps": 25,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/B_representative/rule/trajectories/SSD_00382P01_rule_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00594P02",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 17.7,
+    "details": {
+      "steps": 25,
+      "move_steps": 0,
+      "tap_steps": 25,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/B_representative/rule/trajectories/SSD_00594P02_rule_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00742P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.3,
+    "activity": 1.0,
+    "elapsed_s": 15.8,
+    "details": {
+      "steps": 25,
+      "move_steps": 0,
+      "tap_steps": 25,
+      "transitions": 0,
+      "stall_steps": 0,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/B_representative/rule/trajectories/SSD_00742P01_rule_seed42.jsonl",
+    "error": ""
+  }
+]

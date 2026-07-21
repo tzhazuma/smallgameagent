@@ -1,0 +1,22 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.14875,
+    "activity": 0.7916666666666666,
+    "elapsed_s": 13.4,
+    "details": {
+      "steps": 25,
+      "move_steps": 5,
+      "tap_steps": 19,
+      "transitions": 0,
+      "stall_steps": 5,
+      "fail_flips": 0,
+      "wm_violations": 2
+    },
+    "trajectory_path": "diagnosis_00483_results/00461_rule_check/trajectories/SSD_00461P01_rule_seed42.jsonl",
+    "error": ""
+  }
+]

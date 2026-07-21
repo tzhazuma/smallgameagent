@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from io import BytesIO
@@ -191,6 +192,8 @@ class HybridAgent:
         # ── AgentContext + WorkingMemory ────────────────────────────
         ctx = AgentContext(current_mode=self.mode)
         ctx.working_memory = WorkingMemory()
+        ctx.metadata["game_id"] = self.game_id or Path(game_path).stem
+        ctx.metadata["run_id"] = os.urandom(8).hex()
         self._ctx = ctx
 
         # ── Dataset writer ──────────────────────────────────────────

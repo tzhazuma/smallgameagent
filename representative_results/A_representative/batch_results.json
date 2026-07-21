@@ -6,7 +6,7 @@
     "steps": 25,
     "composite": 0.14875,
     "activity": 0.7916666666666666,
-    "elapsed_s": 14.0,
+    "elapsed_s": 13.3,
     "details": {
       "steps": 25,
       "move_steps": 5,
@@ -16,47 +16,7 @@
       "fail_flips": 0,
       "wm_violations": 2
     },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00461P01_rule_seed42.jsonl",
-    "error": ""
-  },
-  {
-    "game_id": "SSD_00461P01",
-    "mode": "multi-bus",
-    "seed": 42,
-    "steps": 25,
-    "composite": 0.3,
-    "activity": 1.0,
-    "elapsed_s": 11.7,
-    "details": {
-      "steps": 25,
-      "move_steps": 0,
-      "tap_steps": 24,
-      "transitions": 0,
-      "stall_steps": 0,
-      "fail_flips": 0,
-      "wm_violations": 0
-    },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00461P01_multi-bus_seed42.jsonl",
-    "error": ""
-  },
-  {
-    "game_id": "SSD_00461P01",
-    "mode": "multi-bus-memory",
-    "seed": 42,
-    "steps": 25,
-    "composite": 0.3,
-    "activity": 1.0,
-    "elapsed_s": 11.5,
-    "details": {
-      "steps": 25,
-      "move_steps": 0,
-      "tap_steps": 24,
-      "transitions": 0,
-      "stall_steps": 0,
-      "fail_flips": 0,
-      "wm_violations": 0
-    },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00461P01_multi-bus-memory_seed42.jsonl",
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/rule/trajectories/SSD_00461P01_rule_seed42.jsonl",
     "error": ""
   },
   {
@@ -64,9 +24,9 @@
     "mode": "rule",
     "seed": 42,
     "steps": 25,
-    "composite": 0.18375,
+    "composite": 0.24375,
     "activity": 0.625,
-    "elapsed_s": 20.6,
+    "elapsed_s": 20.2,
     "details": {
       "steps": 25,
       "move_steps": 10,
@@ -74,49 +34,9 @@
       "transitions": 0,
       "stall_steps": 9,
       "fail_flips": 0,
-      "wm_violations": 1
-    },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00483P01_rule_seed42.jsonl",
-    "error": ""
-  },
-  {
-    "game_id": "SSD_00483P01",
-    "mode": "multi-bus",
-    "seed": 42,
-    "steps": 25,
-    "composite": 0.15,
-    "activity": 0.0,
-    "elapsed_s": 23.4,
-    "details": {
-      "steps": 25,
-      "move_steps": 25,
-      "tap_steps": 0,
-      "transitions": 0,
-      "stall_steps": 24,
-      "fail_flips": 0,
       "wm_violations": 0
     },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00483P01_multi-bus_seed42.jsonl",
-    "error": ""
-  },
-  {
-    "game_id": "SSD_00483P01",
-    "mode": "multi-bus-memory",
-    "seed": 42,
-    "steps": 25,
-    "composite": 0.15,
-    "activity": 0.0,
-    "elapsed_s": 19.8,
-    "details": {
-      "steps": 25,
-      "move_steps": 25,
-      "tap_steps": 0,
-      "transitions": 0,
-      "stall_steps": 24,
-      "fail_flips": 0,
-      "wm_violations": 0
-    },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00483P01_multi-bus-memory_seed42.jsonl",
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/rule/trajectories/SSD_00483P01_rule_seed42.jsonl",
     "error": ""
   },
   {
@@ -126,7 +46,7 @@
     "steps": 25,
     "composite": 0.215,
     "activity": 0.8333333333333334,
-    "elapsed_s": 16.0,
+    "elapsed_s": 15.9,
     "details": {
       "steps": 25,
       "move_steps": 5,
@@ -136,7 +56,47 @@
       "fail_flips": 0,
       "wm_violations": 1
     },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00522P02_rule_seed42.jsonl",
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/rule/trajectories/SSD_00522P02_rule_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.05,
+    "activity": 0.33333333333333337,
+    "elapsed_s": 18.4,
+    "details": {
+      "steps": 25,
+      "move_steps": 16,
+      "tap_steps": 8,
+      "transitions": 0,
+      "stall_steps": 16,
+      "fail_flips": 0,
+      "wm_violations": 4
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus/trajectories/SSD_00461P01_multi-bus_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00483P01",
+    "mode": "multi-bus",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.10250000000000001,
+    "activity": 0.08333333333333337,
+    "elapsed_s": 27.8,
+    "details": {
+      "steps": 25,
+      "move_steps": 23,
+      "tap_steps": 2,
+      "transitions": 0,
+      "stall_steps": 22,
+      "fail_flips": 0,
+      "wm_violations": 1
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus/trajectories/SSD_00483P01_multi-bus_seed42.jsonl",
     "error": ""
   },
   {
@@ -144,19 +104,59 @@
     "mode": "multi-bus",
     "seed": 42,
     "steps": 25,
-    "composite": 0.3,
-    "activity": 1.0,
-    "elapsed_s": 15.2,
+    "composite": 0.1775,
+    "activity": 0.5833333333333333,
+    "elapsed_s": 18.0,
     "details": {
       "steps": 25,
-      "move_steps": 1,
-      "tap_steps": 24,
+      "move_steps": 11,
+      "tap_steps": 14,
       "transitions": 0,
-      "stall_steps": 0,
+      "stall_steps": 10,
+      "fail_flips": 0,
+      "wm_violations": 1
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus/trajectories/SSD_00522P02_multi-bus_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.04374999999999999,
+    "activity": 0.29166666666666663,
+    "elapsed_s": 18.0,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 7,
+      "transitions": 0,
+      "stall_steps": 17,
+      "fail_flips": 0,
+      "wm_violations": 4
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00461P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00483P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.2,
+    "activity": 0.33333333333333337,
+    "elapsed_s": 22.9,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 8,
+      "transitions": 0,
+      "stall_steps": 16,
       "fail_flips": 0,
       "wm_violations": 0
     },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00522P02_multi-bus_seed42.jsonl",
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00483P01_multi-bus-memory_seed42.jsonl",
     "error": ""
   },
   {
@@ -164,19 +164,19 @@
     "mode": "multi-bus-memory",
     "seed": 42,
     "steps": 25,
-    "composite": 0.3,
-    "activity": 1.0,
-    "elapsed_s": 14.9,
+    "composite": 0.1775,
+    "activity": 0.5833333333333333,
+    "elapsed_s": 17.7,
     "details": {
       "steps": 25,
-      "move_steps": 1,
-      "tap_steps": 24,
+      "move_steps": 11,
+      "tap_steps": 14,
       "transitions": 0,
-      "stall_steps": 0,
+      "stall_steps": 10,
       "fail_flips": 0,
-      "wm_violations": 0
+      "wm_violations": 1
     },
-    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/trajectories/SSD_00522P02_multi-bus-memory_seed42.jsonl",
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00522P02_multi-bus-memory_seed42.jsonl",
     "error": ""
   }
 ]

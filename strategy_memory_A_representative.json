@@ -1,5 +1,5 @@
 {
-  "unknown": {
+  "SSD_00461P01": {
     "play": [
       {
         "pattern": {
@@ -8,10 +8,11 @@
             "duration_ms": 1000
           }
         },
-        "attempts": 4,
-        "successes": 4,
+        "attempts": 2,
+        "successes": 2,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
       }
     ],
     "play_N:GameManager._failCount": [
@@ -27,7 +28,8 @@
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
       },
       {
         "pattern": {
@@ -38,10 +40,11 @@
             "duration_ms": 120
           }
         },
-        "attempts": 93,
-        "successes": 93,
+        "attempts": 31,
+        "successes": 31,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
       },
       {
         "pattern": {
@@ -55,23 +58,192 @@
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
       },
       {
         "pattern": {
           "action": "move",
           "params": {
-            "dx": 0.8754978695520481,
-            "dy": -0.4832219784010501,
+            "dx": 0.8752821921746409,
+            "dy": -0.4836125350546188,
             "duration_ms": 400
           }
         },
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 6.123233995736766e-17,
+            "dy": 1.0,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 4,
+        "successes": 4,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 1.0,
+            "dy": 0.0,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.8944978582231934,
+            "dy": -0.44707223312807026,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.47564054068030276,
+            "dy": -0.8796397422020842,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -1.8369701987210297e-16,
+            "dy": -1.0,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.02047766691655974,
+            "dy": 0.9997903105940037,
+            "duration_ms": 620
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.17297099087360718,
+            "dy": -0.984926919276858,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.572767452364219,
+            "dy": 0.8197179060580548,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.3086668059157514,
+            "dy": -0.9511702281535981,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.9981879791456277,
+            "dy": -0.060172737092207565,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9844618612920886,
+            "dy": 0.17559852978119384,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "e77d5da209bd712c"
       }
-    ],
+    ]
+  },
+  "SSD_00483P01": {
     "play_N:TweenManager.flyToBagTime": [
       {
         "pattern": {
@@ -85,7 +257,8 @@
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "05833262469d09db"
       },
       {
         "pattern": {
@@ -99,7 +272,8 @@
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "05833262469d09db"
       },
       {
         "pattern": {
@@ -110,70 +284,221 @@
             "duration_ms": 220
           }
         },
-        "attempts": 98,
-        "successes": 98,
+        "attempts": 8,
+        "successes": 8,
         "failures": 0,
-        "notes": ""
-      }
-    ],
-    "play_F:MainGame.isGameOver_N:cc.ParticleSystem._emitRateTimeCounter": [
-      {
-        "pattern": {
-          "action": "move",
-          "params": {
-            "dx": 0.09664767282614396,
-            "dy": 0.9953186561786586,
-            "duration_ms": 400
-          }
-        },
-        "attempts": 4,
-        "successes": 4,
-        "failures": 0,
-        "notes": ""
-      }
-    ],
-    "play_F:MainGame.isGameOver_N:Worker.oldCount": [
-      {
-        "pattern": {
-          "action": "move",
-          "params": {
-            "dx": -0.09664767282614391,
-            "dy": -0.9953186561786586,
-            "duration_ms": 400
-          }
-        },
-        "attempts": 1,
-        "successes": 1,
-        "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "05833262469d09db"
       },
       {
         "pattern": {
           "action": "move",
           "params": {
-            "dx": 0.10794896842718524,
-            "dy": 0.9941564364905086,
+            "dx": -0.1466576716628047,
+            "dy": -0.20699648105982194,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.04644779623698007,
+            "dy": -0.998920718688289,
             "duration_ms": 740
           }
         },
         "attempts": 1,
         "successes": 1,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9071247533309795,
+            "dy": -0.4208618323086679,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9450224094408498,
+            "dy": -0.32700557434791655,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.9945715502411456,
+            "dy": 0.10405494438480209,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.7390902686791967,
+            "dy": -0.6736063945240669,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": -0.4105575896710886,
+            "dy": -0.9118346700819541,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.995962245118791,
+            "dy": -0.08977308225708475,
+            "duration_ms": 740
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
       },
       {
         "pattern": {
           "action": "tap",
           "params": {
-            "x": 209.26042319894069,
-            "y": 426.5311023373988,
+            "x": 325.9895384087614,
+            "y": 353.5821717340038,
             "duration_ms": 120
           }
         },
-        "attempts": 94,
-        "successes": 94,
+        "attempts": 2,
+        "successes": 2,
         "failures": 0,
-        "notes": ""
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.14665767166280466,
+            "dy": 0.20699648105982196,
+            "duration_ms": 220
+          }
+        },
+        "attempts": 4,
+        "successes": 4,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 293.7857107447719,
+            "y": 324.58568602166946,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 262.78316960960467,
+            "y": 296.6707979832675,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "tap",
+          "params": {
+            "x": 232.90419037363554,
+            "y": 269.76756925512524,
+            "duration_ms": 120
+          }
+        },
+        "attempts": 2,
+        "successes": 2,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
+      },
+      {
+        "pattern": {
+          "action": "move",
+          "params": {
+            "dx": 0.03806887747942315,
+            "dy": -0.9992751175564498,
+            "duration_ms": 400
+          }
+        },
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "notes": "",
+        "session_id": "05833262469d09db"
       }
     ]
   }

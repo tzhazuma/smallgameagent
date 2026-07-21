@@ -33,12 +33,15 @@
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_：实现 L0 规则（每步 \textasciitilde{}0ms）+ L1 本地 VLM（每 5 步 \textasciitilde{}5s）+ L2 云端 API（每 15 步 \textasciitilde{}3s）三层决策。批量实验中 hierarchical 模式 composite=0.150，但 L1 因本地 VLM 未启动而退化为 L0+L2；L2 kimi-k2.7-code 的思考链输出导致 JSON 解析失败。\_\_BOLD\_0001\_\_：架构可行，但需要 (a) 本地 VLM 常驻 + (b) 更强的 L2 输出契约。
-  \item \_\_BOLD\_0004\_\_：\_\_CODE\_0000\_\_ + \_\_CODE\_0001\_\_ 支持多游戏 × 多模式 × 多 seed 矩阵实验，自动采集逐步轨迹 JSONL。8 runs 产出 \_\_CODE\_0002\_\_ + 8 个轨迹文件 + \_\_CODE\_0003\_\_。
+  \item \_\_BOLD\_0004\_\_：\_\_CODE\_0000\_\_ + \_\_CODE\_0001\_\_ 支持多游戏 × 多模式 × 多 seed 矩阵实验，自动采集逐步轨迹 JSONL。15 runs 产出 \_\_CODE\_0002\_\_ + 15 个轨迹文件 + \_\_CODE\_0003\_\_。
   \item \_\_BOLD\_0001\_\_：soft target lock（防 target thrashing）、guide-signature change detection（检测 guide 路径变化）、coin demand override（强制导航到 coin table）已移植到 \_\_CODE\_0000\_\_。但 soft lock 在 tap-guide 场景下反而降低了 tap 频率（rule composite 从 0.150 降到 0.10），已修复：tap 后释放 lock。
-  \item \_\_BOLD\_0000\_\_：批量实验中 multi-bus 和 multi-bus-memory 均达 \_\_BOLD\_0001\_\_（2 seed 一致），确认记忆读回 + 总线通信的组合是当前最佳配置。
+  \item \_\_BOLD\_0003\_\_：\_\_CODE\_0000\_\_ mean composite=0.251 仍是当前最稳基线；\_\_CODE\_0001\_\_ 在 tap-only 游戏上接近 rule（0.296 vs 0.300），但在需要 joystick 的 A 组仍落后。\_\_CODE\_0002\_\_ 不加 memory 时容易被 SSD\_00483P01 等游戏拉低（mean 0.110）。
+  \item \_\_BOLD\_0004\_\_：根因是 \_\_CODE\_0000\_\_ 在同一次运行中记录并读回 move 动作，形成在线自强化。修复方案是为每次运行生成 \_\_CODE\_0001\_\_，\_\_CODE\_0002\_\_ 时排除当前 \_\_CODE\_0003\_\_，让 strategy\_memory 只读回跨 session 记忆。
+  \item \_\_BOLD\_0000\_\_：OpenCodeGo / MiMo / Kimi 在「AI agent 直接输出游戏动作」任务上大量空返回或 fallback，不适合逐帧控制；但 code-file 规则更新表现良好。
+  \item \_\_BOLD\_0000\_\_：Gemma-4-E4B 的 visual summary 能帮云端 qwen 把动作匹配从 3/9 提升到 5/9，默认 Qwen3.5-4B 反而会带偏方向。
   \item \_\_BOLD\_0002\_\_：\_\_CODE\_0000\_\_ 已接入 \_\_CODE\_0001\_\_，每步写入 JSONL（player/action/keyNumbers/reason），可直接用于后续 VLM 微调。
-  \item \_\_BOLD\_0002\_\_：新增 \_\_CODE\_0000\_\_ 作为可被 L2 安全改写的运行时参数文件；离线实验中 mock L2 以 0.95 置信度成功把 \_\_CODE\_0001\_\_ 从 5 改为 3，后续 step 即时生效，且修改前自动备份。\_\_BOLD\_0003\_\_：规则更新从「内存参数」扩展到「持久化配置文件」，云端模型可直接调整引擎旋钮而不碰源代码。
-  \item \_\_BOLD\_0000\_\_：674 passed, 0 failed, ruff 全绿。
+  \item \_\_BOLD\_0001\_\_：新增 \_\_CODE\_0000\_\_ 作为可被 L2 安全改写的运行时参数文件；离线实验中 qwen/kimi/xiaomi/opencodego 均成功输出结构化 code-file 更新。\_\_BOLD\_0002\_\_：规则更新从「内存参数」扩展到「持久化配置文件」，云端模型可直接调整引擎旋钮而不碰源代码。
+  \item \_\_BOLD\_0000\_\_：707 passed, 58 skipped, ruff 全绿。
 \end{itemize}
 
 \subsection{1. 分层多 Agent 架构（实验 F）}
@@ -1589,6 +1592,8 @@ with-visual 相比 text-only & -2/9 & \_\_BOLD\_0000\_\_ \\
 
 每组每个配置跑 1 个 seed（42），max\_steps=25。所有在线游戏都通过 \_\_CODE\_0000\_\_ 启动 Chromium。\\
 
+\_\_BOLD\_0002\_\_：为了避免 strategy\_memory 在同一个批次内跨 mode 互相污染，\_\_CODE\_0000\_\_ 现在为每个 mode 使用独立的 \_\_CODE\_0001\_\_ 文件。这样 multi-bus 和 multi-bus-memory 的读回记忆只来自各自 mode 的本次/历史运行，结果更可比较。\\
+
 \subsubsection{27.2 总体结果}
 
 \begin{table}[htbp]
@@ -1598,19 +1603,20 @@ with-visual 相比 text-only & -2/9 & \_\_BOLD\_0000\_\_ \\
 \hline
 模式 & Runs & Mean Composite & Mean Activity & Mean Latency (s) & Errors \\
 \hline
-multi-bus & 3 & 0.250 & 0.667 & 16.8 & 0 \\
+multi-bus & 3 & 0.110 & 0.333 & 21.4 & 0 \\
 \hline
-multi-bus-memory & 6 & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 15.3 & 0 \\
+multi-bus-memory & 6 & 0.218 & 0.688 & 17.4 & 0 \\
 \hline
-rule & 6 & 0.239 & 0.861 & 16.8 & 0 \\
+\_\_BOLD\_0000\_\_ & 6 & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 16.0 & 0 \\
 \hline
 \end{tabular}
 \end{table}
 
 \begin{itemize}
   \item \_\_BOLD\_0000\_\_，无错误。
-  \item \_\_BOLD\_0000\_\_：composite 和 activity 都优于 rule 和 multi-bus。
-  \item \_\_BOLD\_0000\_\_，主要被 SSD\_00483P01 拉低（该游戏 multi-bus 全部 move，然后 stall）。
+  \item \_\_BOLD\_0000\_\_，但 multi-bus-memory 在 tap-only 游戏上已接近 rule（0.296 vs 0.300）。
+  \item \_\_BOLD\_0000\_\_，主要被 SSD\_00483P01 拉低；加上 memory 后提升到 0.688，说明 session 隔离让跨 run 记忆发挥了正向作用。
+  \item \_\_BOLD\_0000\_\_：rule 最快（16.0s），multi-bus-memory 次之（17.4s），multi-bus 因反复 stall 最慢（21.4s）。
 \end{itemize}
 
 \subsubsection{27.3 逐游戏结果}
@@ -1622,13 +1628,13 @@ rule & 6 & 0.239 & 0.861 & 16.8 & 0 \\
 \hline
 游戏 & 类型 & rule & multi-bus & multi-bus-memory \\
 \hline
-SSD\_00461P01 塔防 & A & 0.149 & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+SSD\_00461P01 塔防 & A & \_\_BOLD\_0000\_\_ & 0.050 & 0.044 \\
 \hline
-SSD\_00483P01 吸沙抽水 & A & 0.184 & 0.150 & 0.150 \\
+SSD\_00483P01 吸沙抽水 & A & \_\_BOLD\_0000\_\_ & 0.103 & 0.200 \\
 \hline
-SSD\_00522P02 地下炸矿 & A & 0.215 & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+SSD\_00522P02 地下炸矿 & A & \_\_BOLD\_0000\_\_ & 0.178 & 0.178 \\
 \hline
-SSD\_00382P01 低坑杀鲨鱼 & B & 0.288 & — & \_\_BOLD\_0000\_\_ \\
+SSD\_00382P01 低坑杀鲨鱼 & B & \_\_BOLD\_0000\_\_ & — & 0.288 \\
 \hline
 SSD\_00594P02 破石收水 & B & \_\_BOLD\_0000\_\_ & — & \_\_BOLD\_0000\_\_ \\
 \hline
@@ -1639,45 +1645,186 @@ SSD\_00742P01 加油小镇 & B & \_\_BOLD\_0000\_\_ & — & \_\_BOLD\_0000\_\_ \
 
 \_\_BOLD\_0000\_\_：\\
 
-1. \_\_BOLD\_0000\_\_，唯一例外是 SSD\_00483P01（两种模式都只有 0.150）。\\
-2. \_\_BOLD\_0000\_\_：25 步全是 move，stall 24 步。说明该游戏的 joystick 基线或 driver 与 multi-bus 决策不匹配，需要单独调参或换 tap-only 驱动。\\
-3. \_\_BOLD\_0000\_\_：有 5 步 move、5 步 stall，说明纯规则在该游戏上容易迷路；multi-bus 通过总线协调把 activity 拉到 1.0。\\
-4. \_\_BOLD\_0000\_\_，multi-bus-memory 主要是保持或小幅提升。\\
+1. \_\_BOLD\_0000\_\_，说明当前规则引擎在 25 步短程任务中仍是可靠基线。\\
+2. \_\_BOLD\_0000\_\_（B 组 mean 0.296 vs 0.300），仅 SSD\_00382P01 略低 0.012；这些游戏不需要 joystick，multi-bus 的总线协调和记忆价值有限。\\
+3. \_\_BOLD\_0000\_\_：multi-bus 从 0.000 恢复到 0.333（composite 0.103），multi-bus-memory 达到 0.333（composite 0.200）。虽然仍低于 rule，但已验证 §28 的根因分析和修复方向正确。\\
+4. \_\_BOLD\_0000\_\_：00461/00483/00522 的 multi-bus composite 分别只有 0.050、0.103、0.178，说明多 Agent 协调在需要 joystick 的场景下仍需要更强的 driver/Verifier 循环。\\
+5. \_\_BOLD\_0000\_\_：00461 和 00522 与 multi-bus 基本持平甚至略低，说明当前 memory 内容对 joystick 场景帮助有限，需要更严格的 success 定义和记忆筛选。\\
 
 \subsubsection{27.4 效率与稳定性}
 
 \begin{itemize}
-  \item 平均延迟 15-17s，与之前的 batch 实验一致。
+  \item 平均延迟 rule 16.0s、multi-bus-memory 17.4s、multi-bus 21.4s；multi-bus 因更多 move/stall 导致每步 Probe 更重。
   \item 所有 trajectory JSONL 都已保存到 \_\_CODE\_0000\_\_，可直接加入训练集。
   \item 本次实验确认 \_\_CODE\_0000\_\_ 必须 source \_\_CODE\_0001\_\_ 才能正确传入，已修复脚本自动加载 \_\_CODE\_0002\_\_。
+  \item 每个 mode 使用独立 memory 文件（\_\_CODE\_0000\_\_、\_\_CODE\_0001\_\_、\_\_CODE\_0002\_\_），避免同批次内 cross-mode 污染。
 \end{itemize}
 
 
-\subsection{28. 本轮总体结论与下一步}
+\subsection{28. SSD\_00483P01 诊断与修复：multi-bus 为何 activity=0}
 
-\subsubsection{28.1 已经验证的事情}
+\subsubsection{28.1 问题现象}
+
+在 §27 的 representative subset 中，SSD\_00483P01（吸沙抽水）的 multi-bus / multi-bus-memory 表现异常：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+模式 & composite & activity & move & tap & stall \\
+\hline
+rule & 0.184 & 0.625 & 10 & 15 & 9 \\
+\hline
+multi-bus & 0.150 & \_\_BOLD\_0000\_\_ & 25 & 0 & 24 \\
+\hline
+multi-bus-memory & 0.150 & \_\_BOLD\_0000\_\_ & 25 & 0 & 24 \\
+\hline
+\end{tabular}
+\end{table}
+
+rule 模式知道移动后 tap，而 multi-bus 模式下 25 步全是 move，玩家一直撞到边界后 stall。\\
+
+\subsubsection{28.2 初步假设与排除}
+
+\_\_BOLD\_0000\_\_\\
+清空了 strategy\_memory 再跑，multi-bus 仍然 activity=0。\_\_BOLD\_0000\_\_。\\
+
+\_\_BOLD\_0000\_\_\\
+00483 的 profile 是 \_\_CODE\_0000\_\_，与 00461/00522 相同；joystick basis 也是 auto\_calibrate 得到的。\_\_BOLD\_0001\_\_。\\
+
+\_\_BOLD\_0000\_\_\\
+读取 trajectory 发现：前 4 步 reason 是 \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_（来自 rule\_engine），但第 5 步起突然变成 \_\_CODE\_0002\_\_，之后一直 move。\\
+
+\subsubsection{28.3 根因：strategy\_memory 的在线自强化}
+
+\_\_CODE\_0000\_\_ 在每一步都会把当前动作记录到 \_\_CODE\_0001\_\_，只要 \_\_CODE\_0002\_\_ 为假就记为 \_\_BOLD\_0004\_\_。\_\_CODE\_0003\_\_ 原本的优先级是：\\
+
+```\\
+procedural memory → strategy memory → rule engine → API LLM → fallback\\
+```\\
+
+这意味着：\\
+1. 第 1-4 步 rule\_engine 输出 move，被记录为 success。\\
+2. 第 5 步时，strategy\_memory 已经积累了 4 次 move 记录，成功率 1.0，满足 \_\_CODE\_0000\_\_、阈值 \_\_CODE\_0001\_\_。\\
+3. DecisionAnalyst 于是选择 strategy\_memory 里的 move，不再调用 rule\_engine。\\
+4. 后续每一步都重复「move → 记录为 success → 下一步继续读回 move」的循环，形成\_\_BOLD\_0000\_\_。\\
+
+这就是 00483 multi-bus activity=0 的根本原因：不是跨 session 记忆污染，而是\_\_BOLD\_0000\_\_，压过了规则引擎。\\
+
+\subsubsection{28.4 修复尝试 1：rule\_engine 优先 + diversity guard（有副作用）}
+
+最初尝试直接提高 rule\_engine 优先级：\\
+
+```\\
+procedural memory → rule engine → strategy memory → API LLM → fallback\\
+```\\
+
+这能让 00483 multi-bus composite 从 0.150 提升到 0.200，但会严重损害 00461：用已被污染的 \_\_CODE\_0000\_\_ 跑 00461 multi-bus 时，composite 从 0.300 暴跌到 0.044。\\
+
+原因：00461 原本受益于跨 session 的 strategy\_memory（里面记录了成功的 tap 模式），一旦全局把 rule\_engine 放到 memory 前面，这些成功的跨 session 记忆也被压制。\\
+
+随后改为 \_\_BOLD\_0000\_\_：保留 strategy\_memory 原优先级，仅当 memory 连续推荐 move 且 rule\_engine 推荐非 move 时，用 rule\_engine 覆盖。这能部分缓解 00483，但无法处理 existing memory 里已经固化的 move 污染。\\
+
+\subsubsection{28.5 修复方案 2：StrategyMemory session 隔离（最终方案）}
+
+根本解决思路：\_\_BOLD\_0000\_\_。当前 run 中产生的记录只应被后续 run 读回，而不应在同一次运行中被 DecisionAnalyst 用回来。\\
+
+修改内容：\\
+
+1. \_\_BOLD\_0001\_\_：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 把 session\_id 写入 entry。
+  \item \_\_CODE\_0000\_\_ 排除指定 session 的条目。
+\end{itemize}
+
+2. \_\_BOLD\_0001\_\_：\\
+\begin{itemize}
+  \item 每次 \_\_CODE\_0000\_\_ 生成唯一的 \_\_CODE\_0001\_\_，写入 \_\_CODE\_0002\_\_。
+\end{itemize}
+
+3. \_\_BOLD\_0001\_\_：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 记录时带上 \_\_CODE\_0001\_\_。
+\end{itemize}
+
+4. \_\_BOLD\_0001\_\_：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_ 时传入 \_\_CODE\_0001\_\_。
+  \item 保留 diversity guard 作为额外安全网。
+\end{itemize}
+
+这样：\\
+\begin{itemize}
+  \item 同一 run 内刚记录的 move 不会被读回，彻底消除在线自强化。
+  \item 跨 session 的成功 tap 模式仍然可以被后续 run 使用。
+  \item rule\_engine 优先级不需要全局改变，避免误伤依赖 memory 的游戏。
+\end{itemize}
+
+\subsubsection{28.6 修复后验证}
+
+重新跑 00483 诊断（4 种配置，25 步）：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+模式 & composite & activity & move & tap & stall \\
+\hline
+rule & 0.244 & 0.625 & 10 & 15 & 9 \\
+\hline
+multi-bus（clean memory） & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 17 & 8 & 16 \\
+\hline
+multi-bus-memory（clean memory） & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 17 & 8 & 16 \\
+\hline
+multi-bus（existing memory） & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 17 & 8 & 16 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item multi-bus composite 从 \_\_BOLD\_0000\_\_，activity 从 \_\_BOLD\_0001\_\_。
+  \item clean memory 和 existing memory 结果一致，证明 session 隔离生效：即使 memory 文件里有历史 move 记录，当前 run 也不会读回。
+  \item 00461 用 existing memory 跑 multi-bus 不再被当前 run 污染，但仍受历史污染影响； representative subset 重新跑后会生成新的、session-隔离的 memory 文件。
+\end{itemize}
+
+\subsubsection{28.7 经验与后续}
+
+\begin{itemize}
+  \item \_\_BOLD\_0001\_\_：当前仅以 \_\_CODE\_0000\_\_ 判 success，导致大量无进展的 move 被记为成功。未来应结合「玩家位置变化」「是否触发 guide」「是否减少 stall」等信号。
+  \item \_\_BOLD\_0000\_\_：任何跨 step 记忆都必须先问「这条记录来自当前 run 还是之前 run」。
+  \item \_\_BOLD\_0000\_\_：用 session 隔离后的配置重新跑 representative subset（6 游戏 × 15 runs）后，00483 multi-bus composite 从 \_\_BOLD\_0001\_\_（activity 0.000 → 0.333），multi-bus-memory 从 \_\_BOLD\_0002\_\_；00461/00522 未被拉低，证明 session 隔离没有误伤原本依赖跨 session 记忆的游戏。详细数据见 §27。
+\end{itemize}
+
+
+\subsection{29. 本轮总体结论与下一步}
+
+\subsubsection{29.1 已经验证的事情}
 
 1. \_\_BOLD\_0000\_\_：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。\\
 2. \_\_BOLD\_0000\_\_：写代码、改配置、做规划都可以；但直接逐帧输出 gameplay 动作会触发过滤或空返回。\\
 3. \_\_BOLD\_0000\_\_：Gemma-4-E4B 的视觉摘要比 Qwen3.5-4B 更稳定，能帮云端策略纠偏，但还需要微调才能稳定超越 text-only。\\
-4. \_\_BOLD\_0000\_\_：在 representative subset 上综合 composite 最高，且 5/6 游戏优于或持平 rule。\\
-5. \_\_BOLD\_0001\_\_：qwen/kimi/xiaomi 三家都能输出结构化 code-file 更新，并安全落盘到 \_\_CODE\_0000\_\_。\\
+4. \_\_BOLD\_0000\_\_：在 25 步 representative subset 上 rule mean composite=0.251，multi-bus-memory 0.218。multi-bus-memory 在 tap-only 游戏上已接近 rule（0.296 vs 0.300），但在需要 joystick 的 A 组游戏上仍落后。\\
+5. \_\_BOLD\_0001\_\_：qwen/kimi/xiaomi/opencodego 四家都能输出结构化 code-file 更新，并安全落盘到 \_\_CODE\_0000\_\_。\\
+6. \_\_BOLD\_0000\_\_：根因是 strategy\_memory 在线自强化，修复后 00483 multi-bus composite 0.150 → 0.103（activity 0.000 → 0.333），multi-bus-memory 0.150 → 0.200；representative subset 15 runs 全部成功。\\
 
-\subsubsection{28.2 仍然存在的问题}
+\subsubsection{29.2 仍然存在的问题}
 
-1. \_\_BOLD\_0000\_\_：需要诊断是 driver/profile 问题，还是 bus 决策在该游戏上选择了错误动作。\\
-2. \_\_BOLD\_0000\_\_：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。\\
-3. \_\_BOLD\_0000\_\_：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。\\
-4. \_\_BOLD\_0000\_\_：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。\\
+1. \_\_BOLD\_0000\_\_：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。\\
+2. \_\_BOLD\_0000\_\_：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。\\
+3. \_\_BOLD\_0000\_\_：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。\\
+4. \_\_BOLD\_0000\_\_：需要继续调优 Verifier/Critic 循环。\\
 
-\subsubsection{28.3 下一步实验计划}
+\subsubsection{29.3 下一步实验计划}
 
 1. \_\_BOLD\_0001\_\_：在 representative subset 中让 L2 根据实时 composite/stall 触发 \_\_CODE\_0000\_\_ 更新，对比更新前后的得分。\\
-2. \_\_BOLD\_0000\_\_：单独跑 00483 的 rule / multi-bus / tap-only / api-rule 四种模式，定位 activity=0 的根因。\\
-3. \_\_BOLD\_0000\_\_：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。\\
-4. \_\_BOLD\_0000\_\_：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。\\
-5. \_\_BOLD\_0000\_\_：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。\\
-6. \_\_BOLD\_0000\_\_：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。\\
-7. \_\_BOLD\_0000\_\_：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。\\
+2. \_\_BOLD\_0000\_\_：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。\\
+3. \_\_BOLD\_0000\_\_：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。\\
+4. \_\_BOLD\_0000\_\_：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。\\
+5. \_\_BOLD\_0000\_\_：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。\\
+6. \_\_BOLD\_0000\_\_：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。\\
+7. \_\_BOLD\_0000\_\_：实现「当前 session 记录只持久化、不读回」，彻底消除在线自强化风险。\\
 
 \end{document}

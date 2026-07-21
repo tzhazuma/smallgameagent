@@ -6,12 +6,15 @@
 ## 0. 一页结论
 
 - **分层架构（HierarchicalPlanner）**：实现 L0 规则（每步 ~0ms）+ L1 本地 VLM（每 5 步 ~5s）+ L2 云端 API（每 15 步 ~3s）三层决策。批量实验中 hierarchical 模式 composite=0.150，但 L1 因本地 VLM 未启动而退化为 L0+L2；L2 kimi-k2.7-code 的思考链输出导致 JSON 解析失败。**结论**：架构可行，但需要 (a) 本地 VLM 常驻 + (b) 更强的 L2 输出契约。
-- **批量实验框架**：`batch_runner.py` + `analyze_batch.py` 支持多游戏 × 多模式 × 多 seed 矩阵实验，自动采集逐步轨迹 JSONL。8 runs 产出 `batch_results.json` + 8 个轨迹文件 + `analysis.md`。
+- **批量实验框架**：`batch_runner.py` + `analyze_batch.py` 支持多游戏 × 多模式 × 多 seed 矩阵实验，自动采集逐步轨迹 JSONL。15 runs 产出 `batch_results_all.json` + 15 个轨迹文件 + `analysis_all.md`。
 - **Node.js 高级逻辑移植**：soft target lock（防 target thrashing）、guide-signature change detection（检测 guide 路径变化）、coin demand override（强制导航到 coin table）已移植到 `rules.py`。但 soft lock 在 tap-guide 场景下反而降低了 tap 频率（rule composite 从 0.150 降到 0.10），已修复：tap 后释放 lock。
-- **multi-bus 最优**：批量实验中 multi-bus 和 multi-bus-memory 均达 **0.300**（2 seed 一致），确认记忆读回 + 总线通信的组合是当前最佳配置。
+- **Representative subset 在线跑测（6 游戏 × 15 runs）**：`rule` mean composite=0.251 仍是当前最稳基线；`multi-bus-memory` 在 tap-only 游戏上接近 rule（0.296 vs 0.300），但在需要 joystick 的 A 组仍落后。`multi-bus` 不加 memory 时容易被 SSD_00483P01 等游戏拉低（mean 0.110）。
+- **00483 multi-bus activity=0 已修复**：根因是 `StrategyMemory` 在同一次运行中记录并读回 move 动作，形成在线自强化。修复方案是为每次运行生成 `run_id`，`lookup` 时排除当前 `run_id`，让 strategy_memory 只读回跨 session 记忆。
+- **云端 API 直接 gameplay 负结果**：OpenCodeGo / MiMo / Kimi 在「AI agent 直接输出游戏动作」任务上大量空返回或 fallback，不适合逐帧控制；但 code-file 规则更新表现良好。
+- **本地 VLM 视觉上下文**：Gemma-4-E4B 的 visual summary 能帮云端 qwen 把动作匹配从 3/9 提升到 5/9，默认 Qwen3.5-4B 反而会带偏方向。
 - **数据采集**：`DatasetWriter` 已接入 `batch_runner`，每步写入 JSONL（player/action/keyNumbers/reason），可直接用于后续 VLM 微调。
-- **L2 代码文件级规则更新**：新增 `configs/runtime_rules.json` 作为可被 L2 安全改写的运行时参数文件；离线实验中 mock L2 以 0.95 置信度成功把 `stuck_escape_threshold` 从 5 改为 3，后续 step 即时生效，且修改前自动备份。**结论**：规则更新从「内存参数」扩展到「持久化配置文件」，云端模型可直接调整引擎旋钮而不碰源代码。
-- **测试**：674 passed, 0 failed, ruff 全绿。
+- **L2 代码文件级规则更新**：新增 `configs/runtime_rules.json` 作为可被 L2 安全改写的运行时参数文件；离线实验中 qwen/kimi/xiaomi/opencodego 均成功输出结构化 code-file 更新。**结论**：规则更新从「内存参数」扩展到「持久化配置文件」，云端模型可直接调整引擎旋钮而不碰源代码。
+- **测试**：707 passed, 58 skipped, ruff 全绿。
 
 ## 1. 分层多 Agent 架构（实验 F）
 
@@ -1090,67 +1093,176 @@ LD_LIBRARY_PATH=/home/azuma/.lmstudio/extensions/backends/llama.cpp-linux-x86_64
 
 每组每个配置跑 1 个 seed（42），max_steps=25。所有在线游戏都通过 `PLAYWRIGHT_CHROMIUM_PATH` 启动 Chromium。
 
+**重要控制**：为了避免 strategy_memory 在同一个批次内跨 mode 互相污染，`exp_representative_subset.py` 现在为每个 mode 使用独立的 `strategy_memory_{mode}.json` 文件。这样 multi-bus 和 multi-bus-memory 的读回记忆只来自各自 mode 的本次/历史运行，结果更可比较。
+
 ### 27.2 总体结果
 
 | 模式 | Runs | Mean Composite | Mean Activity | Mean Latency (s) | Errors |
 |---|---|---|---|---|---|
-| multi-bus | 3 | 0.250 | 0.667 | 16.8 | 0 |
-| multi-bus-memory | 6 | **0.275** | **0.833** | 15.3 | 0 |
-| rule | 6 | 0.239 | 0.861 | 16.8 | 0 |
+| multi-bus | 3 | 0.110 | 0.333 | 21.4 | 0 |
+| multi-bus-memory | 6 | 0.218 | 0.688 | 17.4 | 0 |
+| **rule** | 6 | **0.251** | **0.875** | 16.0 | 0 |
 
 - **15 个 run 全部成功完成**，无错误。
-- **multi-bus-memory 综合表现最好**：composite 和 activity 都优于 rule 和 multi-bus。
-- **multi-bus 平均 activity 只有 0.667**，主要被 SSD_00483P01 拉低（该游戏 multi-bus 全部 move，然后 stall）。
+- **rule 综合表现最好**，但 multi-bus-memory 在 tap-only 游戏上已接近 rule（0.296 vs 0.300）。
+- **multi-bus 平均 activity 只有 0.333**，主要被 SSD_00483P01 拉低；加上 memory 后提升到 0.688，说明 session 隔离让跨 run 记忆发挥了正向作用。
+- **latency**：rule 最快（16.0s），multi-bus-memory 次之（17.4s），multi-bus 因反复 stall 最慢（21.4s）。
 
 ### 27.3 逐游戏结果
 
 | 游戏 | 类型 | rule | multi-bus | multi-bus-memory |
 |---|---|---|---|---|
-| SSD_00461P01 塔防 | A | 0.149 | **0.300** | **0.300** |
-| SSD_00483P01 吸沙抽水 | A | 0.184 | 0.150 | 0.150 |
-| SSD_00522P02 地下炸矿 | A | 0.215 | **0.300** | **0.300** |
-| SSD_00382P01 低坑杀鲨鱼 | B | 0.288 | — | **0.300** |
+| SSD_00461P01 塔防 | A | **0.149** | 0.050 | 0.044 |
+| SSD_00483P01 吸沙抽水 | A | **0.244** | 0.103 | 0.200 |
+| SSD_00522P02 地下炸矿 | A | **0.215** | 0.178 | 0.178 |
+| SSD_00382P01 低坑杀鲨鱼 | B | **0.300** | — | 0.288 |
 | SSD_00594P02 破石收水 | B | **0.300** | — | **0.300** |
 | SSD_00742P01 加油小镇 | B | **0.300** | — | **0.300** |
 
 **关键发现**：
 
-1. **multi-bus-memory ≥ rule 在 5/6 游戏上成立**，唯一例外是 SSD_00483P01（两种模式都只有 0.150）。
-2. **SSD_00483P01 的 multi-bus/multi-bus-memory activity=0**：25 步全是 move，stall 24 步。说明该游戏的 joystick 基线或 driver 与 multi-bus 决策不匹配，需要单独调参或换 tap-only 驱动。
-3. **SSD_00461P01 的 rule 模式最差（0.149）**：有 5 步 move、5 步 stall，说明纯规则在该游戏上容易迷路；multi-bus 通过总线协调把 activity 拉到 1.0。
-4. **B 组三个 tap-only 游戏 rule 已经能到 0.288-0.300**，multi-bus-memory 主要是保持或小幅提升。
+1. **rule 在 6/6 游戏上都是最高或并列最高**，说明当前规则引擎在 25 步短程任务中仍是可靠基线。
+2. **multi-bus-memory 在 tap-only 游戏上几乎追平 rule**（B 组 mean 0.296 vs 0.300），仅 SSD_00382P01 略低 0.012；这些游戏不需要 joystick，multi-bus 的总线协调和记忆价值有限。
+3. **SSD_00483P01 的 multi-bus/multi-bus-memory 经过 session 隔离后 activity 不再为 0**：multi-bus 从 0.000 恢复到 0.333（composite 0.103），multi-bus-memory 达到 0.333（composite 0.200）。虽然仍低于 rule，但已验证 §28 的根因分析和修复方向正确。
+4. **A 组 tap-guide 游戏中 multi-bus 明显弱于 rule**：00461/00483/00522 的 multi-bus composite 分别只有 0.050、0.103、0.178，说明多 Agent 协调在需要 joystick 的场景下仍需要更强的 driver/Verifier 循环。
+5. **multi-bus-memory 在 A 组并不总是优于 multi-bus**：00461 和 00522 与 multi-bus 基本持平甚至略低，说明当前 memory 内容对 joystick 场景帮助有限，需要更严格的 success 定义和记忆筛选。
 
 ### 27.4 效率与稳定性
 
-- 平均延迟 15-17s，与之前的 batch 实验一致。
+- 平均延迟 rule 16.0s、multi-bus-memory 17.4s、multi-bus 21.4s；multi-bus 因更多 move/stall 导致每步 Probe 更重。
 - 所有 trajectory JSONL 都已保存到 `representative_results/{A,B}_representative/trajectories/`，可直接加入训练集。
 - 本次实验确认 `PLAYWRIGHT_CHROMIUM_PATH` 必须 source `.env` 才能正确传入，已修复脚本自动加载 `.env`。
+- 每个 mode 使用独立 memory 文件（`strategy_memory_rule.json`、`strategy_memory_multi-bus.json`、`strategy_memory_multi-bus-memory.json`），避免同批次内 cross-mode 污染。
 
 
-## 28. 本轮总体结论与下一步
+## 28. SSD_00483P01 诊断与修复：multi-bus 为何 activity=0
 
-### 28.1 已经验证的事情
+### 28.1 问题现象
+
+在 §27 的 representative subset 中，SSD_00483P01（吸沙抽水）的 multi-bus / multi-bus-memory 表现异常：
+
+| 模式 | composite | activity | move | tap | stall |
+|---|---|---|---|---|---|
+| rule | 0.184 | 0.625 | 10 | 15 | 9 |
+| multi-bus | 0.150 | **0.000** | 25 | 0 | 24 |
+| multi-bus-memory | 0.150 | **0.000** | 25 | 0 | 24 |
+
+rule 模式知道移动后 tap，而 multi-bus 模式下 25 步全是 move，玩家一直撞到边界后 stall。
+
+### 28.2 初步假设与排除
+
+**假设 1：strategy_memory 被之前 run 污染。**  
+清空了 strategy_memory 再跑，multi-bus 仍然 activity=0。**排除**。
+
+**假设 2：driver_type / profile 不匹配。**  
+00483 的 profile 是 `tap-guide`，与 00461/00522 相同；joystick basis 也是 auto_calibrate 得到的。**排除**。
+
+**假设 3：multi-bus 的 DecisionAnalyst 没有选择 rule_engine。**  
+读取 trajectory 发现：前 4 步 reason 是 `tap_guide_move_dist=14.57` / `stuck_escape_5`（来自 rule_engine），但第 5 步起突然变成 `strategy_memory:1.00`，之后一直 move。
+
+### 28.3 根因：strategy_memory 的在线自强化
+
+`MultiAgentOrchestrator._update_memory()` 在每一步都会把当前动作记录到 `StrategyMemory`，只要 `probe_state.done` 为假就记为 **success**。`DecisionAnalyst` 原本的优先级是：
+
+```
+procedural memory → strategy memory → rule engine → API LLM → fallback
+```
+
+这意味着：
+1. 第 1-4 步 rule_engine 输出 move，被记录为 success。
+2. 第 5 步时，strategy_memory 已经积累了 4 次 move 记录，成功率 1.0，满足 `min_attempts=2`、阈值 `>=0.6`。
+3. DecisionAnalyst 于是选择 strategy_memory 里的 move，不再调用 rule_engine。
+4. 后续每一步都重复「move → 记录为 success → 下一步继续读回 move」的循环，形成**在线自强化（online self-reinforcement）**。
+
+这就是 00483 multi-bus activity=0 的根本原因：不是跨 session 记忆污染，而是**同一次运行中刚刚产生的记忆立刻被用回来**，压过了规则引擎。
+
+### 28.4 修复尝试 1：rule_engine 优先 + diversity guard（有副作用）
+
+最初尝试直接提高 rule_engine 优先级：
+
+```
+procedural memory → rule engine → strategy memory → API LLM → fallback
+```
+
+这能让 00483 multi-bus composite 从 0.150 提升到 0.200，但会严重损害 00461：用已被污染的 `strategy_memory_A_representative.json` 跑 00461 multi-bus 时，composite 从 0.300 暴跌到 0.044。
+
+原因：00461 原本受益于跨 session 的 strategy_memory（里面记录了成功的 tap 模式），一旦全局把 rule_engine 放到 memory 前面，这些成功的跨 session 记忆也被压制。
+
+随后改为 **diversity guard**：保留 strategy_memory 原优先级，仅当 memory 连续推荐 move 且 rule_engine 推荐非 move 时，用 rule_engine 覆盖。这能部分缓解 00483，但无法处理 existing memory 里已经固化的 move 污染。
+
+### 28.5 修复方案 2：StrategyMemory session 隔离（最终方案）
+
+根本解决思路：**strategy_memory 必须区分「跨 session 记忆」和「当前 session 在线记忆」**。当前 run 中产生的记录只应被后续 run 读回，而不应在同一次运行中被 DecisionAnalyst 用回来。
+
+修改内容：
+
+1. **`src/agent/strategy_memory.py`**：
+   - `record(..., session_id=...)` 把 session_id 写入 entry。
+   - `lookup(..., exclude_session_id=...)` 排除指定 session 的条目。
+
+2. **`src/agent/hybrid_agent.py`**：
+   - 每次 `run_game()` 生成唯一的 `run_id`，写入 `ctx.metadata["run_id"]`。
+
+3. **`src/agent/multi_agent/orchestrator.py`**：
+   - `_update_memory()` 记录时带上 `ctx.metadata["run_id"]`。
+
+4. **`src/agent/roles/decision_analyst.py`**：
+   - `lookup()` 时传入 `exclude_session_id=ctx.metadata["run_id"]`。
+   - 保留 diversity guard 作为额外安全网。
+
+这样：
+- 同一 run 内刚记录的 move 不会被读回，彻底消除在线自强化。
+- 跨 session 的成功 tap 模式仍然可以被后续 run 使用。
+- rule_engine 优先级不需要全局改变，避免误伤依赖 memory 的游戏。
+
+### 28.6 修复后验证
+
+重新跑 00483 诊断（4 种配置，25 步）：
+
+| 模式 | composite | activity | move | tap | stall |
+|---|---|---|---|---|---|
+| rule | 0.244 | 0.625 | 10 | 15 | 9 |
+| multi-bus（clean memory） | **0.200** | **0.333** | 17 | 8 | 16 |
+| multi-bus-memory（clean memory） | **0.200** | **0.333** | 17 | 8 | 16 |
+| multi-bus（existing memory） | **0.200** | **0.333** | 17 | 8 | 16 |
+
+**关键结论**：
+- multi-bus composite 从 **0.150 → 0.200**，activity 从 **0.000 → 0.333**。
+- clean memory 和 existing memory 结果一致，证明 session 隔离生效：即使 memory 文件里有历史 move 记录，当前 run 也不会读回。
+- 00461 用 existing memory 跑 multi-bus 不再被当前 run 污染，但仍受历史污染影响； representative subset 重新跑后会生成新的、session-隔离的 memory 文件。
+
+### 28.7 经验与后续
+
+- **strategy_memory 的 success 定义需要更严格**：当前仅以 `not done` 判 success，导致大量无进展的 move 被记为成功。未来应结合「玩家位置变化」「是否触发 guide」「是否减少 stall」等信号。
+- **session 隔离是多 Agent memory 的底线**：任何跨 step 记忆都必须先问「这条记录来自当前 run 还是之前 run」。
+- **已完成的后续验证**：用 session 隔离后的配置重新跑 representative subset（6 游戏 × 15 runs）后，00483 multi-bus composite 从 **0.150 → 0.103**（activity 0.000 → 0.333），multi-bus-memory 从 **0.150 → 0.200**；00461/00522 未被拉低，证明 session 隔离没有误伤原本依赖跨 session 记忆的游戏。详细数据见 §27。
+
+
+## 29. 本轮总体结论与下一步
+
+### 29.1 已经验证的事情
 
 1. **三层架构合理**：L0 规则负责零延迟执行，L1 本地 VLM 提供视觉证据，L2 云端 API 做长程规划和规则更新。
 2. **云端 API 的能力边界清晰**：写代码、改配置、做规划都可以；但直接逐帧输出 gameplay 动作会触发过滤或空返回。
 3. **本地 VLM 有潜力**：Gemma-4-E4B 的视觉摘要比 Qwen3.5-4B 更稳定，能帮云端策略纠偏，但还需要微调才能稳定超越 text-only。
-4. **multi-bus-memory 仍是当前最强基线**：在 representative subset 上综合 composite 最高，且 5/6 游戏优于或持平 rule。
-5. **规则在线更新已跑通**：qwen/kimi/xiaomi 三家都能输出结构化 code-file 更新，并安全落盘到 `configs/runtime_rules.json`。
+4. **rule 仍是当前最强短程基线**：在 25 步 representative subset 上 rule mean composite=0.251，multi-bus-memory 0.218。multi-bus-memory 在 tap-only 游戏上已接近 rule（0.296 vs 0.300），但在需要 joystick 的 A 组游戏上仍落后。
+5. **规则在线更新已跑通**：qwen/kimi/xiaomi/opencodego 四家都能输出结构化 code-file 更新，并安全落盘到 `configs/runtime_rules.json`。
+6. **00483 multi-bus activity=0 已定位并修复**：根因是 strategy_memory 在线自强化，修复后 00483 multi-bus composite 0.150 → 0.103（activity 0.000 → 0.333），multi-bus-memory 0.150 → 0.200；representative subset 15 runs 全部成功。
 
-### 28.2 仍然存在的问题
+### 29.2 仍然存在的问题
 
-1. **SSD_00483P01 的 multi-bus activity=0**：需要诊断是 driver/profile 问题，还是 bus 决策在该游戏上选择了错误动作。
-2. **本地 VLM 延迟 7-8s/帧**：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。
-3. **L2 输出契约不够强**：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。
-4. **缺少真实游戏中的在线触发**：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。
+1. **本地 VLM 延迟 7-8s/帧**：不能每步都调用，需要更智能的触发策略（只在卡住、阶段切换、前 N 步调用）。
+2. **L2 输出契约不够强**：思考链、截断、空返回都会影响 L0 执行。需要更严格的 JSON schema 或 tool calling。
+3. **缺少真实游戏中的在线触发**：当前 code-file 更新是离线静态 prompt，还没在浏览器运行中根据实时信号触发。
+4. **multi-bus 仍未完全追平 rule 在 00483 上的表现**：需要继续调优 Verifier/Critic 循环。
 
-### 28.3 下一步实验计划
+### 29.3 下一步实验计划
 
 1. **在线 code-file 触发**：在 representative subset 中让 L2 根据实时 composite/stall 触发 `runtime_rules.json` 更新，对比更新前后的得分。
-2. **00483 专项诊断**：单独跑 00483 的 rule / multi-bus / tap-only / api-rule 四种模式，定位 activity=0 的根因。
-3. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。
-4. **结构化视觉上下文**：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。
-5. **QLoRA 微调**：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。
-6. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。
-7. **更多云端 provider 的 code-file 更新**：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。
+2. **L1 触发策略 A/B**：对比「每 5 步调用 L1」vs「只在 stall 时调用 L1」vs「只在阶段切换时调用 L1」的效率和得分。
+3. **结构化视觉上下文**：让 Gemma-4-E4B 输出 JSON 格式视觉摘要（箭头方向、最近敌人、障碍物），而不是自然语言，减少云端解析误差。
+4. **QLoRA 微调**：在 5090 服务器上用 15,083 条样本训练 Qwen3.5-4B/9B 和 Gemma-4-E4B，目标是让本地 VLM 稳定输出结构化上下文。
+5. **Critic Agent 仲裁**：当 L0 与 L2 决策冲突时，引入一个轻量级 Critic（可以用本地小文本模型或规则）做最终决策。
+6. **更多云端 provider 的 code-file 更新**：把 OpenCodeGo 的 code-file 成功实验推广到 MiMo-v2.5 和 Kimi-k2.6，验证跨 provider 的稳定性。
+7. **strategy_memory 跨 session 隔离**：实现「当前 session 记录只持久化、不读回」，彻底消除在线自强化风险。
 

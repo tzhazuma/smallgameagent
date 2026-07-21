@@ -1,0 +1,62 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.04374999999999999,
+    "activity": 0.29166666666666663,
+    "elapsed_s": 18.0,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 7,
+      "transitions": 0,
+      "stall_steps": 17,
+      "fail_flips": 0,
+      "wm_violations": 4
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00461P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00483P01",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.2,
+    "activity": 0.33333333333333337,
+    "elapsed_s": 22.9,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 8,
+      "transitions": 0,
+      "stall_steps": 16,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00483P01_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00522P02",
+    "mode": "multi-bus-memory",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.1775,
+    "activity": 0.5833333333333333,
+    "elapsed_s": 17.7,
+    "details": {
+      "steps": 25,
+      "move_steps": 11,
+      "tap_steps": 14,
+      "transitions": 0,
+      "stall_steps": 10,
+      "fail_flips": 0,
+      "wm_violations": 1
+    },
+    "trajectory_path": "/home/azuma/Downloads/smallgameagent/representative_results/A_representative/multi-bus-memory/trajectories/SSD_00522P02_multi-bus-memory_seed42.jsonl",
+    "error": ""
+  }
+]

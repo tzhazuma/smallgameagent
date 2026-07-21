@@ -178,7 +178,10 @@ class MultiAgentOrchestrator:
                 phase = self.strategy_memory.phase_id(ctx.probe_state)
                 success = not ctx.probe_state.get("done") or ctx.probe_state.get("win", False)
                 self.strategy_memory.record(
-                    game_id, phase, {"action": action.get("action"), "params": action.get("params")}, success
+                    game_id, phase,
+                    {"action": action.get("action"), "params": action.get("params")},
+                    success,
+                    session_id=ctx.metadata.get("run_id"),
                 )
             except Exception:
                 pass

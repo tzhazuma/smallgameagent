@@ -778,11 +778,11 @@ def _add_key_findings_slide(prs) -> None:
     _add_content_bg(slide)
 
     findings = [
-        ("✅ 有效", "multi-bus-memory 在 representative subset 上 mean composite 0.275，5/6 游戏优于或持平 rule。", _C_SUCCESS),
+        ("✅ 有效", "rule 在 6 游戏 representative subset 上 mean composite=0.251，仍是当前最稳短程基线。", _C_SUCCESS),
+        ("✅ 有效", "multi-bus-memory 在 tap-only 游戏上接近 rule（0.296 vs 0.300），记忆读回对无 joystick 场景有价值。", _C_SUCCESS),
         ("✅ 有效", "L2 code-file 更新在 qwen/kimi/xiaomi/opencodego 均成功，云端模型确实能改持久化规则旋钮。", _C_SUCCESS),
-        ("✅ 有效", "Gemma-4-E4B 视觉上下文让云端动作匹配从 3/9 提升到 5/9，本地 VLM 有潜力。", _C_SUCCESS),
-        ("⚠️ 待优化", "OpenCodeGo / MiMo / Kimi 直接做 gameplay 动作时大量空返回或 fallback，云端不适合逐帧控制。", _C_WARN),
-        ("⚠️ 待优化", "SSD_00483P01 的 multi-bus activity=0，driver/profile 需要单独诊断。", _C_WARN),
+        ("✅ 已修复", "00483 multi-bus activity=0：根因是 strategy_memory 在线自强化，session 隔离后 multi-bus-memory 0.200、activity 0.333。", _C_SUCCESS),
+        ("⚠️ 待优化", "multi-bus 在需要 joystick 的 A 组明显弱于 rule（mean 0.110），需要更强的 driver/Verifier 循环。", _C_WARN),
         ("📌 方向", "把云端放在 L2 做规划与规则更新，L0 规则负责执行，L1 VLM 只做视觉证据。", _C_SECONDARY),
     ]
 
@@ -805,10 +805,10 @@ def _add_representative_results_slide(prs) -> None:
     _add_table_slide_raw(slide, 0.65, 1.45, 12.3, 4.8,
         ["游戏", "类型", "rule", "multi-bus", "multi-bus-memory"],
         [
-            ["SSD_00461P01 塔防", "A", "0.149", "0.300", "0.300"],
-            ["SSD_00483P01 吸沙抽水", "A", "0.184", "0.150", "0.150"],
-            ["SSD_00522P02 地下炸矿", "A", "0.215", "0.300", "0.300"],
-            ["SSD_00382P01 低坑杀鲨鱼", "B", "0.288", "—", "0.300"],
+            ["SSD_00461P01 塔防", "A", "0.149", "0.050", "0.044"],
+            ["SSD_00483P01 吸沙抽水", "A", "0.244", "0.103", "0.200"],
+            ["SSD_00522P02 地下炸矿", "A", "0.215", "0.178", "0.178"],
+            ["SSD_00382P01 低坑杀鲨鱼", "B", "0.300", "—", "0.288"],
             ["SSD_00594P02 破石收水", "B", "0.300", "—", "0.300"],
             ["SSD_00742P01 加油小镇", "B", "0.300", "—", "0.300"],
         ])
@@ -816,7 +816,7 @@ def _add_representative_results_slide(prs) -> None:
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.35), Inches(12.3), Inches(0.7))
     _set_fill(note, _C_LIGHT)
     _set_text_style(note.text_frame.paragraphs[0],
-        "15 runs 全部成功，multi-bus-memory 综合 mean composite 0.275，activity 0.833。唯一例外 00483 需要 driver 诊断。",
+        "15 runs 全部成功。rule mean composite=0.251 仍是最稳基线；multi-bus-memory 在 tap-only 游戏接近 rule（0.296 vs 0.300）。session 隔离让 00483 从 activity=0 恢复到 0.333。",
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
@@ -865,6 +865,7 @@ def _add_next_steps_slide(prs) -> None:
         "在 5090 服务器跑 QLoRA 微调，把本地 VLM 训练成专用画面理解器",
         "把离线回放接入 CI：每次规则改动自动跑 5 游戏回归",
         "探索 Agent 间更严格的仲裁：Critic 对 L0/L2 冲突做最终决策",
+        " redesign strategy_memory 的 success 信号：结合位置变化、guide 触发、stall 减少",
     ]
     content = slide.shapes.add_textbox(Inches(0.85), Inches(1.55), Inches(12.0), Inches(5.5))
     tf = content.text_frame

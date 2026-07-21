@@ -47,8 +47,17 @@ class StrategyMemory:
         pattern: dict[str, Any],
         success: bool,
         notes: str = "",
+        session_id: str | None = None,
     ) -> None:
-        """Record an attempted pattern and its outcome."""
+        """Record an attempted pattern and its outcome.
+
+        Parameters
+        ----------
+        session_id:
+            Optional identifier for the current play session.  Stored with the
+            entry so that ``lookup`` can exclude patterns from the same session
+            and avoid online self-reinforcement.
+        """
         game = self._data.setdefault(game_id, {})
         entries = game.setdefault(phase_id, [])
 
@@ -65,15 +74,16 @@ class StrategyMemory:
                     entry["notes"] = notes
                 break
         else:
-            entries.append(
-                {
-                    "pattern": pattern,
-                    "attempts": 1,
-                    "successes": 1 if success else 0,
-                    "failures": 0 if success else 1,
-                    "notes": notes,
-                }
-            )
+            new_entry: dict[str, Any] = {
+                "pattern": pattern,
+                "attempts": 1,
+                "successes": 1 if success else 0,
+                "failures": 0 if success else 1,
+                "notes": notes,
+            }
+            if session_id is not None:
+                new_entry["session_id"] = session_id
+            entries.append(new_entry)
         self._save()
 
     def lookup(
@@ -82,12 +92,23 @@ class StrategyMemory:
         phase_id: str,
         top_k: int = 3,
         min_attempts: int = 1,
+        exclude_session_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return the best-known patterns for a game phase ordered by success rate."""
+        """Return the best-known patterns for a game phase ordered by success rate.
+
+        Parameters
+        ----------
+        exclude_session_id:
+            If provided, entries recorded in that session are ignored.  This
+            prevents the agent from reading back actions it just recorded in
+            the same run, which can cause online self-reinforcement loops.
+        """
         entries = self._data.get(game_id, {}).get(phase_id, [])
         scored = []
         for e in entries:
             if e.get("attempts", 0) < min_attempts:
+                continue
+            if exclude_session_id is not None and e.get("session_id") == exclude_session_id:
                 continue
             rate = e.get("successes", 0) / max(1, e.get("attempts", 1))
             scored.append((rate, e))

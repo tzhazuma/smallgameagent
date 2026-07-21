@@ -1,0 +1,22 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "multi-bus",
+    "seed": 42,
+    "steps": 25,
+    "composite": 0.04374999999999999,
+    "activity": 0.29166666666666663,
+    "elapsed_s": 18.1,
+    "details": {
+      "steps": 25,
+      "move_steps": 17,
+      "tap_steps": 7,
+      "transitions": 0,
+      "stall_steps": 17,
+      "fail_flips": 0,
+      "wm_violations": 4
+    },
+    "trajectory_path": "diagnosis_00483_results/00461_multi-bus_existing-memory_check2/trajectories/SSD_00461P01_multi-bus_seed42.jsonl",
+    "error": ""
+  }
+]

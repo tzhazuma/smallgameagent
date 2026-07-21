@@ -30,7 +30,7 @@ if _ENV_FILE.is_file():
 
 from configs.game_profiles import get_driver_for_type, get_game_type  # noqa: E402
 from src.experiments.analyze_batch import analyze  # noqa: E402
-from src.experiments.batch_runner import BatchConfig, run_batch  # noqa: E402
+from src.experiments.batch_runner import BatchConfig, RunResult, run_batch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 GAMES_DIR = ROOT / "_extracted" / "games"
@@ -104,24 +104,44 @@ async def main() -> None:
         print(f"Group {cfg['name']}: {len(cfg['games'])} games × {len(cfg['modes'])} modes × {len(SEEDS)} seeds")
         print(f"{'='*60}", flush=True)
 
-        batch_config = BatchConfig(
-            games=cfg["games"],
-            modes=cfg["modes"],
-            seeds=SEEDS,
-            max_steps=MAX_STEPS,
-            headed=False,
-            collect_dataset=True,
-            output_dir=str(ROOT / "representative_results" / cfg["name"]),
-            memory_config={"strategy_memory_path": str(ROOT / f"strategy_memory_{cfg['name']}.json")},
-            config_overrides={"probe_timeout_ms": 30_000},
-        )
-        results = await run_batch(batch_config)
-        all_results.extend(results)
+        group_results: list[RunResult] = []
+        # Run each mode with its own isolated strategy memory so that
+        # multi-bus and multi-bus-memory do not cross-pollinate within the
+        # same batch.  This makes the per-mode numbers directly comparable.
+        for mode in cfg["modes"]:
+            memory_path = ROOT / "representative_results" / cfg["name"] / f"strategy_memory_{mode}.json"
+            memory_path.parent.mkdir(parents=True, exist_ok=True)
+            batch_config = BatchConfig(
+                games=cfg["games"],
+                modes=[mode],
+                seeds=SEEDS,
+                max_steps=MAX_STEPS,
+                headed=False,
+                collect_dataset=True,
+                output_dir=str(ROOT / "representative_results" / cfg["name"] / mode),
+                memory_config={"strategy_memory_path": str(memory_path)},
+                config_overrides={"probe_timeout_ms": 30_000},
+            )
+            results = await run_batch(batch_config)
+            group_results.extend(results)
+            all_results.extend(results)
 
-        results_path = ROOT / "representative_results" / cfg["name"] / "batch_results.json"
-        analysis_path = ROOT / "representative_results" / cfg["name"] / "analysis.md"
-        if results_path.exists():
-            analyze(results_path, analysis_path)
+        # Merge per-mode batch_results.json into the group summary expected
+        # by the downstream analyze() helper.
+        group_results_path = ROOT / "representative_results" / cfg["name"] / "batch_results.json"
+        group_results_path.parent.mkdir(parents=True, exist_ok=True)
+        group_results_path.write_text(
+            json.dumps(
+                [{"game_id": r.game_id, "mode": r.mode, "seed": r.seed,
+                  "steps": r.steps, "composite": r.composite, "activity": r.activity,
+                  "elapsed_s": r.elapsed_s, "details": r.details,
+                  "trajectory_path": r.trajectory_path, "error": r.error}
+                 for r in group_results],
+                ensure_ascii=False, indent=2,
+            ),
+            encoding="utf-8",
+        )
+        analyze(group_results_path, ROOT / "representative_results" / cfg["name"] / "analysis.md")
 
     merged_path = ROOT / "representative_results" / "batch_results_all.json"
     merged_path.parent.mkdir(parents=True, exist_ok=True)
