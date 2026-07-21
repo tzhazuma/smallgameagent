@@ -2,6 +2,74 @@
 
 > 随实验推进持续更新。方案见 `EXPERIMENT_PLAN.md`。
 
+## 2026-07-21 P17 L2 代码文件级规则更新闭环
+
+### 新增 `configs/runtime_rules.json`
+
+存放可被 L2 安全改写的运行时参数：
+
+```json
+{
+  "coin_save_buffer": 0,
+  "stuck_escape_threshold": 5,
+  "target_lock_max_steps": 8,
+  "obstacle_repulse_weight": 1.3,
+  "escape_score_radius": 3.0
+}
+```
+
+### `RuleEngine` 支持运行时参数读取
+
+- `src/engine/rules.py`：新增 `_param(name, default)`，查找顺序为内存 `RuleParameters` → `configs/runtime_rules.json` → 硬编码默认值。
+- `_load_runtime_rules()` 每次 step 读取 JSON，修改后无需重启。
+
+### `RuleUpdateApplier` 支持 code-file 更新
+
+安全门：
+
+1. allowlist：只允许修改白名单内的文件；
+2. 置信度 ≥ 0.9；
+3. patch 大小 ≤ 2000 字符，search 块 ≤ 500 字符；
+4. 文件必须存在；
+5. search 块必须唯一匹配；
+6. 修改前自动备份（保留最近 3 份）。
+
+### 实验脚本
+
+```bash
+PYTHONPATH=. .venv/bin/python -B src/experiments/exp_code_file_rule_update.py
+```
+
+产出：`experiment_code_file_rule_update.json`。
+
+### 实验结果
+
+| 指标 | 数值 |
+|---|---|
+| 游戏 | SSD_00461P01 |
+| 回放步数 | 30 |
+| 修改前 `stuck_escape_threshold` | 5 |
+| 触发 step | 5 |
+| 实际生效 step | 6 |
+| 修改后阈值（运行中读取） | 3 |
+| L2 置信度 | 0.95 |
+| L2 update 调用次数 | 5 |
+| 自动备份 | ✅ |
+| 实验后恢复 | ✅ |
+
+### 结论
+
+- L2 通过结构化 JSON 直接修改 `configs/runtime_rules.json` 的实验成功闭环。
+- 规则引擎无需重启即可读取新参数，说明「云端模型调引擎旋钮」的路径可行。
+- 安全门（allowlist + 高置信度 + 自动备份）把风险控制在单一配置文件内，未通过则进入待审队列，避免误改源码。
+
+### 质量门
+
+- `ruff check src/engine/rules.py src/agent/hybrid_agent.py src/agent/decision_makers/hierarchical_maker.py src/experiments/exp_code_file_rule_update.py`：全绿。
+- `pytest tests/test_rule_update.py tests/test_hybrid_agent.py tests/test_hierarchical_planner.py -q`：**47 passed**。
+
+---
+
 ## 2026-07-21 P16 VLM 训练数据集生成与 5090 训练准备
 
 ### 使用 processed_runs_converter 生成 7 任务数据集

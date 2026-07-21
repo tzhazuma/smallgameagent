@@ -1,7 +1,7 @@
 # smallgameagent 实验报告（第三轮：分层架构 + 批量框架）
 
-> 2026-07-20。配套：`EXPERIMENT_PLAN.md`（方案）、`EXPERIMENT_RESULTS.md`（过程数据）。
-> 本轮重点：分层多 Agent 架构、Node.js 高级逻辑移植、批量实验框架、数据采集管线。
+> 2026-07-21。配套：`EXPERIMENT_PLAN.md`（方案）、`EXPERIMENT_RESULTS.md`（过程数据）。
+> 本轮重点：分层多 Agent 架构、Node.js 高级逻辑移植、批量实验框架、数据采集管线、**L2 代码文件级规则更新**。
 
 ## 0. 一页结论
 
@@ -10,6 +10,7 @@
 - **Node.js 高级逻辑移植**：soft target lock（防 target thrashing）、guide-signature change detection（检测 guide 路径变化）、coin demand override（强制导航到 coin table）已移植到 `rules.py`。但 soft lock 在 tap-guide 场景下反而降低了 tap 频率（rule composite 从 0.150 降到 0.10），已修复：tap 后释放 lock。
 - **multi-bus 最优**：批量实验中 multi-bus 和 multi-bus-memory 均达 **0.300**（2 seed 一致），确认记忆读回 + 总线通信的组合是当前最佳配置。
 - **数据采集**：`DatasetWriter` 已接入 `batch_runner`，每步写入 JSONL（player/action/keyNumbers/reason），可直接用于后续 VLM 微调。
+- **L2 代码文件级规则更新**：新增 `configs/runtime_rules.json` 作为可被 L2 安全改写的运行时参数文件；离线实验中 mock L2 以 0.95 置信度成功把 `stuck_escape_threshold` 从 5 改为 3，后续 step 即时生效，且修改前自动备份。**结论**：规则更新从「内存参数」扩展到「持久化配置文件」，云端模型可直接调整引擎旋钮而不碰源代码。
 - **测试**：674 passed, 0 failed, ruff 全绿。
 
 ## 1. 分层多 Agent 架构（实验 F）
@@ -689,5 +690,78 @@ Gemma-4-E4B 对应使用 `src/training/train_gemma4.py`，参数结构相同。
 - 数据集已就绪：15,083 条样本、22 游戏、7 任务。
 - 训练脚本与数据加载器已验证可导入；待 5090 可用时直接启动 QLoRA。
 - 该数据集可与后续人工标注/在线采集数据合并，持续扩展 VLM 的 domain 覆盖。
+
+## 22. L2 代码文件级规则更新（code-file update）
+
+### 22.1 动机
+
+之前的 L2 规则更新只能修改内存中的 `RuleParameters`， agent 重启后失效，且无法调整引擎内部未暴露给参数表的旋钮。我们希望：
+
+- 云端模型在运行时发现「当前关卡障碍物密集，默认卡死阈值 5 步太慢」，能直接降低 `stuck_escape_threshold`；
+- 修改落在一个受控的配置文件里，**不直接改 `.py` 源码**，重启后仍然有效；
+- 修改过程有安全门：allowlist、高置信度、自动备份、小 patch。
+
+### 22.2 实现
+
+新增 `configs/runtime_rules.json`，存放可被 L2 安全改写的运行时参数：
+
+```json
+{
+  "coin_save_buffer": 0,
+  "stuck_escape_threshold": 5,
+  "target_lock_max_steps": 8,
+  "obstacle_repulse_weight": 1.3,
+  "escape_score_radius": 3.0
+}
+```
+
+`src/engine/rules.py`：
+
+- `RuleEngine.__init__` 接受可选 `rule_params: RuleParameters`；
+- 新增 `_param(name, default)`，查找顺序为：内存 `RuleParameters` → `configs/runtime_rules.json` → 硬编码默认值；
+- `_load_runtime_rules()` 每次 step 读取 JSON，保证 code-file 更新后无需重启即可生效。
+
+`src/agent/rule_update.py`：
+
+- `RuleUpdateApplier._apply_code_file()` 实现安全门：
+  1. **allowlist**：只允许修改白名单内的文件；
+  2. **置信度 ≥ 0.9**；
+  3. **patch 大小 ≤ 2000 字符**，search 块 ≤ 500 字符；
+  4. **文件必须存在**且为普通文件；
+  5. **search 块必须唯一**匹配，否则进入 `pending_code_updates` 待审队列；
+  6. 修改前自动备份到 `configs/.rule_backups/runtime_rules.json.0.bak`，保留最近 3 份。
+
+`src/agent/hierarchical_planner.py` 与 `src/agent/decision_makers/hierarchical_maker.py`：透传 `rule_update_allowlist`，默认指向 `configs/runtime_rules.json`。
+
+### 22.3 实验
+
+新建 `src/experiments/exp_code_file_rule_update.py`：
+
+- 在 `processed-runs/SSD_00461P01` 上离线回放前 30 步；
+- mock L2 在第 5 步触发规则更新，返回 `update_type=code_file`，把 `stuck_escape_threshold` 从 5 改为 3，置信度 0.95；
+- 验证修改是否被应用、后续 step 是否读到新值、文件是否被备份、实验结束后是否恢复原始文件。
+
+结果：
+
+| 指标 | 数值 |
+|---|---|
+| 修改前阈值 | 5 |
+| 应用 step | 6 |
+| 修改后阈值（运行中读取） | 3 |
+| 置信度 | 0.95 |
+| 自动备份 | ✅ |
+| 实验后恢复 | ✅ |
+
+### 22.4 关键发现
+
+1. **code-file 更新在离线实验中成功闭环**：mock L2 输出结构化 JSON，`RuleUpdateApplier` 通过全部安全门，配置文件被修改，规则引擎在下一步即读取到新阈值。
+2. **安全门有效**：低置信度、不在 allowlist、search 块不唯一的更新会被拒绝并进入待审队列，避免误改源码。
+3. **与内存参数更新的关系**：`RuleParameters`（内存）适合高频小调，`code_file`（配置文件）适合需要持久化的引擎旋钮；两者共享同一 `_param()` 读取路径，优先级为内存 > 文件 > 默认值。
+
+### 22.5 后续工作
+
+- 在真实云端 API（kimi / qwen / mimo）上触发 code-file 更新，观察模型对「哪些参数该改、改多少」的决策质量；
+- 把 `runtime_rules.json` 的 schema 写入 L2 prompt，限制可改字段与取值范围；
+- 接入版本控制：每次 code-file 更新生成一条 git-style diff 记录，方便回滚与审计。
 
 

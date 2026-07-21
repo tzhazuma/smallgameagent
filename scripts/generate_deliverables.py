@@ -409,6 +409,33 @@ def _add_rule_wiring_slide(prs) -> None:
     ], _C_SUCCESS)
 
 
+def _add_code_file_update_slide(prs) -> None:
+    """Slide showing code-file rule update experiment."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "代码文件级更新：L2 直接调引擎旋钮")
+
+    _card(slide, 0.5, 1.4, 6.0, 2.6, "安全门设计", [
+        "白名单：只能改 configs/runtime_rules.json",
+        "置信度 ≥ 0.9，patch ≤ 2000 字符",
+        "search 块必须唯一匹配，否则进待审队列",
+        "修改前自动备份，保留最近 3 份",
+    ], _C_SUCCESS)
+
+    _card(slide, 6.8, 1.4, 6.0, 2.6, "离线实验结果", [
+        "游戏：SSD_00461P01，回放 30 步",
+        "mock L2 以 0.95 置信度触发更新",
+        "stuck_escape_threshold 5 → 3",
+        "第 6 步起规则引擎读取到新阈值",
+        "实验结束后配置文件自动恢复",
+    ], _C_ACCENT)
+
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(4.2), Inches(12.3), Inches(1.0))
+    _set_fill(insight, _C_LIGHT)
+    _set_text_style(insight.text_frame.paragraphs[0],
+        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」。重启后仍然生效，且风险被限制在单一配置文件中。",
+        Pt(14), color=_C_DARK, align=PP_ALIGN.CENTER)
+
+
 def _add_agent_comm_slide(prs) -> None:
     """Agent communication and memory strategies slide."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -519,24 +546,24 @@ def write_pptx() -> None:
 
     # ---- Slide 2: Agenda ----
     _add_bullet_slide(prs, "今天聊什么？", [
-        "小游戏 Agent 到底难在哪？",
-        "我们的解法：三层快慢分离架构",
-        "云端多模型 API 与本地 VLM 的落地配置",
-        "规则在线更新：让底层规则也能「进化」",
-        "Agent 通信与记忆策略",
-        "最新实验结果与训练数据管线",
-        "下一步我们要攻什么？",
+        "小游戏 Agent 到底卡在哪几个地方？",
+        "我们的思路：把快执行和慢思考拆开，做三层架构",
+        "怎么接入多家云模型，又怎么在本地跑小 VLM",
+        "规则不是死的：云端模型如何在线更新底层规则",
+        "Agent 之间怎么通信、怎么记东西",
+        "最近实验跑出了什么结果，数据怎么准备",
+        "下一步还想试什么？",
     ])
 
     # ---- Section: Problem ----
     _add_section_slide(prs, "01 我们在解决什么问题？")
 
     _add_bullet_slide(prs, "小游戏可玩广告，自动化并不 trivial", [
-        "空间一致性：场景会随进度改变，云端模型容易「记错」障碍物位置",
-        "时间一致性：后续策略会反向改写前面的行为语义，导致推进失败",
-        "策略短视：有钱就去升级，而不是攒够再升级，效率很低",
-        "运行效率：每个游戏后端数据不同，日志与探针不能一刀切",
-        "API 延迟：纯云端决策太慢，无法满足实时逐步控制",
+        "空间一致性：场景会随着进度变化，云端模型容易记错障碍物位置",
+        "时间一致性：后面的策略可能反过来改前面的行为含义，导致推进失败",
+        "策略短视：有钱就升级，而不是攒够再升级，来回跑很多步",
+        "运行效率：不同游戏后端数据差异大，探针和日志不能一刀切",
+        "API 延迟：纯云端决策太慢，实时控制扛不住",
     ])
 
     # ---- Section: Architecture ----
@@ -545,9 +572,9 @@ def write_pptx() -> None:
     _add_architecture_slide(prs)
 
     _add_bullet_slide(prs, "慢思考 + 快执行，各司其职", [
-        "L0 规则引擎：每步 ~0 ms，负责 move / tap 的零延迟执行",
+        "L0 规则引擎：每步几乎不花时间，负责 move / tap 的零延迟执行",
         "L1 本地 VLM：看截图判断当前状态，每 N 步或卡住时做战术修正",
-        "L2 云端 API：看 probe state 做长程规划与规则更新，每 M 步或阶段切换触发",
+        "L2 云端 API：看 probe state 做长程规划和规则更新，每 M 步或阶段切换触发",
         "核心思路：把贵且慢的调用摊到多步，单步延迟压到接近 0",
     ])
 
@@ -569,12 +596,14 @@ def write_pptx() -> None:
 
     _add_rule_wiring_slide(prs)
 
+    _add_code_file_update_slide(prs)
+
     _add_bullet_slide(prs, "规则不是写死的，触发后才让上层改", [
-        "触发器监控：composite 持续低迷 / stall 计数 / L0-L2 冲突 / 世界模型 stale",
+        "触发器监控：composite 持续低迷 / stall 计数 / L0-L2 决策冲突 / 世界模型 stale",
         "L2 输出结构化 JSON：param、memory_entry、phase_contract、code_file",
         "默认只修改内存参数与 strategy memory，零风险、即时生效",
-        "代码文件改写需 allowlist + 置信度 ≥ 0.9 + 自动备份，未通过则进入待审队列",
-        "目标：把「拿到钱就升级」的短视行为，改成「攒够再升级」的长程最优策略",
+        "代码文件改写需 allowlist + 置信度 ≥ 0.9 + 自动备份，没通过就进待审队列",
+        "目标：把「有钱就升级」的短视行为改成「攒够再升级」的长程策略",
     ])
 
     # ---- Section: Agent communication ----
@@ -632,7 +661,7 @@ def write_pptx() -> None:
         ])
 
     _add_bullet_slide(prs, "关键发现", [
-        "离线回放无需浏览器即可快速验证 decider 改动，5 款游戏 rule/hierarchical 跑通",
+        "离线回放不用开浏览器，就能快速验证 decider 改动，5 款游戏 rule/hierarchical 跑通",
         "00332/00382 等 tap-only 游戏与 rule engine 策略一致，joystick 游戏仍有优化空间",
         "Qwen API 成功触发 L2 规划与 rule update，但单步延迟约 3.7s，在线需异步化",
         "memory / multi-bus 模式可接入同一离线回放框架，下一步批量对比",
@@ -653,8 +682,9 @@ def write_pptx() -> None:
     _add_section_slide(prs, "09 下一步")
 
     _add_bullet_slide(prs, "接下来要攻的几件事", [
-        "在更多游戏上跑真实 Qwen multi-bus-memory，量化通信/记忆成本与收益",
-        "尝试 L2 规则更新的 code_file 模式（allowlist + 高置信度 + 自动备份）",
+        "在真实云端 API（kimi / qwen / mimo）上触发 code-file 更新，验证真实 L2 的调参决策质量",
+        "把 runtime_rules.json 的 schema 写进 L2 prompt，约束可改字段与取值范围",
+        "尝试 L2 规则更新的 phase_contract 与 memory_entry 模式，完善上层对下层的更新手段",
         "让本地 VLM 常驻，验证 L1 战术修正对 joystick 游戏的收益",
         "在 5090 服务器上跑 QLoRA 微调，把本地 VLM 变成专用画面理解器",
         "把离线回放集成到 CI：每次规则改动自动跑 5 游戏回归",

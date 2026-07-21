@@ -412,6 +412,10 @@ class HybridAgent:
             "procedural_memory": self._procedural_memory,
             "strategy_memory": self._strategy_memory,
             "rule_params": self._rule_params,
+            "rule_update_allowlist": self._config.get(
+                "rule_update_allowlist",
+                [str(Path(__file__).resolve().parent.parent.parent / "configs" / "runtime_rules.json")],
+            ),
         }
         # Pass through interval/threshold overrides for hierarchical/makers.
         for key in ("l1_interval", "l2_interval", "stuck_threshold"):

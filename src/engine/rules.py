@@ -7,11 +7,13 @@ dispatches to the correct strategy implementation for each driver type.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import random
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from configs.game_profiles import get_profile, get_profile_or_generic
@@ -163,10 +165,36 @@ class RuleEngine:
         self._coin_override: dict[str, Any] | None = None
 
     def _param(self, name: str, default: Any) -> Any:
-        """Read a tunable parameter from the runtime store or fall back to default."""
-        if self.rule_params is None:
-            return default
-        return self.rule_params.get(name, default)
+        """Read a tunable parameter from the runtime store or fall back to default.
+
+        The lookup order is:
+        1. In-memory ``RuleParameters`` (L2 param updates take effect immediately).
+        2. ``configs/runtime_rules.json`` (L2 code-file updates modify this file).
+        3. Hard-coded ``default``.
+        """
+        if self.rule_params is not None:
+            value = self.rule_params.get(name)
+            if value is not None:
+                return value
+        runtime = self._load_runtime_rules()
+        if name in runtime:
+            return runtime[name]
+        return default
+
+    @staticmethod
+    def _load_runtime_rules() -> dict[str, Any]:
+        """Load the optional runtime rules JSON config.
+
+        This file is intentionally on the code-file update allowlist so that
+        the cloud L2 can safely tune engine knobs without touching source code.
+        """
+        path = Path(__file__).resolve().parent.parent.parent / "configs" / "runtime_rules.json"
+        try:
+            if path.is_file():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
 
     def set_rule_params(self, rule_params: RuleParameters) -> None:
         """Replace the runtime parameter store (used by hierarchical updates)."""

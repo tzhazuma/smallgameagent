@@ -50,6 +50,7 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
             stuck_threshold=kwargs.get("stuck_threshold", 3),
             rule_params=rule_params,
             strategy_memory=strategy_memory,
+            rule_update_allowlist=kwargs.get("rule_update_allowlist"),
         )
 
     async def decide(self, ctx: "AgentContext") -> dict[str, Any]:
