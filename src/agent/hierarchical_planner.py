@@ -55,8 +55,13 @@ _L2_UPDATE_SYSTEM = (
     '  "payload": {...},\n'
     '  "confidence": 0.0-1.0\n'
     '}\n\n'
+    "Tunable parameters (use these exact names in payload for param updates):\n"
+    "- Engine knobs: stuck_escape_threshold (int), target_lock_max_steps (int), coin_save_buffer (float), obstacle_repulse_weight (float), escape_score_radius (float)\n"
+    "- Trigger sensitivity: trigger_composite_threshold (float), trigger_stall_threshold (int), trigger_cooldown_steps (int), trigger_relative_decrease_pct (float or null), trigger_max_updates_per_run (int)\n"
+    "- Watchdog margins: watchdog_activity_drop_margin (float), watchdog_stall_increase_margin (int)\n\n"
     "Examples:\n"
     '- To change a knob: {"update_type":"param","target":"escape","reason":"hero is stuck too often","payload":{"stuck_escape_threshold":3},"confidence":0.85}\n'
+    '- To relax trigger: {"update_type":"param","target":"trigger","reason":"too many L2 calls","payload":{"trigger_max_updates_per_run":1,"trigger_cooldown_steps":12},"confidence":0.8}\n'
     '- To do nothing: {"update_type":"none","target":"","reason":"performance is acceptable","payload":{},"confidence":0.0}\n'
     '- To update a config file: {"update_type":"code_file","target":"runtime_rules.json","reason":"reduce lock time","payload":{"file_path":"configs/runtime_rules.json","search":"\\\"target_lock_max_steps\\\": 8","replace":"\\\"target_lock_max_steps\\\": 5"},"confidence":0.9}\n\n'
     "Rules:\n"

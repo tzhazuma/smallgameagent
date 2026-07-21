@@ -1526,7 +1526,23 @@ python -B src/experiments/offline_replay.py \
 
 **意义**：触发器配置不再是硬编码或仅内存态，而是持久化、可审计、可被 L2 安全修改的「规则旋钮」。这完成了同学想要的「直接用 API 修改规则代码文件」闭环中最后一块拼图：L2 不仅能改引擎参数，还能改触发器本身的灵敏度。
 
-### 36.11 下一步
+### 36.11 L2 Prompt 更新：告诉云端模型可以调什么
+
+把触发器/Watchdog 参数写进 `runtime_rules.json` 后，还需要让 L2 **知道**它可以调整这些旋钮。否则模型只会输出它熟悉的 `stuck_escape_threshold` 之类的引擎参数。
+
+**修改内容**：
+- `src/agent/hierarchical_planner.py` 的 `_L2_UPDATE_SYSTEM` 和 `src/agent/rule_update.py` 的 `update_prompt()` 中，新增「Tunable parameters」段落，明确列出三类可调参数：
+  1. **Engine knobs**：`stuck_escape_threshold`、`target_lock_max_steps`、`coin_save_buffer`、`obstacle_repulse_weight`、`escape_score_radius`
+  2. **Trigger sensitivity**：`trigger_composite_threshold`、`trigger_stall_threshold`、`trigger_cooldown_steps`、`trigger_relative_decrease_pct`、`trigger_max_updates_per_run`
+  3. **Watchdog margins**：`watchdog_activity_drop_margin`、`watchdog_stall_increase_margin`
+- 新增示例：`{"update_type":"param","target":"trigger","reason":"too many L2 calls","payload":{"trigger_max_updates_per_run":1,"trigger_cooldown_steps":12},"confidence":0.8}`
+
+**意义**：L2 现在不仅能改引擎参数，还能根据运行状况动态调整触发器灵敏度和 watchdog 安全网。例如：
+- 如果 L2 发现自己被调用太频繁，可以主动提高 `trigger_cooldown_steps` 或降低 `trigger_max_updates_per_run`。
+- 如果 watchdog 回滚太激进，L2 可以放宽 `watchdog_stall_increase_margin`。
+- 这形成了「L2 调整触发器 → 触发器控制 L2 调用频率」的自反馈闭环。
+
+### 36.12 下一步
 
 1. 在 WorkingMemory 中增加 per-step activity 记录，让 watchdog 的 activity 信号真正生效。
 2. 在真实游戏 run 中验证 stall-based rollback 是否能阻止 qwen 式的性能退化。
