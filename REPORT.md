@@ -1393,6 +1393,58 @@ python src/training/train_qwen35.py \
 目标：让本地 VLM 稳定输出结构化 JSON 视觉摘要，并提升 `next_probe_action` 与 `failure_recovery` 任务准确率。
 
 
+## 35. 规则更新触发器改进：相对下降 + 硬上限
+
+### 35.1 动机
+
+§34 的阈值扫描暴露了两个问题：
+
+1. **绝对阈值过于激进**：00461 的 rule 基线约 0.14，阈值 0.18 导致几乎每 5 步就触发一次 L2，qwen 在 50 步内触发了 ~8 次更新，总耗时膨胀到 583s，composite 反而从 0.143 掉到 0.090。
+2. **无更新次数上限**：一旦 composite 持续低迷，触发器会不断调用 L2，形成「越更新越差、越差越更新」的恶性循环。
+
+### 35.2 改进内容
+
+在 `src/agent/rule_update.py` 的 `RuleUpdateTrigger` 中新增：
+
+- **`relative_decrease_pct`**：相对下降触发。记录本 run 的峰值 composite，当滚动平均值从峰值下降超过该百分比时触发。例如 `relative_decrease_pct=0.2` 表示「比本 run 最好成绩差 20% 以上才更新」。这避免了在低基线游戏上过度触发。
+- **`max_updates_per_run`**：单 run 硬上限（默认 3）。达到上限后不再触发 L2，防止 runaway calls。
+- **`cooldown_steps` 默认从 5 提高到 8**：给每次更新更长的观察窗口。
+
+`HierarchicalPlanner` 和 `HierarchicalDecisionMaker` 已透传这些参数；`HybridAgent._get_maker_kwargs()` 支持通过 `config_overrides` 注入。
+
+### 35.3 单元测试验证
+
+| 场景 | 配置 | 结果 |
+|---|---|---|
+| 相对下降触发 | peak=0.30, 当前=0.20, pct=0.2 | step 4 触发（drop 22.2%），step 7 再次触发（drop 33.3%） |
+| 硬上限 | max_updates=2 | 第 3 次及以后不再触发 |
+| 绝对阈值 + 上限 | threshold=0.25, max=1 | 仅 step 2 触发一次，后续即使 composite=0.10 也不再触发 |
+| Cooldown | cooldown=3 | 触发后 3 步内不再触发 |
+
+### 35.4 使用方式
+
+```python
+config = BatchConfig(
+    games={...},
+    modes=["hierarchical"],
+    config_overrides={
+        "l2_interval": 99999,       # 禁用 L2 planning
+        "l1_interval": 0,           # 禁用 L1 VLM
+        "composite_threshold": 0.10,  # 绝对阈值保守
+        "relative_decrease_pct": 0.25,  # 或相对下降 25%
+        "max_updates_per_run": 2,
+        "cooldown_steps": 10,
+    },
+)
+```
+
+### 35.5 下一步
+
+1. 在 00483（rule 表现落后）上跑相对下降触发，验证正向收益。
+2. 给 watchdog 增加 activity/stall 回滚信号，而不仅看 composite。
+3. 把触发器配置写进 `configs/runtime_rules.json`，让 L2 也能调整触发灵敏度。
+
+
 ## 34. 多 Provider 规则更新阈值扫描（在线 A/B）
 
 ### 34.1 实验设计

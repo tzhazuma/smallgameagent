@@ -51,6 +51,11 @@ class HierarchicalDecisionMaker(BaseDecisionMaker):
             rule_params=rule_params,
             strategy_memory=strategy_memory,
             rule_update_allowlist=kwargs.get("rule_update_allowlist"),
+            composite_threshold=float(kwargs.get("composite_threshold", 0.15)),
+            conflict_threshold=int(kwargs.get("conflict_threshold", 3)),
+            cooldown_steps=int(kwargs.get("cooldown_steps", 8)),
+            relative_decrease_pct=kwargs.get("relative_decrease_pct"),
+            max_updates_per_run=int(kwargs.get("max_updates_per_run", 3)),
         )
 
     async def decide(self, ctx: "AgentContext") -> dict[str, Any]:

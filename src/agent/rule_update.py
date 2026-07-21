@@ -97,6 +97,16 @@ class RuleUpdateTrigger:
     The trigger maintains a small rolling window of recent composites, stall
     counts, and L0/L2 conflicts.  When any threshold is crossed it returns a
     reason string; otherwise it returns ``None``.
+
+    Two composite trigger modes are supported:
+
+    - **Absolute**: fire when the rolling average drops below
+      ``composite_threshold``.
+    - **Relative**: fire when the rolling average drops by more than
+      ``relative_decrease_pct`` from the peak average observed in this run.
+      This avoids over-triggering on games whose baseline is naturally low.
+
+    A hard ``max_updates_per_run`` cap prevents runaway L2 calls.
     """
 
     def __init__(
@@ -105,18 +115,24 @@ class RuleUpdateTrigger:
         stall_threshold: int = DEFAULT_STALL_THRESHOLD,
         conflict_threshold: int = DEFAULT_CONFLICT_THRESHOLD,
         composite_window: int = 5,
-        cooldown_steps: int = 5,
+        cooldown_steps: int = 8,
+        relative_decrease_pct: float | None = None,
+        max_updates_per_run: int = 3,
     ) -> None:
         self.composite_threshold = composite_threshold
         self.stall_threshold = stall_threshold
         self.conflict_threshold = conflict_threshold
         self.composite_window = composite_window
         self.cooldown_steps = cooldown_steps
+        self.relative_decrease_pct = relative_decrease_pct
+        self.max_updates_per_run = max_updates_per_run
         self._composites: list[float] = []
         self._stall_streak: int = 0
         self._conflict_streak: int = 0
         self._last_step: int = -1
         self._last_trigger_step: int = -cooldown_steps - 1
+        self._peak_avg: float = 0.0
+        self._updates_this_run: int = 0
 
     def check(
         self,
@@ -128,6 +144,10 @@ class RuleUpdateTrigger:
         if step == self._last_step:
             return None
         self._last_step = step
+
+        # Hard cap: stop triggering after max_updates_per_run.
+        if self._updates_this_run >= self.max_updates_per_run:
+            return None
 
         # Cooldown: do not spam L2 with back-to-back calls.
         if step - self._last_trigger_step < self.cooldown_steps:
@@ -150,14 +170,35 @@ class RuleUpdateTrigger:
         self._conflict_streak = 0 if conflict == 0 else self._conflict_streak + 1
 
         avg_composite = sum(self._composites) / max(1, len(self._composites))
+
+        # Track peak for relative-decrease trigger.
+        if avg_composite > self._peak_avg:
+            self._peak_avg = avg_composite
+
+        # Relative-decrease trigger (preferred when configured).
+        if (
+            self.relative_decrease_pct is not None
+            and self._peak_avg > 0
+            and len(self._composites) >= self.composite_window
+        ):
+            drop_pct = (self._peak_avg - avg_composite) / self._peak_avg
+            if drop_pct >= self.relative_decrease_pct:
+                self._last_trigger_step = step
+                self._updates_this_run += 1
+                return f"relative_drop_{drop_pct:.1%}_from_peak_{self._peak_avg:.3f}"
+
+        # Absolute threshold trigger.
         if avg_composite < self.composite_threshold and len(self._composites) >= self.composite_window:
             self._last_trigger_step = step
+            self._updates_this_run += 1
             return f"low_composite_avg_{avg_composite:.3f}"
         if self._stall_streak >= self.stall_threshold:
             self._last_trigger_step = step
+            self._updates_this_run += 1
             return f"stall_streak_{self._stall_streak}"
         if self._conflict_streak >= self.conflict_threshold:
             self._last_trigger_step = step
+            self._updates_this_run += 1
             return f"conflict_streak_{self._conflict_streak}"
 
         # World-model stale event trigger.
@@ -166,6 +207,7 @@ class RuleUpdateTrigger:
             if stats.get("stale_events", 0) > getattr(self, "_last_stale_events", 0):
                 self._last_stale_events = stats.get("stale_events", 0)
                 self._last_trigger_step = step
+                self._updates_this_run += 1
                 return "world_model_stale"
 
         return None

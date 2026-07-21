@@ -421,7 +421,11 @@ class HybridAgent:
             ),
         }
         # Pass through interval/threshold overrides for hierarchical/makers.
-        for key in ("l1_interval", "l2_interval", "stuck_threshold"):
+        for key in (
+            "l1_interval", "l2_interval", "stuck_threshold",
+            "composite_threshold", "conflict_threshold", "cooldown_steps",
+            "relative_decrease_pct", "max_updates_per_run",
+        ):
             if key in self._config:
                 kwargs[key] = self._config[key]
         # Pass through max_rounds from config for multi-bus variants.

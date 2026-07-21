@@ -17,6 +17,8 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.agent.rule_update import (
+    DEFAULT_COMPOSITE_THRESHOLD,
+    DEFAULT_CONFLICT_THRESHOLD,
     RuleParameters,
     RuleUpdateApplier,
     RuleUpdateTrigger,
@@ -117,6 +119,11 @@ class HierarchicalPlanner:
         rule_params: RuleParameters | None = None,
         strategy_memory: Any | None = None,
         rule_update_allowlist: list[str] | None = None,
+        composite_threshold: float = DEFAULT_COMPOSITE_THRESHOLD,
+        conflict_threshold: int = DEFAULT_CONFLICT_THRESHOLD,
+        cooldown_steps: int = 8,
+        relative_decrease_pct: float | None = None,
+        max_updates_per_run: int = 3,
     ) -> None:
         self._rule_engine = rule_engine
         self._api_client = api_client
@@ -138,7 +145,14 @@ class HierarchicalPlanner:
             strategy_memory,
             code_file_allowlist=rule_update_allowlist,
         )
-        self._rule_trigger = RuleUpdateTrigger()
+        self._rule_trigger = RuleUpdateTrigger(
+            composite_threshold=composite_threshold,
+            stall_threshold=stuck_threshold,
+            conflict_threshold=conflict_threshold,
+            cooldown_steps=cooldown_steps,
+            relative_decrease_pct=relative_decrease_pct,
+            max_updates_per_run=max_updates_per_run,
+        )
         self._rule_watchdog = RuleUpdateWatchdog(self._rule_applier)
 
         # Call counters for metrics
