@@ -2048,6 +2048,15 @@ config = BatchConfig(
 
 **QLoRA 计划**：数据同步完成后在 5090 跑 `run_qlora_5090.sh`（qwen3.5-4b，6 任务，epochs=3，lora-r=16，HF mirror 下载模型）。
 
+### 38.13 QLoRA 自动启动（5090）
+
+在 5090 上部署了 `monitor_qlora.sh`（nohup 常驻，SSH 断开不影响）：
+1. 等待 `vlm_data.tar.gz`（634MB 压缩包，包含 21,297 张截图）传输完成（文件大小稳定 >600MB）；
+2. 解压到 `vlm-training-data-processed-runs`；
+3. 运行 `run_qlora_5090.sh`（qwen3.5-4b，6 任务，epochs=3，lora-r=16，HF mirror 下载模型）。
+
+数据经 aTrust 隧道传输较慢（~7MB/min），预计 ~80 分钟完成；QLoRA 训练随后自动开始。训练日志写入 `/mnt/nas_datasets/tangzh/qlora_run.log`。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
