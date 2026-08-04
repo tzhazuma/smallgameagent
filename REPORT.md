@@ -2020,6 +2020,19 @@ config = BatchConfig(
 - 代码层改进完成（tap-first + target_id objective），待更稳定的运行环境（真 GPU / 云任务平台）验证。
 - WSL xvfb 软件渲染对大游戏不稳定：同一游戏有时能跑（255 events）有时初始化挂起。
 
+### 38.11 Tap-first Fallback 无浏览器验证
+
+在 §38.10 的环境限制下，改用**无浏览器验证**：直接通过 adapter 的 `/plan` 端点（`PLAYABLE_PLANNER_FALLBACK_FIRST=1`，0.03s 返回）构造 whiteout 商店游戏的 fallback 策略：
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| strategy_id | `discover-calibrate--5_39` | calibrate 阶段 |
+| objective | `{selector:"target_id", target_id:"money-dd3aa0cef03efc"}` | ✅ 用 target_id 替代 current_guide（修复 unresolved） |
+| actions | `probe_joystick`（target_binding=none） | 未校准→校准 |
+| base | 匹配 brief | ✅ |
+
+策略通过 schema 结构核对（objective/actions/transitions/recovery/invariants/evidence_refs 均符合 contract）。**结论：tap-first fallback + target_id objective 在构造层面验证通过**，浏览器运行验证待稳定环境。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。

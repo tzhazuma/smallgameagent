@@ -2891,6 +2891,30 @@ qwen3.7-max 完整 brief & 90–120s & ✅ 结构接近但非严格合规 \\
   \item WSL xvfb 软件渲染对大游戏不稳定：同一游戏有时能跑（255 events）有时初始化挂起。
 \end{itemize}
 
+\subsubsection{38.11 Tap-first Fallback 无浏览器验证}
+
+在 §38.10 的环境限制下，改用\_\_BOLD\_0002\_\_：直接通过 adapter 的 \_\_CODE\_0000\_\_ 端点（\_\_CODE\_0001\_\_，0.03s 返回）构造 whiteout 商店游戏的 fallback 策略：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+字段 & 值 & 说明 \\
+\hline
+strategy\_id & \_\_CODE\_0000\_\_ & calibrate 阶段 \\
+\hline
+objective & \_\_CODE\_0000\_\_ & ✅ 用 target\_id 替代 current\_guide（修复 unresolved） \\
+\hline
+actions & \_\_CODE\_0000\_\_（target\_binding=none） & 未校准→校准 \\
+\hline
+base & 匹配 brief & ✅ \\
+\hline
+\end{tabular}
+\end{table}
+
+策略通过 schema 结构核对（objective/actions/transitions/recovery/invariants/evidence\_refs 均符合 contract）。\_\_BOLD\_0000\_\_，浏览器运行验证待稳定环境。\\
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\
