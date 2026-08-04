@@ -950,6 +950,64 @@ def _add_table_slide_raw(slide, left: float, top: float, width: float, height: f
             paragraph.alignment = PP_ALIGN.CENTER
 
 
+def _add_rule_update_flow_slide(prs) -> None:
+    """Visual flow diagram of the online rule-update loop."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "规则在线更新闭环：从触发到回滚")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
+
+    # Boxes: (left, top, width, height, label, color)
+    boxes = [
+        (0.8, 1.6, 2.6, 1.0, "L0 Rule Engine\n零延迟执行", _C_ACCENT),
+        (4.2, 1.6, 2.6, 1.0, "Trigger\ncomposite / stall / conflict", _C_WARN),
+        (7.6, 1.6, 2.6, 1.0, "L2 Cloud API\n结构化 JSON 输出", _C_PRIMARY),
+        (7.6, 3.4, 2.6, 1.0, "Applier\nallowlist + confidence + backup", _C_SECONDARY),
+        (4.2, 3.4, 2.6, 1.0, "Watchdog\nbaseline vs trial 对比", _C_SUCCESS),
+        (0.8, 3.4, 2.6, 1.0, "RuleParameters\n内存 + runtime_rules.json", _C_MUTED),
+    ]
+
+    for left, top, w, h, label, color in boxes:
+        box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(top), Inches(w), Inches(h))
+        _set_fill(box, color)
+        box.line.width = Pt(0)
+        tb = slide.shapes.add_textbox(Inches(left + 0.08), Inches(top + 0.15), Inches(w - 0.16), Inches(h - 0.3))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        for i, line in enumerate(label.split("\n")):
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            _set_text_style(p, line, Pt(12), bold=(i == 0), color=_C_LIGHT, align=PP_ALIGN.CENTER)
+
+    # Arrows (simplified: right arrows between top row, down arrows, left arrows)
+    arrow_positions = [
+        (3.4, 1.95, 0.8, 0.35, MSO_SHAPE.RIGHT_ARROW),   # L0 -> Trigger
+        (6.8, 1.95, 0.8, 0.35, MSO_SHAPE.RIGHT_ARROW),   # Trigger -> L2
+        (8.9, 2.6, 0.35, 0.8, MSO_SHAPE.DOWN_ARROW),     # L2 -> Applier
+        (6.8, 3.75, 0.8, 0.35, MSO_SHAPE.LEFT_ARROW),    # Applier -> Watchdog
+        (3.4, 3.75, 0.8, 0.35, MSO_SHAPE.LEFT_ARROW),    # Watchdog -> Params
+        (1.95, 2.6, 0.35, 0.8, MSO_SHAPE.UP_ARROW),      # Params -> L0
+    ]
+    for left, top, w, h, shape_type in arrow_positions:
+        arrow = slide.shapes.add_shape(shape_type, Inches(left), Inches(top), Inches(w), Inches(h))
+        _set_fill(arrow, _C_MUTED)
+
+    # Bottom insight
+    insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.8), Inches(5.0), Inches(11.7), Inches(1.6))
+    _set_fill(insight, _C_LIGHT)
+    tf = insight.text_frame
+    tf.word_wrap = True
+    points = [
+        "① Trigger 监控 composite / stall / conflict，满足条件时上报",
+        "② L2 输出结构化 JSON（param / memory_entry / code_file），Applier 安全门过滤",
+        "③ Watchdog 对比更新前后 3 步表现，变差则自动 rollback",
+        "④ RuleParameters 同时被 L0 和 Trigger 读取，形成「执行 → 监控 → 更新 → 回滚」闭环",
+    ]
+    for i, txt in enumerate(points):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        _set_text_style(p, txt, Pt(12), color=_C_DARK)
+        p.space_after = Pt(4)
+
+
 def _add_bar_chart_slide(prs) -> None:
     """Slide with horizontal bars comparing search/plan variants."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -1096,6 +1154,8 @@ def write_pptx() -> None:
     _add_trigger_design_slide(prs)
 
     _add_code_file_update_slide(prs)
+
+    _add_rule_update_flow_slide(prs)
 
     _add_bullet_slide(prs, "规则不是写死的，触发后才让上层改", [
         "触发器监控：composite 持续低迷 / stall 计数 / L0-L2 决策冲突 / 世界模型 stale",

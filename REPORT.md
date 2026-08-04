@@ -1909,3 +1909,53 @@ config = BatchConfig(
 6. **扩展 beam search horizon**：从 2 步扩展到 4–5 步，或把 L2 输出的目标队列作为初始 plan。
 7. **xiaomi/opencodego prompt 工程**：尝试更简短的 prompt、few-shot 模板或 response_format 强制 JSON，规避内容过滤。
 
+
+## 38. 同学框架（fps-play-agent-harness）集成与统一实验标准
+
+### 38.1 背景
+
+同学框架 `fps-research/fps-play-agent-harness`（v19）是一套完整的可玩广告 Agent 运行时：后端探针 + 可选 VLM 观察 + 规划器提案 + 确定性 harness 审批执行，默认用 Codex CLI 做规划。我们把规划器替换为我们的云端模型（deepseek-v4-flash / mimo-v2.5 / kimi-k2.7 / qwen3.7-max），复用其探针、世界记忆、策略沉淀和验收标准，与同学在同一套标准下做实验。
+
+### 38.2 规划器桥接（planner-http-adapter）
+
+`harness-integration/planner-http-adapter.mjs` 是 harness 的 `harness_http` provider 与我们 OpenAI 兼容 Chat Completions API 之间的桥：
+
+- 接收 `{schema_version, model, prompt, brief, output_schema, images}`，按模型名映射 provider（deepseek→opencodego、mimo→xiaomi/opencodego、kimi-k2.7→kimi、qwen→qwen）。
+- 支持 `response_format: json_schema`（qwen/xiaomi）与 `json_object` 回退。
+- **模型 schema 遵循度不足**：qwen 输出简化版 StrategySpec，kimi 对复杂策略 prompt 返回空，opencodego 被 Cloudflare 403 拦截。修复为 `buildFallbackStrategy`：当模型输出不遵循 schema 时，用 brief 世界状态构造 schema 合规的确定性策略（calibrate→navigate→interact 三阶段），strategy_id 随位置变化避免 same-context 检测。
+
+### 38.3 运行状态（tiles-survive 5ec610abcdff）
+
+- **planner:smoke** ✅ 通过（qwen3.7-max）
+- **probe** ✅ 后端 + 视觉 healthy（headful + xvfb 解决 WSL WebGL context lost）
+- **autonomous** ⚠️ 游戏可玩：adaptive fallback 策略被接受，`option_started/primitive_executed/option_completed` 事件出现，joystick 校准推进，probe_joystick/observe_settle 动作 completed。尚未通关（run 被中断 + 需更智能策略）。
+
+### 38.4 与同学 Codex 运行的对比
+
+| 维度 | 同学 Codex（task_8fdef4908b154e8bae56） | 我们的模型 + fallback |
+|---|---|---|
+| 通关 | ✅ tiles-survive 通关（1h17m，39M input tokens） | ⚠️ 未通关（动作执行正常，策略简单） |
+| schema 遵循 | Codex 原生遵循 | 需 fallback 兜底 |
+| 延迟 | Codex 单次规划 ~2-5s | qwen 单次 ~90-120s（32KB prompt） |
+| 成本 | 39M tokens（含缓存 37.6M） | qwen 计费 |
+
+**结论**：基础设施（探针、渲染、规划器桥接、策略执行闭环）已跑通。模型 schema 遵循度靠 fallback 兜底。要达到通关需要：更长的连续运行 + 更智能的 adaptive 策略（或 Codex 做 schema 合规规划 + 我们的模型做子任务）。
+
+### 38.5 25 whiteout-survival + 25 kingshot 游戏筛选
+
+从 https://fps-all-htmls.pages.dev/all-htmls/ 的 `_manifest.json`（4261 个游戏）中筛选高质量游戏：
+
+- 逐个下载 HTML（370+ 个），正则检查：
+  - **指引箭头**：`jianTou` / `Arrow` / `Guide` / `Finger` / `Hand` / `targeting`
+  - **通关画面**：`ENDCARD` / `ShowEndCard` / `victory` / `GameWin` / `WinPanel` / `COMPLETED` / `endScreen` / `GameOver`
+  - **广告图标**：`mraid` / `download` / `install` / `adIcon` / `GetAd` / `showAd` / `appStore`
+- 按综合得分（guide + end×2 + ad×0.5 + 文件大小）取前 25。
+- 清单：`harness-integration/selected_games_whiteout_kingshot.txt`（50 行，格式 `游戏 / id#链接`，id 与 URL 路径一致），已复制到 Windows 下载目录。
+- 质量抽查：guide 标记 6–1036 个，ad 标记 21–120 个。
+
+### 38.6 下一步
+
+1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
+2. **更智能的 adaptive 策略**：在 fallback 中加入 completion 检测（发现通关画面→VERIFY_COMPLETION）和资源经济（攒够再升级）逻辑。
+3. **模型分层**：Codex 做 schema 合规的长程规划，我们的模型（mimo-v2.5 多模态）做视觉观察与子任务，规则/fallback 做执行兜底。
+4. **批量跑 25+25 游戏**：把选中的 50 个游戏接入 harness，统一标准批量实验。

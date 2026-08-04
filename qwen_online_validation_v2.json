@@ -1,0 +1,40 @@
+[
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "rule",
+    "seed": 42,
+    "steps": 15,
+    "composite": 0.1285714285714286,
+    "activity": 0.8571428571428572,
+    "elapsed_s": 9.8,
+    "details": {
+      "steps": 15,
+      "move_steps": 2,
+      "tap_steps": 12,
+      "transitions": 0,
+      "stall_steps": 2,
+      "fail_flips": 0,
+      "wm_violations": 2
+    },
+    "error": ""
+  },
+  {
+    "game_id": "SSD_00461P01",
+    "mode": "hierarchical",
+    "seed": 42,
+    "steps": 15,
+    "composite": 0.15,
+    "activity": 0.0,
+    "elapsed_s": 211.6,
+    "details": {
+      "steps": 15,
+      "move_steps": 14,
+      "tap_steps": 0,
+      "transitions": 0,
+      "stall_steps": 14,
+      "fail_flips": 0,
+      "wm_violations": 0
+    },
+    "error": ""
+  }
+]
