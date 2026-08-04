@@ -1928,7 +1928,8 @@ config = BatchConfig(
 
 - **planner:smoke** ✅ 通过（qwen3.7-max）
 - **probe** ✅ 后端 + 视觉 healthy（headful + xvfb 解决 WSL WebGL context lost）
-- **autonomous** ⚠️ 游戏可玩：adaptive fallback 策略被接受，`option_started/primitive_executed/option_completed` 事件出现，joystick 校准推进，probe_joystick/observe_settle 动作 completed。尚未通关（run 被中断 + 需更智能策略）。
+- **autonomous** ⚠️ 游戏可玩但无法通关：adaptive fallback 策略被接受，`option_started/primitive_executed/option_completed` 事件出现（4 个 gameplay steps），probe_joystick/observe_settle 动作 completed。
+- **校准卡点（tiles-survive 特有）**：joystick 校准只产生 1 个 effective sample（首个 0.5,0.5 脉冲移动 +0.38，之后同方向脉冲位移为 0）。`calibration_gate` 失败原因：insufficient_effective_samples / repeated_directions_are_collinear。校准无法完成 → probe_joystick 被 intent gate 拦截 → run 以 `planner_same_context_contract_failure_budget_exhausted` 终止。这说明该游戏的控制方案并非自由 joystick 移动（同学 Codex 会话通过 1h17m 探索才弄清），需要每游戏的控制知识。
 
 ### 38.4 与同学 Codex 运行的对比
 
