@@ -452,11 +452,16 @@ const server = createServer(async (req, res) => {
   }
 
   try {
-    const messages = buildMessages(request);
-    const t0 = Date.now();
-    const text = await callChatCompletions(provider, messages, 2048, request.output_schema);
-    const latencyMs = Date.now() - t0;
-    console.log(`[planner-http-adapter] ${request.model} ${request.output_schema?.title || "?"} ${latencyMs}ms raw_len=${text.length}`);
+    const fallbackFirst = process.env.PLAYABLE_PLANNER_FALLBACK_FIRST === "1";
+    let text = "";
+    let latencyMs = 0;
+    if (!fallbackFirst) {
+      const messages = buildMessages(request);
+      const t0 = Date.now();
+      text = await callChatCompletions(provider, messages, 2048, request.output_schema);
+      latencyMs = Date.now() - t0;
+    }
+    console.log(`[planner-http-adapter] ${request.model} ${request.output_schema?.title || "?"} ${latencyMs}ms raw_len=${text.length} fallback_first=${fallbackFirst}`);
     const parsed = extractJson(text);
     // Determine response field from the output schema title if possible.
     const schemaTitle = String(request.output_schema?.title || "").toLowerCase();

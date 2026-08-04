@@ -1975,6 +1975,20 @@ config = BatchConfig(
 **结论**：kimi-k2.7 可作 harness 规划器（延迟比 qwen 快 2-4x），但长 prompt 偶发空返回需 fallback 兜底。下一步用 kimi 跑控制方案简单的游戏（从 25+25 清单中选）。
 **kimi 规则更新可靠性补充**：kimi 对「游戏 agent 策略优化」类 prompt 的内容过滤不稳定——改措辞（如「simulator tuning」）偶尔能绕过（返回有效 param 更新），但同一措辞重复调用时有时返回空。**结论：规则更新仍以 qwen 为可靠 provider；kimi 的 few-shot 适用于 harness StrategySpec（§38.7），不适用于小参数规则更新。**
 
+### 38.8 whiteout-survival 测试游戏运行结果（test.html = ag-complete/whiteout-survival/9caf6c585e72）
+
+用户提供的 test.html 是 `ag-complete/whiteout-survival/9caf6c585e72`（极地兵器商店）。用 harness + fallback-first adapter（跳过 LLM 直接走确定性 adaptive fallback）跑：
+
+- **probe** ✅ 后端 + 视觉 healthy（headful + xvfb）
+- **autonomous** ⚠️ `SETTLED_COMPLETE`（settled_complete=True），但 **gameplay_steps=0**，是**假阳性**：
+  - `doneReason: "active UI /Main/Canvas/logo_panel/download_bg"` —— 游戏初始 logo 面板的 `download_bg` 广告下载按钮被 probe 的 WIN/ENDCARD 正则误判为通关
+  - 与我们 smallgameagent §5.2 遇到的「probe 终止假阳性」是同一类问题（cc.Button._transitionFinished / download 按钮等常驻 UI 命中 WIN 正则）
+- **fallback-first 模式生效**：adapter 0ms 返回构造策略（`fallback_first=true`），harness 无需 LLM 即可跑完整管线
+
+**结论**：
+1. **完整管线跑通**：探针 → fallback 策略 → 策略安装 → 完成判定，harness 端到端可运行白屏游戏。
+2. **完成检测需借鉴我们的修复**：应把 smallgameagent §5.2 的「佐证制完成判定」（要求 win/victory 面板节点 / 胜利 analytics / 非 cc.* 管理器强胜利标志，排除 download/ad 按钮）移植到 harness 的 probe，避免假阳性。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
