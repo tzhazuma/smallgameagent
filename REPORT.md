@@ -1954,6 +1954,26 @@ config = BatchConfig(
 - 清单：`harness-integration/selected_games_whiteout_kingshot.txt`（50 行，格式 `游戏 / id#链接`，id 与 URL 路径一致），已复制到 Windows 下载目录。
 - 质量抽查：guide 标记 6–1036 个，ad 标记 21–120 个。
 
+### 38.7 Kimi-k2.7 Schema 遵循度突破
+
+之前的发现是「只有 qwen 能稳定输出规则更新 JSON，kimi 对复杂策略 prompt 返回空」。本轮发现 kimi-k2.7 **能** 产出 schema 合规的 StrategySpec，关键在 prompt 结构：
+
+- **注入真实 base**：把 brief 的 base（game_id/run_id/state_version/scene_epoch/policy_set_id）直接注入 prompt，kimi 会精确回显，否则它会抄示例里的假 base。
+- **few-shot 完整示例**：给一个紧凑的完整 StrategySpec 示例（含 states/actions/transitions/recovery/invariants），kimi 严格照抄结构。
+- **空响应 fallback**：adapter 对模型返回空/不可解析时不再 502，改为返回构造的 fallback 策略，保证 run 持续推进。
+
+**实测**：
+| 方式 | 延迟 | 结果 |
+|---|---|---|
+| kimi 紧凑 prompt + 示例 | 7–23s | ✅ 完整 StrategySpec（11 个必需键全有） |
+| kimi 完整 32KB brief | 48s | ✅ base 匹配 brief，action=probe_joystick |
+| kimi 完整 32KB brief（harness 内） | ~50s | ⚠️ 有时返回空（内容过滤），fallback 兜底 |
+| qwen3.7-max 完整 brief | 90–120s | ✅ 结构接近但非严格合规 |
+
+**harness 运行（tiles-survive, kimi planner）**：`BUDGET_EXHAUSTED`（比之前的 RUNTIME_FAULT 有进步），3 gameplay steps。joystick 校准仍只有 1 个 effective sample，确认是该游戏控制方案特殊（非自由 joystick），需每游戏控制知识。
+
+**结论**：kimi-k2.7 可作 harness 规划器（延迟比 qwen 快 2-4x），但长 prompt 偶发空返回需 fallback 兜底。下一步用 kimi 跑控制方案简单的游戏（从 25+25 清单中选）。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
