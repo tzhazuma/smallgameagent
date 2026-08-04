@@ -3008,6 +3008,14 @@ python src/inference/server.py --model Qwen/Qwen3.5-4B --adapter checkpoints/qwe
 python src/experiments/exp\_finetuned\_vlm\_eval.py --endpoint http://127.0.0.1:8000 --game SSD\_00461P01 --steps 5\\
 ```\\
 
+\subsubsection{38.20 全量 QLoRA 训练已启动 ✅}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：664MB tar 全部到达 5090（transfer\_loop.sh 自动续传，\textasciitilde{}1h40m）。
+  \item \_\_BOLD\_0002\_\_：\_\_CODE\_0000\_\_ 检测到 tar 完整后自动解压并启动 \_\_CODE\_0001\_\_，正在加载 6 任务（progression\_grounding / field\_grounding / probe\_action\_effect / next\_probe\_action / information\_gain\_judgment / pulse\_response\_grounding），15,083 样本，epochs=3，lora-r=16。
+  \item 训练日志：\_\_CODE\_0000\_\_（monitor 重定向到 qlora\_monitor.log）。
+\end{itemize}
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\

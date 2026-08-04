@@ -2110,6 +2110,12 @@ python src/inference/server.py --model Qwen/Qwen3.5-4B --adapter checkpoints/qwe
 python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:8000 --game SSD_00461P01 --steps 5
 ```
 
+### 38.20 全量 QLoRA 训练已启动 ✅
+
+- **数据转移完成**：664MB tar 全部到达 5090（transfer_loop.sh 自动续传，~1h40m）。
+- **全量 QLoRA 启动**：`monitor_qlora.sh` 检测到 tar 完整后自动解压并启动 `run_qlora_5090.sh --no-deepspeed`，正在加载 6 任务（progression_grounding / field_grounding / probe_action_effect / next_probe_action / information_gain_judgment / pulse_response_grounding），15,083 样本，epochs=3，lora-r=16。
+- 训练日志：`/mnt/nas_datasets/tangzh/qlora_run.log`（monitor 重定向到 qlora_monitor.log）。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
