@@ -2096,6 +2096,20 @@ python src/inference/server.py   --model Qwen/Qwen3.5-4B   --adapter checkpoints
 - **转移进度**：363M/664M（55%），`transfer_loop.sh` 自动续传稳定（~8MB/min），预计 ~40 min 完成。
 - 全量 QLoRA 将由 monitor 自动启动。
 
+### 38.19 微调 VLM 评估脚本就绪
+
+新增 `src/experiments/exp_finetuned_vlm_eval.py`：QLoRA 训练完成后，调用 `src/inference/server.py` 的 `/predict` 端点（FastAPI），逐帧生成微调 VLM 的视觉摘要，评估：
+- 微调前后视觉摘要质量对比（§23/§26 基线）
+- 微调 VLM 摘要 → 云端 qwen 决策的准确率
+
+用法：
+```bash
+# 启动微调 VLM 服务（5090 或本地）
+python src/inference/server.py --model Qwen/Qwen3.5-4B --adapter checkpoints/qwen35-4b-gameplay/final --port 8000
+# 评估
+python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:8000 --game SSD_00461P01 --steps 5
+```
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
