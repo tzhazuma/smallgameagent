@@ -2984,6 +2984,14 @@ python src/inference/server.py   --model Qwen/Qwen3.5-4B   --adapter checkpoints
   \item 训练日志：\_\_CODE\_0000\_\_；转移进度：\_\_CODE\_0001\_\_
 \end{itemize}
 
+\subsubsection{38.18 Adapter 验证 + 转移进度}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：training\_metadata.json 确认 base\_model=Qwen/Qwen3.5-4B, lora\_r=8, lora\_alpha=16, 任务列表完整；adapter 已拉回本地（26MB）备用。
+  \item \_\_BOLD\_0001\_\_：363M/664M（55\%），\_\_CODE\_0000\_\_ 自动续传稳定（\textasciitilde{}8MB/min），预计 \textasciitilde{}40 min 完成。
+  \item 全量 QLoRA 将由 monitor 自动启动。
+\end{itemize}
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\

@@ -2090,6 +2090,12 @@ python src/inference/server.py   --model Qwen/Qwen3.5-4B   --adapter checkpoints
 - 部署后作为 L1 画面理解层：看截图 → 输出结构化视觉上下文 → 喂给云端 L2（§23/§26/§30 的架构）
 - 训练日志：`/mnt/nas_datasets/tangzh/qlora_run.log`；转移进度：`/mnt/nas_datasets/tangzh/qlora_monitor.log`
 
+### 38.18 Adapter 验证 + 转移进度
+
+- **子集 adapter 验证**：training_metadata.json 确认 base_model=Qwen/Qwen3.5-4B, lora_r=8, lora_alpha=16, 任务列表完整；adapter 已拉回本地（26MB）备用。
+- **转移进度**：363M/664M（55%），`transfer_loop.sh` 自动续传稳定（~8MB/min），预计 ~40 min 完成。
+- 全量 QLoRA 将由 monitor 自动启动。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
