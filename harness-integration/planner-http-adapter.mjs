@@ -267,13 +267,27 @@ function buildFallbackStrategy(brief) {
   // Phase the strategy by control-map state and target distance. This produces
   // structurally different strategies as the run evolves, which also avoids the
   // harness's same-context replan detection.
+  const hasGuide = Boolean(guide?.target_name || guide?.target_path || guide?.target_position);
+  const isTapGame = Boolean(target) && !hasGuide;  // targets exist but no guide arrow → tap/shop style
   let optionName;
   let suffix;
   let summary;
-  if (!controlVerified && allowed.some((o) => o.name === "probe_joystick")) {
+  if (isTapGame && Number.isFinite(targetDist) && targetDist < 2.0 && allowed.some((o) => o.name === "probe_tap")) {
+    optionName = "probe_tap";
+    suffix = "collect";
+    summary = "Close to the target; tap to collect/interact.";
+  } else if (isTapGame && Number.isFinite(targetDist) && targetDist < 2.0 && allowed.some((o) => o.name === "dwell_at_target")) {
+    optionName = "dwell_at_target";
+    suffix = "interact";
+    summary = "Near the active target; dwell to trigger the interaction.";
+  } else if (!controlVerified && allowed.some((o) => o.name === "probe_joystick")) {
     optionName = "probe_joystick";
     suffix = "calibrate";
     summary = "Calibrate the joystick control map with repeated non-collinear pulses.";
+  } else if (target && Number.isFinite(targetDist) && targetDist < 2.0 && allowed.some((o) => o.name === "probe_tap")) {
+    optionName = "probe_tap";
+    suffix = "collect";
+    summary = "Close to the target; tap to collect/interact.";
   } else if (target && Number.isFinite(targetDist) && targetDist < 2.0 && allowed.some((o) => o.name === "dwell_at_target")) {
     optionName = "dwell_at_target";
     suffix = "interact";
@@ -339,10 +353,20 @@ function buildFallbackStrategy(brief) {
   const refs = [...new Set([...evidenceRefs, ...memoryRefs])];
 
   // Only use a target-bound objective when the world actually has a guide/target.
-  const hasTarget = Boolean(target) || Boolean(guide?.target_name || guide?.target_path);
-  const objective = hasTarget
-    ? { selector: "current_guide", sticky: false }
-    : { selector: "none", sticky: false };
+  const hasTarget = Boolean(target) || hasGuide;
+  let objective;
+  if (hasGuide) {
+    objective = { selector: "current_guide", sticky: false };
+  } else if (target) {
+    // No guide arrow but concrete targets exist (tap/shop style): bind to a
+    // literal target id so the harness can resolve the objective.
+    const targetId = target.id || target.target_id || target.name || null;
+    objective = targetId
+      ? { selector: "target_id", target_id: targetId, sticky: false }
+      : { selector: "target_role", target_role: "interact", sticky: false };
+  } else {
+    objective = { selector: "none", sticky: false };
+  }
   // If there is no target, avoid target-requiring options.
   let effectiveOption = option;
   if (!hasTarget && effectiveOption.requires_target === true) {

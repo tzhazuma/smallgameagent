@@ -2008,6 +2008,18 @@ config = BatchConfig(
 1. **假阳性修复有效**：不再把下载按钮误判为通关。
 2. **BLOCKED_UNKNOWN_MECHANIC 是诚实信号**：商店类游戏（tap 交互）需要探索发现控制方案，fallback 的 joystick/observe 策略不适用。下一步应为 tap 类游戏提供 probe_tap 优先的 fallback 变体。
 
+### 38.10 Tap-first Fallback + 环境限制
+
+**改进（planner-http-adapter.mjs）**：
+1. **tap/shop 类游戏识别**：当世界有 targets 但无 guide（`isTapGame`）时，目标接近（<2.0）优先 `probe_tap`（采集/交互），否则走 joystick 校准→导航。
+2. **objective 修复**：无 guide 但有 target 时用 `target_id`（绑定首个 target 的 id，如 `money-dd3aa0cef03efc`）替代 `current_guide`，修复 `strategy_objective_unresolved` 循环 replan。
+
+**验证状态**：代码已实现并通过 `node --check` 语法检查。但在 WSL + xvfb 软件渲染下，13MB 的 whiteout 商店游戏初始化挂起（probe 目录空、无事件推进），无法在本环境完成运行验证。之前（§38.9 修复后）该游戏能跑到 `BLOCKED_UNKNOWN_MECHANIC`（255 events），说明环境可用但时快时慢。
+
+**结论**：
+- 代码层改进完成（tap-first + target_id objective），待更稳定的运行环境（真 GPU / 云任务平台）验证。
+- WSL xvfb 软件渲染对大游戏不稳定：同一游戏有时能跑（255 events）有时初始化挂起。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。

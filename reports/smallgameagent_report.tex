@@ -2877,6 +2877,20 @@ qwen3.7-max 完整 brief & 90–120s & ✅ 结构接近但非严格合规 \\
 1. \_\_BOLD\_0000\_\_：不再把下载按钮误判为通关。\\
 2. \_\_BOLD\_0000\_\_：商店类游戏（tap 交互）需要探索发现控制方案，fallback 的 joystick/observe 策略不适用。下一步应为 tap 类游戏提供 probe\_tap 优先的 fallback 变体。\\
 
+\subsubsection{38.10 Tap-first Fallback + 环境限制}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0002\_\_：当世界有 targets 但无 guide（\_\_CODE\_0000\_\_）时，目标接近（<2.0）优先 \_\_CODE\_0001\_\_（采集/交互），否则走 joystick 校准→导航。\\
+2. \_\_BOLD\_0004\_\_：无 guide 但有 target 时用 \_\_CODE\_0000\_\_（绑定首个 target 的 id，如 \_\_CODE\_0001\_\_）替代 \_\_CODE\_0002\_\_，修复 \_\_CODE\_0003\_\_ 循环 replan。\\
+
+\_\_BOLD\_0002\_\_：代码已实现并通过 \_\_CODE\_0000\_\_ 语法检查。但在 WSL + xvfb 软件渲染下，13MB 的 whiteout 商店游戏初始化挂起（probe 目录空、无事件推进），无法在本环境完成运行验证。之前（§38.9 修复后）该游戏能跑到 \_\_CODE\_0001\_\_（255 events），说明环境可用但时快时慢。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 代码层改进完成（tap-first + target\_id objective），待更稳定的运行环境（真 GPU / 云任务平台）验证。
+  \item WSL xvfb 软件渲染对大游戏不稳定：同一游戏有时能跑（255 events）有时初始化挂起。
+\end{itemize}
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\
