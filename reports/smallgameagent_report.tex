@@ -2915,6 +2915,25 @@ base & 匹配 brief & ✅ \\
 
 策略通过 schema 结构核对（objective/actions/transitions/recovery/invariants/evidence\_refs 均符合 contract）。\_\_BOLD\_0000\_\_，浏览器运行验证待稳定环境。\\
 
+\subsubsection{38.12 5090 服务器接入 + 批量 runner + 环境发现}
+
+\_\_BOLD\_0001\_\_：通过 \_\_CODE\_0000\_\_（aTrust SSH 隧道，port 12345）访问成功。\\
+\begin{itemize}
+  \item 在 \_\_CODE\_0000\_\_ 创建 venv，安装 \_\_BOLD\_0001\_\_（RTX 5090 Blackwell 支持）+ transformers/peft/trl/datasets（PyPI 直连失败，用清华镜像成功）。
+  \item 训练数据（790MB，21,297 张截图）+ 训练脚本已 rsync 到 5090。
+\end{itemize}
+
+\_\_BOLD\_0003\_\_：读取 25+25 游戏清单，逐游戏下载 HTML → game:init → run:autonomous，支持 \_\_CODE\_0000\_\_ / \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_（mimo 默认）。\\
+\begin{itemize}
+  \item 3 游戏 headless 测试：pipeline 跑通（<1min/游戏，fallback-first 无 LLM 延迟），但落点 BLOCKED\_UNSAFE（fallback 策略在这些游戏上动作被拦）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：qwen ✅（7.5s）/ kimi ✅（1.6s）/ xiaomi-mimo ✅（2.5s）；opencodego-deepseek ❌（Cloudflare 403）；deepseek 直连 ❌（余额 402）。批量以 mimo 为主。\\
+
+\_\_BOLD\_0000\_\_：kingshot-c378f843e877 在 headless Chromium + swiftshader 下 render healthy（backend+visual），无需 xvfb。部分游戏可 headless 跑。\\
+
+\_\_BOLD\_0001\_\_：数据同步完成后在 5090 跑 \_\_CODE\_0000\_\_（qwen3.5-4b，6 任务，epochs=3，lora-r=16，HF mirror 下载模型）。\\
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\

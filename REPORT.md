@@ -2033,6 +2033,21 @@ config = BatchConfig(
 
 策略通过 schema 结构核对（objective/actions/transitions/recovery/invariants/evidence_refs 均符合 contract）。**结论：tap-first fallback + target_id objective 在构造层面验证通过**，浏览器运行验证待稳定环境。
 
+### 38.12 5090 服务器接入 + 批量 runner + 环境发现
+
+**5090 服务器（4× RTX 5090）**：通过 `~/ssh5090-proxy.sh`（aTrust SSH 隧道，port 12345）访问成功。
+- 在 `/mnt/nas_datasets/tangzh/qlora_env` 创建 venv，安装 **torch 2.11.0+cu128**（RTX 5090 Blackwell 支持）+ transformers/peft/trl/datasets（PyPI 直连失败，用清华镜像成功）。
+- 训练数据（790MB，21,297 张截图）+ 训练脚本已 rsync 到 5090。
+
+**批量 runner（harness_batch_runner.py）**：读取 25+25 游戏清单，逐游戏下载 HTML → game:init → run:autonomous，支持 `--parallel` / `--headless` / `--provider`（mimo 默认）。
+- 3 游戏 headless 测试：pipeline 跑通（<1min/游戏，fallback-first 无 LLM 延迟），但落点 BLOCKED_UNSAFE（fallback 策略在这些游戏上动作被拦）。
+
+**Provider 现状**：qwen ✅（7.5s）/ kimi ✅（1.6s）/ xiaomi-mimo ✅（2.5s）；opencodego-deepseek ❌（Cloudflare 403）；deepseek 直连 ❌（余额 402）。批量以 mimo 为主。
+
+**Headless 突破**：kingshot-c378f843e877 在 headless Chromium + swiftshader 下 render healthy（backend+visual），无需 xvfb。部分游戏可 headless 跑。
+
+**QLoRA 计划**：数据同步完成后在 5090 跑 `run_qlora_5090.sh`（qwen3.5-4b，6 任务，epochs=3，lora-r=16，HF mirror 下载模型）。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
