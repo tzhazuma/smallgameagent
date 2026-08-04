@@ -2073,6 +2073,12 @@ config = BatchConfig(
 - `monitor_qlora.sh`（nohup，修复版）每 30s 检查文件大小，稳定 ≥600MB 后自动：解压 → 运行 `run_qlora_5090.sh --no-deepspeed`（6 任务 × 15,083 样本，epochs=3，lora-r=16）。
 - 子集验证已确认完整 pipeline 可用（§38.14）；全量训练预计数小时，日志 `/mnt/nas_datasets/tangzh/qlora_monitor.log`。
 
+### 38.16 全量转移进度 + mimo 批量确认
+
+- 数据转移：236M/634M（~8MB/min，rsync --append-verify 续传稳定），预计 ~50 min 完成。
+- mimo-v2.5 批量测试（kingshot-94766e5d61dc）：pipeline 跑通（headless, 0.0min），落点 BLOCKED_UNSAFE —— 与已知「每游戏控制方案需探索」一致，批量基础设施正常。
+- QLoRA 全量训练待数据完成后由 monitor 自动启动。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
