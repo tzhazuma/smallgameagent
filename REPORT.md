@@ -1973,6 +1973,7 @@ config = BatchConfig(
 **harness 运行（tiles-survive, kimi planner）**：`BUDGET_EXHAUSTED`（比之前的 RUNTIME_FAULT 有进步），3 gameplay steps。joystick 校准仍只有 1 个 effective sample，确认是该游戏控制方案特殊（非自由 joystick），需每游戏控制知识。
 
 **结论**：kimi-k2.7 可作 harness 规划器（延迟比 qwen 快 2-4x），但长 prompt 偶发空返回需 fallback 兜底。下一步用 kimi 跑控制方案简单的游戏（从 25+25 清单中选）。
+**kimi 规则更新可靠性补充**：kimi 对「游戏 agent 策略优化」类 prompt 的内容过滤不稳定——改措辞（如「simulator tuning」）偶尔能绕过（返回有效 param 更新），但同一措辞重复调用时有时返回空。**结论：规则更新仍以 qwen 为可靠 provider；kimi 的 few-shot 适用于 harness StrategySpec（§38.7），不适用于小参数规则更新。**
 
 ### 38.6 下一步
 
