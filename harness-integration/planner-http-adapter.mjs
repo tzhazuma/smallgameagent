@@ -300,7 +300,7 @@ function buildFallbackStrategy(brief) {
     || { name: optionName, requires_target: false, observable_effects: ["any_relevant_progress"] };
 
   const requiresTarget = option.requires_target === true;
-  const observable = (option.observable_effects || ["any_relevant_progress"])[0] || "any_relevant_progress";
+  let observable = (option.observable_effects || ["any_relevant_progress"])[0] || "any_relevant_progress";
 
   // Default parameters per option so the deterministic compile gate accepts it.
   const optionParams = {
@@ -338,15 +338,34 @@ function buildFallbackStrategy(brief) {
   const memoryRefs = brief.memory_refs || [];
   const refs = [...new Set([...evidenceRefs, ...memoryRefs])];
 
+  // Only use a target-bound objective when the world actually has a guide/target.
+  const hasTarget = Boolean(target) || Boolean(guide?.target_name || guide?.target_path);
+  const objective = hasTarget
+    ? { selector: "current_guide", sticky: false }
+    : { selector: "none", sticky: false };
+  // If there is no target, avoid target-requiring options.
+  let effectiveOption = option;
+  if (!hasTarget && effectiveOption.requires_target === true) {
+    effectiveOption = allowed.find((o) => o.name === "observe_settle")
+      || allowed.find((o) => o.name === "probe_tap")
+      || allowed.find((o) => !o.requires_target)
+      || allowed[0];
+    params = optionParams[effectiveOption.name] || {};
+    observable = (effectiveOption.observable_effects || ["any_relevant_progress"])[0] || "any_relevant_progress";
+    suffix = "observe";
+    summary = "No active target; observe and probe the scene.";
+  }
+  const finalRequiresTarget = effectiveOption.requires_target === true && hasTarget;
+
   const state = {
     state_id: "discover",
-    description: `Discovery phase (${suffix}): exercise ${option.name} to reveal mechanics and reach settled completion.`,
-    objective: { selector: "current_guide", sticky: false },
+    description: `Discovery phase (${suffix}): exercise ${effectiveOption.name} to reveal mechanics and reach settled completion.`,
+    objective,
     actions: [
       {
         action_id: "a_discover",
-        option: option.name,
-        target_binding: requiresTarget ? "objective" : "none",
+        option: effectiveOption.name,
+        target_binding: finalRequiresTarget ? "objective" : "none",
         parameters: params,
         route_policy: "none",
         repeat: "until_transition",

@@ -1989,6 +1989,25 @@ config = BatchConfig(
 1. **完整管线跑通**：探针 → fallback 策略 → 策略安装 → 完成判定，harness 端到端可运行白屏游戏。
 2. **完成检测需借鉴我们的修复**：应把 smallgameagent §5.2 的「佐证制完成判定」（要求 win/victory 面板节点 / 胜利 analytics / 非 cc.* 管理器强胜利标志，排除 download/ad 按钮）移植到 harness 的 probe，避免假阳性。
 
+### 38.9 Probe 假阳性修复 + no-target fallback（§5.2 逻辑移植）
+
+**问题**：harness 的 generic probe 把游戏初始 logo 面板的 `download_bg` 广告下载按钮误判为通关（doneReason 指向 download_bg → probe:win → SETTLED_COMPLETE），与我们在 smallgameagent §5.2 修过的假阳性同类。
+
+**修复 1（generic-probe-normalizer.mjs）**：`completionSignals` 增加 `downloadCtaFalsePositive` 守卫——当 `doneReason` 命中 download/install/ad/logo_panel/cta 且不含真实通关节点（WinPanel/Victory/ENDCARD）时，抑制 `probe:win`/`probe:done` 信号。
+
+**修复 2（planner-http-adapter.mjs）**：fallback 策略的 objective 不再硬编码 `current_guide`——当世界无 guide/target 时改用 `selector:"none"` 且避免 target-requiring 选项（否则 harness 报 `strategy_objective_unresolved` 循环 replan）。
+
+**验证（whiteout-survival-9caf6c585e72 极地兵器商店）**：
+| 阶段 | 结果 |
+|---|---|
+| 修复前 | `SETTLED_COMPLETE`（gameplay_steps=0，download_bg 假阳性） |
+| 修复后 | `BLOCKED_UNKNOWN_MECHANIC`（settled_complete=False，不再假通关） |
+| 诊断 | 游戏有 6 个 targets 但无 guide；商店类玩法控制方案未知，harness 诚实报告「unknown mechanic」 |
+
+**结论**：
+1. **假阳性修复有效**：不再把下载按钮误判为通关。
+2. **BLOCKED_UNKNOWN_MECHANIC 是诚实信号**：商店类游戏（tap 交互）需要探索发现控制方案，fallback 的 joystick/observe 策略不适用。下一步应为 tap 类游戏提供 probe_tap 优先的 fallback 变体。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。

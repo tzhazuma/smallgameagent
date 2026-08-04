@@ -2848,6 +2848,35 @@ qwen3.7-max 完整 brief & 90–120s & ✅ 结构接近但非严格合规 \\
 1. \_\_BOLD\_0000\_\_：探针 → fallback 策略 → 策略安装 → 完成判定，harness 端到端可运行白屏游戏。\\
 2. \_\_BOLD\_0000\_\_：应把 smallgameagent §5.2 的「佐证制完成判定」（要求 win/victory 面板节点 / 胜利 analytics / 非 cc.* 管理器强胜利标志，排除 download/ad 按钮）移植到 harness 的 probe，避免假阳性。\\
 
+\subsubsection{38.9 Probe 假阳性修复 + no-target fallback（§5.2 逻辑移植）}
+
+\_\_BOLD\_0001\_\_：harness 的 generic probe 把游戏初始 logo 面板的 \_\_CODE\_0000\_\_ 广告下载按钮误判为通关（doneReason 指向 download\_bg → probe:win → SETTLED\_COMPLETE），与我们在 smallgameagent §5.2 修过的假阳性同类。\\
+
+\_\_BOLD\_0005\_\_：\_\_CODE\_0000\_\_ 增加 \_\_CODE\_0001\_\_ 守卫——当 \_\_CODE\_0002\_\_ 命中 download/install/ad/logo\_panel/cta 且不含真实通关节点（WinPanel/Victory/ENDCARD）时，抑制 \_\_CODE\_0003\_\_/\_\_CODE\_0004\_\_ 信号。\\
+
+\_\_BOLD\_0003\_\_：fallback 策略的 objective 不再硬编码 \_\_CODE\_0000\_\_——当世界无 guide/target 时改用 \_\_CODE\_0001\_\_ 且避免 target-requiring 选项（否则 harness 报 \_\_CODE\_0002\_\_ 循环 replan）。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|}
+\hline
+阶段 & 结果 \\
+\hline
+修复前 & \_\_CODE\_0000\_\_（gameplay\_steps=0，download\_bg 假阳性） \\
+\hline
+修复后 & \_\_CODE\_0000\_\_（settled\_complete=False，不再假通关） \\
+\hline
+诊断 & 游戏有 6 个 targets 但无 guide；商店类玩法控制方案未知，harness 诚实报告「unknown mechanic」 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+1. \_\_BOLD\_0000\_\_：不再把下载按钮误判为通关。\\
+2. \_\_BOLD\_0000\_\_：商店类游戏（tap 交互）需要探索发现控制方案，fallback 的 joystick/observe 策略不适用。下一步应为 tap 类游戏提供 probe\_tap 优先的 fallback 变体。\\
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\
