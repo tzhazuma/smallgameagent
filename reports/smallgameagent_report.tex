@@ -2943,6 +2943,18 @@ base & 匹配 brief & ✅ \\
 
 数据经 aTrust 隧道传输较慢（\textasciitilde{}7MB/min），预计 \textasciitilde{}80 分钟完成；QLoRA 训练随后自动开始。训练日志写入 \_\_CODE\_0000\_\_。\\
 
+\subsubsection{38.14 QLoRA 子集训练在 5090 成功 ✅}
+
+在 RTX 5090 上完成 QLoRA 全流程验证（pulse\_response\_grounding 20 样本子集，1 epoch）：\\
+\begin{itemize}
+  \item \_\_BOLD\_0001\_\_：torch 2.11.0+cu128 + transformers/peft/trl/datasets/deepspeed/mpi4py/torchvision（HF mirror + 清华 pip 镜像；\_\_CODE\_0000\_\_ 绕过 CAS 401）
+  \item \_\_BOLD\_0000\_\_：20 样本 10 步，67s，train\_loss 15.88，eval\_loss 14.71
+  \item \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_（adapter\_model.safetensors + adapter\_config.json，LoRA r=8，targets=q/k/v/o\_proj）
+  \item \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_（单 GPU 无需 ZeRO-2）
+\end{itemize}
+
+完整 15,083 样本训练待数据（634MB tar 经 aTrust 隧道 \textasciitilde{}7MB/min）传输完成后由 \_\_CODE\_0000\_\_ 自动启动。\\
+
 \subsubsection{38.6 下一步}
 
 1. \_\_BOLD\_0000\_\_：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。\\

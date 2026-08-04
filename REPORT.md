@@ -2057,6 +2057,16 @@ config = BatchConfig(
 
 数据经 aTrust 隧道传输较慢（~7MB/min），预计 ~80 分钟完成；QLoRA 训练随后自动开始。训练日志写入 `/mnt/nas_datasets/tangzh/qlora_run.log`。
 
+### 38.14 QLoRA 子集训练在 5090 成功 ✅
+
+在 RTX 5090 上完成 QLoRA 全流程验证（pulse_response_grounding 20 样本子集，1 epoch）：
+- **环境**：torch 2.11.0+cu128 + transformers/peft/trl/datasets/deepspeed/mpi4py/torchvision（HF mirror + 清华 pip 镜像；`HF_HUB_DISABLE_XET=1` 绕过 CAS 401）
+- **训练**：20 样本 10 步，67s，train_loss 15.88，eval_loss 14.71
+- **产物**：`checkpoints/qwen35-subset/final/`（adapter_model.safetensors + adapter_config.json，LoRA r=8，targets=q/k/v/o_proj）
+- **命令**：`train_qwen35.py --no-deepspeed`（单 GPU 无需 ZeRO-2）
+
+完整 15,083 样本训练待数据（634MB tar 经 aTrust 隧道 ~7MB/min）传输完成后由 `monitor_qlora.sh` 自动启动。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
