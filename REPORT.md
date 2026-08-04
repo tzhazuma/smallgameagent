@@ -2079,6 +2079,17 @@ config = BatchConfig(
 - mimo-v2.5 批量测试（kingshot-94766e5d61dc）：pipeline 跑通（headless, 0.0min），落点 BLOCKED_UNSAFE —— 与已知「每游戏控制方案需探索」一致，批量基础设施正常。
 - QLoRA 全量训练待数据完成后由 monitor 自动启动。
 
+### 38.17 L1 VLM 部署路径（QLoRA adapter 就绪后）
+
+QLoRA 训练产出 PEFT adapter（adapter_config.json + adapter_model.safetensors），部署路径已验证：
+```bash
+# 本地/5090 启动 VLM 推理服务（src/inference/server.py 支持 --adapter）
+python src/inference/server.py   --model Qwen/Qwen3.5-4B   --adapter checkpoints/qwen35-4b-gameplay/final   --no-flash-attn --port 8000
+```
+- 子集 adapter 格式与 server 期望一致（checkpoint 目录含 adapter_config.json）
+- 部署后作为 L1 画面理解层：看截图 → 输出结构化视觉上下文 → 喂给云端 L2（§23/§26/§30 的架构）
+- 训练日志：`/mnt/nas_datasets/tangzh/qlora_run.log`；转移进度：`/mnt/nas_datasets/tangzh/qlora_monitor.log`
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
