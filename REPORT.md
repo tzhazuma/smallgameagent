@@ -2067,6 +2067,12 @@ config = BatchConfig(
 
 完整 15,083 样本训练待数据（634MB tar 经 aTrust 隧道 ~7MB/min）传输完成后由 `monitor_qlora.sh` 自动启动。
 
+### 38.15 全量数据转移 + QLoRA 自动训练（进行中）
+
+- 634MB 数据 tar 经 aTrust 隧道传输（~8MB/min），rsync `--append-verify` 断点续传中（已修复 `--append 与 --partial-dir 冲突`）。
+- `monitor_qlora.sh`（nohup，修复版）每 30s 检查文件大小，稳定 ≥600MB 后自动：解压 → 运行 `run_qlora_5090.sh --no-deepspeed`（6 任务 × 15,083 样本，epochs=3，lora-r=16）。
+- 子集验证已确认完整 pipeline 可用（§38.14）；全量训练预计数小时，日志 `/mnt/nas_datasets/tangzh/qlora_monitor.log`。
+
 ### 38.6 下一步
 
 1. **长时间连续运行**：让 tiles-survive/whiteout/kingshot 的 autonomous run 持续跑通（后台不中断），观察 adaptive fallback 能否通关。
