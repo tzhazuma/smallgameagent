@@ -1058,6 +1058,36 @@ def _add_bar_chart_slide(prs) -> None:
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
+def _add_harness_slide(prs) -> None:
+    """Slide summarizing the fps-play-agent-harness integration."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "同学框架集成：统一实验标准")
+    _add_left_bar(slide, _C_SUCCESS)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.5, "规划器桥接（planner-http-adapter）", [
+        "harness_http provider ↔ 我们的 Chat Completions API",
+        "deepseek-v4-flash / mimo-v2.5 / kimi-k2.7 / qwen3.7-max",
+        "kimi few-shot 可产出 schema 合规 StrategySpec（7-48s）",
+        "fallback-first 模式：0ms 返回确定性策略",
+    ], _C_SECONDARY)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.5, "已解决的工程问题", [
+        "WSL WebGL：headful + xvfb + swiftshader 标志",
+        "probe 假阳性：download/ad 按钮不再误判通关（§5.2 移植）",
+        "objective unresolved：无 guide 时用 target_id",
+        "代理网络：NODE_USE_ENV_PROXY=1 走 clash",
+    ], _C_SUCCESS)
+
+    # Results row
+    _card(slide, 0.65, 4.15, 12.3, 2.4, "运行结果与瓶颈", [
+        "tiles-survive：可玩 3-4 步，joystick 校准被游戏特殊控制卡住（同学 Codex 用 1h17m 探索）",
+        "whiteout 商店：SETTLED_COMPLETE 假阳性已修复 → BLOCKED_UNKNOWN_MECHANIC（诚实信号）",
+        "瓶颈：模型 schema 遵循度（fallback 兜底）+ 每游戏控制知识 + WSL 软件渲染不稳定",
+        "25+25 游戏清单已筛选交付（指引箭头 + 通关画面 + 广告图标验证）",
+    ], _C_ACCENT)
+
+
 def _add_next_steps_slide(prs) -> None:
     """Next steps slide."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -1249,6 +1279,8 @@ def write_pptx() -> None:
 
     # ---- Section: Roadmap ----
     _add_section_slide(prs, "09", "路线图")
+
+    _add_harness_slide(prs)
 
     _add_roadmap_slide(prs)
 
