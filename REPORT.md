@@ -2208,3 +2208,24 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **normalizer 迭代**：本轮补 objective selector 一致性（target_id 只能带 target_id、current_guide/none 不能带 target）、transition predicate 白名单（31 个）、key/value 类型校验（valueless/string/numeric）。
 
 **对比**：同样游戏 WSL 软渲染 RUNTIME_FAULT（0 策略执行）vs Windows Edge 真 GPU 正常执行（4-5 个策略计划、12-14 个动作）。Windows Edge 是真 GPU 渲染的标准批量环境。
+
+
+### 38.25 normalizer 迭代（objective/predicate/可达性）+ Edge 稳定性
+
+**normalizer 第三轮修复**（planner-http-adapter.mjs）：
+- objective selector 一致性：target_id 只能带 target_id；target_role 只能带 target_role；current_guide/none 不能带 target_id/target_role。
+- transition predicate 白名单（31 个 STRATEGY_PREDICATES）+ key/value 类型校验：valueless predicate 强制 key/value=null；phase_is/control_domain_is 需 string value；no_progress_at_least 等需正整数。
+- **状态可达性**：从 entry_state BFS 遍历 transitions，剔除不可达 states（harness 拒绝 "strategy contains unreachable states"）。
+- **mimo 图片剥离**：opencodego 的 mimo-v2.5 拒绝 base64 data-URL 图片（"url is invalid"）且多模态响应超时；planner 请求默认剥离图片（`PLAYABLE_PLANNER_KEEP_IMAGES=1` 可恢复），视觉理解走独立 L1 VLM 路径。
+
+**修复后验证**（kingshot-94766e5d61dc）：**planner_rejected=0**，BUDGET_EXHAUSTED 240 步完整预算。
+
+**Edge 稳定性发现**：Edge headless 连续跑多个游戏后状态退化（游戏白屏、gameplay=0）。修复：run_batch.bat 每游戏前 `taskkill /F /IM msedge.exe` + 重启（`--mute-audio --remote-debugging-port=9222`），保证每次 run 干净。
+
+**WSL 软渲染 vs Windows Edge 真 GPU 对比**：
+| 维度 | WSL（SwiftShader/xvfb） | Windows Edge（D3D11 真 GPU） |
+|---|---|---|
+| Cocos 3.8.5 WebGL2 | ✗ Error 16405 白屏 | ✓ 完整渲染 |
+| Unity WebGL | △ 部分 | ✓ |
+| 策略执行 | tiles 可跑 | tiles + kingshot + whiteout 均可 |
+| 批量稳定性 | 单游戏 | 需每游戏重启 Edge |
