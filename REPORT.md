@@ -2328,3 +2328,19 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - kimi-k2.7-code 之前验证可产出合规 StrategySpec（§38.7），可用于少样本对照。
 
 **更新批量主力配置**：`run_batch.bat` 默认 `PLAYABLE_PLANNER_MODEL=mimo-v2.5`（已如此）。
+
+
+### 38.31 batch8：再破纪录（14 gameplay）
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-33efef78d709 | Cocos | OPERATOR_INTERRUPTED | 21 | **14** ⭐ | 4 | 16 |
+| kingshot-f9a4fa1b6227 | Cocos | OPERATOR_INTERRUPTED | 23 | 10 | 3 | 16 |
+| whiteout-survival-7606ead29015 | Cocos | OPERATOR_INTERRUPTED | 17 | 0 | 6 | 12 |
+| whiteout-survival-f2fa5adcb7f1 | Cocos | OPERATOR_INTERRUPTED | 16 | 0 | 2 | 4 |
+
+- kingshot-33efef78d709 再破 gameplay 纪录（14）；kingshot 系列两个 16 actions。
+- **累计 26 游戏：16 个产生真实 gameplay，成功率 62%**。
+- 7606ead29015/f2fa5adcb7f1 运行正常（plans 2-6、actions 4-12）但 gameplay=0（渲染/游戏启动问题，策略已执行）。
+
+**累计成功游戏 gameplay 排行**：33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) > c378f843e877(6) > 87790941fd83(5)
