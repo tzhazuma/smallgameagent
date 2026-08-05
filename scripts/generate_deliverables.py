@@ -1368,6 +1368,9 @@ def _add_windows_batch_slide(prs) -> None:
             ["kingshot-830518bfdad4", "Cocos", "OPERATOR_INTERRUPTED", "26", "19", "4", "21"],
             ["whiteout-survival-c47908da8b11", "Cocos", "OPERATOR_INTERRUPTED", "15", "9", "3", "9"],
             ["kingshot-80b82b11529c", "Cocos", "OPERATOR_INTERRUPTED", "18", "7", "5", "13"],
+            ["kingshot-14271ce32d49", "Cocos", "OPERATOR_INTERRUPTED", "21", "12", "4", "17"],
+            ["kingshot-e16d5e5e7cce", "Cocos", "OPERATOR_INTERRUPTED", "14", "8", "6", "13"],
+            ["whiteout-survival-fa4439bf53cb", "Cocos", "OPERATOR_INTERRUPTED", "20", "7", "5", "14"],
             ["kingshot-ce59e2a9a7a3", "Cocos", "RUNTIME_FAULT", "2", "0", "0", "0"],
             ["kingshot-29345f023e9e", "Cocos", "BLOCKED_UNSAFE", "0", "0", "0", "0"],
         ])
@@ -1375,7 +1378,7 @@ def _add_windows_batch_slide(prs) -> None:
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.55), Inches(12.3), Inches(0.55))
     _set_fill(note, _C_LIGHT)
     _set_text_style(note.text_frame.paragraphs[0],
-        "34 游戏累计 22 个产生真实 gameplay（21 个 Cocos）；最佳 kingshot-830518bfdad4：19 gameplay / 21 actions；batch10 首次 4/4 全胜。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）。",
+        "38 游戏累计 25 个产生真实 gameplay（24 个 Cocos）；最佳 kingshot-830518bfdad4：19 gameplay / 21 actions；成功率 66%。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）。",
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 if __name__ == "__main__":
