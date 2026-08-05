@@ -1344,10 +1344,10 @@ def _add_vlm_layer_slide(prs) -> None:
     ], _C_ACCENT)
 
     _card(slide, 6.95, 1.45, 6.0, 2.3, "VLM 参与前后对比", [
-        "kingshot-c378f843e877：6 → 9 gameplay",
         "kingshot-94766e5d61dc：7 → 19 gameplay（+171%）",
-        "actions：12 → 23（+92%），steps 240 → 26",
-        "VLM 画面理解显著提升策略精准度与执行效率",
+        "whiteout-12ababda99c7（JSON 模板修复）：10 → 228 gameplay",
+        "actions：12 → 240，steps 240 → 26（持续游玩）",
+        "关键：task-specific JSON 模板提高 guard 接受率 → VLM 上下文进入策略循环",
     ], _C_SUCCESS)
 
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(3.95), Inches(12.3), Inches(0.6))
