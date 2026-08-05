@@ -2368,3 +2368,20 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 | kimi-k2.7-code (kimi) | 164-229s | 空 ❌ | 0 |
 
 **结论**：mimo-v2.5 是 harness 30KB 大负载规划的唯一可靠模型。reasoning 型模型（deepseek/kimi）在该负载下均超时空输出。批量主力维持 mimo-v2.5（符合"批量用 mimo"的既定策略）；kimi/qwen 额度保留给轻量调用或规则更新。
+
+
+### 38.33 batch10：4/4 全胜，绝对纪录 19 gameplay
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| **kingshot-830518bfdad4** | Cocos | OPERATOR_INTERRUPTED | 26 | **19** ⭐⭐ | 4 | **21** |
+| whiteout-survival-c47908da8b11 | Cocos | OPERATOR_INTERRUPTED | 15 | 9 | 3 | 9 |
+| kingshot-80b82b11529c | Cocos | OPERATOR_INTERRUPTED | 18 | 7 | 5 | 13 |
+| whiteout-survival-97799fcc5eef | Cocos | OPERATOR_INTERRUPTED | 17 | 6 | 5 | 16 |
+
+- **batch10 首次 4/4 全胜**；kingshot-830518bfdad4 以 **19 gameplay / 21 actions 刷新绝对纪录**（mimo 策略在该游戏被充分执行）。
+- **累计 34 游戏：22 个产生真实 gameplay（21 个 Cocos），成功率 65%**。
+
+**累计成功 gameplay 排行**：830518bfdad4(19) > 33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) = c47908da8b11(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) = 80b82b11529c(7) > f8c53b366225(6) = 97799fcc5eef(6) = c378f843e877(6) > 19047d91c9de(5) = 87790941fd83(5)
+
+**趋势**：批次成功率 2/4 → 3/4 → 4/4（batch8→9→10），Edge 12s 等待 + normalizer 稳定后，mimo-v2.5 策略执行质量持续提升。
