@@ -2344,3 +2344,27 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 7606ead29015/f2fa5adcb7f1 运行正常（plans 2-6、actions 4-12）但 gameplay=0（渲染/游戏启动问题，策略已执行）。
 
 **累计成功游戏 gameplay 排行**：33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) > c378f843e877(6) > 87790941fd83(5)
+
+
+### 38.32 batch9 + kimi-k2.7-code 对照：三模型结论收敛
+
+**batch9（4 个新游戏，mimo-v2.5）**：
+| 游戏 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|
+| kingshot-19047d91c9de | BUDGET_EXHAUSTED | 240 | 5 | 4 | 8 |
+| kingshot-f8c53b366225 | RUNTIME_FAULT | 16 | 6 | 1 | 7 |
+| whiteout-survival-bdfbb9a2a81d | OPERATOR_INTERRUPTED | 17 | 0 | 6 | 12 |
+| whiteout-survival-27367a5836fc | OPERATOR_INTERRUPTED | 17 | 0 | 5 | 10 |
+
+- **累计 30 游戏：18 个产生真实 gameplay，成功率 60%**。
+
+**kimi-k2.7-code 对照（kingshot-c378f843e877）**：raw_len=0（164-229s 超时空输出）→ fallback → BLOCKED_UNSAFE | 16 步 | 0 gameplay。此前 §38.7 的 kimi 成功是小 prompt 场景；真实 harness 大负载（30KB brief）下同样不可靠。
+
+**三模型对照定论（kingshot-c378f843e877）**：
+| 模型 | 响应 | 策略输出 | gameplay |
+|---|---|---|---|
+| **mimo-v2.5 (opencodego)** | 20-50s | 7-26KB ✅ | **6** |
+| deepseek-v4-flash (opencodego) | 85-90s | 空 ❌ | 0 |
+| kimi-k2.7-code (kimi) | 164-229s | 空 ❌ | 0 |
+
+**结论**：mimo-v2.5 是 harness 30KB 大负载规划的唯一可靠模型。reasoning 型模型（deepseek/kimi）在该负载下均超时空输出。批量主力维持 mimo-v2.5（符合"批量用 mimo"的既定策略）；kimi/qwen 额度保留给轻量调用或规则更新。
