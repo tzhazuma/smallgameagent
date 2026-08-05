@@ -198,11 +198,18 @@ function extractJson(text) {
   return candidates[0];
 }
 
-function buildMessages(request) {
+function buildMessages(request, provider) {
   const messages = [{ role: "system", content: SYSTEM_PROMPT }];
   const content = [];
-  for (const img of request.images || []) {
-    content.push({ type: "image_url", image_url: { url: img } });
+  // The opencodego mimo endpoint rejects base64 data-URL images
+  // ("url is invalid") and multimodal responses are very slow/timeout-prone.
+  // Strip images for planner calls unless PLAYABLE_PLANNER_KEEP_IMAGES=1.
+  const stripImages = process.env.PLAYABLE_PLANNER_KEEP_IMAGES !== "1"
+    && (String(provider?.model || "").toLowerCase().includes("mimo"));
+  if (!stripImages) {
+    for (const img of request.images || []) {
+      content.push({ type: "image_url", image_url: { url: img } });
+    }
   }
   // Append the output schema so the model emits the exact expected structure.
   let prompt = request.prompt;
@@ -613,8 +620,25 @@ function normalizeStrategy(parsed, brief) {
     } : { no_progress_before_replan: 3, max_action_failures: 2, settle_before_retry: true };
     return st;
   });
-  const entryState = typeof parsed.entry_state === "string" && states.some((s) => s.state_id === parsed.entry_state)
+  let entryState = typeof parsed.entry_state === "string" && states.some((s) => s.state_id === parsed.entry_state)
     ? parsed.entry_state : states[0].state_id;
+  // Reachability: keep only states reachable from entry_state via transitions
+  // (and their next targets). The harness rejects unreachable states.
+  const byId = new Map(states.map((s) => [s.state_id, s]));
+  const reachable = new Set();
+  const queue = [entryState];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (reachable.has(id) || !byId.has(id)) continue;
+    reachable.add(id);
+    for (const t of byId.get(id).transitions || []) {
+      if (typeof t.next === "string" && !["REPLAN", "VERIFY_COMPLETION", "STOP"].includes(t.next)) queue.push(t.next);
+    }
+  }
+  const pruned = states.filter((s) => reachable.has(s.state_id));
+  if (pruned.length === 0) return buildFallbackStrategy(brief || {});
+  if (!reachable.has(entryState)) entryState = pruned[0].state_id;
+  const finalStates = pruned.length === states.length ? states : pruned;
   return {
     schema_version: "agent_harness.strategy_spec.v1",
     kind: "StrategySpec",
@@ -628,7 +652,7 @@ function normalizeStrategy(parsed, brief) {
     strategy_id: typeof parsed.strategy_id === "string" ? parsed.strategy_id.slice(0, 64) : "normalized-strategy",
     summary: typeof parsed.summary === "string" ? parsed.summary : "Normalized model strategy.",
     entry_state: entryState,
-    states,
+    states: finalStates,
     global_replan_triggers: Array.isArray(parsed.global_replan_triggers) ? parsed.global_replan_triggers.slice(0, 12) : ["repeated_no_progress", "completion_suspected", "failure_active"],
     invariants: Array.isArray(parsed.invariants) ? parsed.invariants : [{ predicate: "failure_active", key: null, value: null, on_violation: "STOP" }],
     // The harness rejects references that are absent from the brief's
@@ -675,7 +699,7 @@ const server = createServer(async (req, res) => {
     let text = "";
     let latencyMs = 0;
     if (!fallbackFirst) {
-      const messages = buildMessages(request);
+      const messages = buildMessages(request, provider);
       const t0 = Date.now();
       text = await callChatCompletions(provider, messages, Number(process.env.PLANNER_MAX_TOKENS || 8192), request.output_schema);
       latencyMs = Date.now() - t0;

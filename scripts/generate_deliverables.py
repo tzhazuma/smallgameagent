@@ -1282,6 +1282,8 @@ def write_pptx() -> None:
 
     _add_harness_slide(prs)
 
+    _add_windows_batch_slide(prs)
+
     _add_roadmap_slide(prs)
 
     # ---- Section: Next ----
@@ -1322,6 +1324,46 @@ def main() -> None:
     compile_tex()
     write_pptx()
 
+
+
+
+def _add_windows_batch_slide(prs) -> None:
+    """Slide: Windows Edge real-GPU rendering + batch results."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "Windows Edge 真 GPU 渲染：批量实验打通")
+    _add_left_bar(slide, _C_SECONDARY)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.3, "为什么必须换渲染环境", [
+        "Cocos 3.8.5 游戏（kingshot/whiteout）要求完整 WebGL2",
+        "WSL 软渲染 / D3D12 / Vulkan 直通均缺扩展 → Error 16405 白屏",
+        "Windows Edge headless + D3D11 真 GPU：WebGL2 完整",
+        "WSL 连接 Edge CDP（--remote-debugging-port=9222 --mute-audio）",
+    ], _C_ACCENT)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.3, "工程改动", [
+        "harness 支持 PLAYABLE_BROWSER_CDP 连接外部浏览器",
+        "startup_timeout_ms 提到 45s（Unity/Cocos 加载 10-15s 出 canvas）",
+        "声音关闭：Edge --mute-audio + harness mute() 双保险",
+        "WSL adapter(9100) ↔ Windows harness 双向可达",
+    ], _C_SUCCESS)
+
+    _add_table_slide_raw(slide, 0.65, 3.95, 12.3, 2.6,
+        ["游戏", "引擎", "terminal", "steps", "gameplay", "plans", "actions"],
+        [
+            ["tiles-survive-5ec610abcdff", "Unity", "OPERATOR_INTERRUPTED", "20", "9", "5", "14"],
+            ["kingshot-c378f843e877", "Cocos", "OPERATOR_INTERRUPTED", "22", "6", "4", "14"],
+            ["kingshot-94766e5d61dc", "Cocos", "BUDGET_EXHAUSTED", "240", "7", "4", "12"],
+            ["whiteout-survival-87790941fd83", "Cocos", "OPERATOR_INTERRUPTED", "16", "5", "4", "9"],
+            ["kingshot-ce59e2a9a7a3", "Cocos", "RUNTIME_FAULT", "2", "0", "0", "0"],
+            ["kingshot-29345f023e9e", "Cocos", "BLOCKED_UNSAFE", "0", "0", "0", "0"],
+        ])
+
+    note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.55), Inches(12.3), Inches(0.55))
+    _set_fill(note, _C_LIGHT)
+    _set_text_style(note.text_frame.paragraphs[0],
+        "4/6 正常执行（含 3 个 Cocos 游戏）；策略规范化器让 mimo-v2.5 的 7-26KB 策略通过 harness 严格契约（planner_rejected=0）。",
+        Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 if __name__ == "__main__":
     main()
