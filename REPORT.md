@@ -2288,3 +2288,27 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 全部成功游戏的 plans 在 4-6、actions 在 9-17，mimo-v2.5 策略稳定执行。
 
 **累计成功游戏**（gameplay 排序）：kingshot-2653755ff3a0(13) > kingshot-9423402859e9(10) = whiteout-12ababda99c7(10) = kingshot-0042aa74feb8(10) > tiles-survive(9) > whiteout-b64a7594f0c2(8) > whiteout-86420cdd2bbb(7) = whiteout-cc237de42cb3(7) > kingshot-94766e5d61dc(7) > kingshot-c378f843e877(6) > whiteout-87790941fd83(5)
+
+
+### 38.29 batch7 + deepseek-v4-flash 对照实验
+
+**batch7（4 个新游戏，mimo-v2.5）**：
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-6dd565baa02d | Cocos | OPERATOR_INTERRUPTED | 20 | 8 | 5 | 13 |
+| whiteout-survival-b47a4f071e9c | Cocos | OPERATOR_INTERRUPTED | 21 | **10** | 5 | 15 |
+| whiteout-survival-a6e1c05b9664 | Cocos | OPERATOR_INTERRUPTED | 17 | 2 | 6 | 12 |
+| kingshot-60c380dfaad4 | Cocos | BUDGET_EXHAUSTED | 240 | 0 | 1 | 0 |
+
+- batch7: 3/4 成功。**累计 22 游戏：14 个产生真实 gameplay（13 个 Cocos），成功率 64%**。
+
+**deepseek-v4-flash 对照（kingshot-c378f843e877，同游戏 mimo 基线 22 步/6 gameplay/14 actions）**：
+- **deepseek-v4-flash 通过 opencodego 全部 raw_len=0**（85-90s 推理超时后 content 为空），无法产出策略 → 全部走 fallback。
+- 结果 BLOCKED_UNSAFE | 10 步 | 0 gameplay | plans 4 | actions 8（fallback 策略执行了 8 个动作但页面状态异常）。
+- **结论**：deepseek-v4-flash（opencodego）的 reasoning 输出不被 adapter 捕获（content 空），不适用于本 harness 策略生成。**批量主力确认为 mimo-v2.5**（20-50s 响应、7-26KB 策略、通过 normalizer 校验）。
+
+**模型对比小结（kingshot-c378f843e877）**：
+| 模型 | 响应 | 策略输出 | terminal | gameplay |
+|---|---|---|---|---|
+| mimo-v2.5 (opencodego) | 20-50s | 7-26KB ✅ | OPERATOR_INTERRUPTED | 6 |
+| deepseek-v4-flash (opencodego) | 85-90s | 空 ❌ | BLOCKED_UNSAFE | 0 |
