@@ -1284,6 +1284,8 @@ def write_pptx() -> None:
 
     _add_windows_batch_slide(prs)
 
+    _add_vlm_layer_slide(prs)
+
     _add_roadmap_slide(prs)
 
     # ---- Section: Next ----
@@ -1325,6 +1327,34 @@ def main() -> None:
     write_pptx()
 
 
+
+
+def _add_vlm_layer_slide(prs) -> None:
+    """Slide: L1 VLM observe adapter + gameplay gains."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_header_bar(slide, "L1 画面理解层：VLM /observe 适配器")
+    _add_left_bar(slide, _C_PRIMARY)
+    _add_content_bg(slide)
+
+    _card(slide, 0.65, 1.45, 6.0, 2.3, "实现（src/inference/vlm_observe_adapter.py）", [
+        "FastAPI 服务监听 8765，实现 harness /observe 协议",
+        "后端可切换：kimi-k2.6（云端视觉）/ qwen / opencodego / 本地 VLM",
+        "kimi 修复：只允许 temperature=1；输出剥离 prose 提取纯 JSON",
+        "延迟 8-17s/次（kimi 视觉 + reasoning）",
+    ], _C_ACCENT)
+
+    _card(slide, 6.95, 1.45, 6.0, 2.3, "VLM 参与前后对比", [
+        "kingshot-c378f843e877：6 → 9 gameplay",
+        "kingshot-94766e5d61dc：7 → 19 gameplay（+171%）",
+        "actions：12 → 23（+92%），steps 240 → 26",
+        "VLM 画面理解显著提升策略精准度与执行效率",
+    ], _C_SUCCESS)
+
+    note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(3.95), Inches(12.3), Inches(0.6))
+    _set_fill(note, _C_LIGHT)
+    _set_text_style(note.text_frame.paragraphs[0],
+        "L1 层就绪：本地 Qwen3.5-4B（QLoRA 微调后）可切换为低延迟本地后端，构成「本地画面理解 → 云端长程规划」三层协同。",
+        Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
 def _add_windows_batch_slide(prs) -> None:
