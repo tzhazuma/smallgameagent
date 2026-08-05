@@ -551,7 +551,19 @@ function normalizeStrategy(parsed, brief) {
         return a;
       }
       if (desc.requires_target === true) {
-        a.target_binding = objSelector === "none" ? "none" : "objective";
+        if (objSelector === "none") {
+          // A target-requiring option cannot be bound when the state has no
+          // objective — replace with a safe allow-listed action.
+          a.option = fbOption;
+          a.parameters = {};
+          a.target_binding = "none";
+          a.route_policy = "none";
+          a.repeat = "once";
+          a.max_local_iterations = 3;
+          a.expected_effect = safeEffect(fbOption, "state_settles");
+          return a;
+        }
+        a.target_binding = "objective";
       } else {
         a.target_binding = "none";
       }
@@ -612,7 +624,13 @@ function normalizeStrategy(parsed, brief) {
       const next = ["REPLAN", "VERIFY_COMPLETION", "STOP"].includes(t?.next) || stateIds.has(t?.next) ? t.next : "REPLAN";
       return { predicate: pred, key, value, next };
     };
-    st.transitions = Array.isArray(st.transitions) && st.transitions.length > 0 ? st.transitions.map(normalizeTransition) : [{ predicate: "always", key: null, value: null, next: "REPLAN" }];
+    const rawTransitions = Array.isArray(st.transitions) && st.transitions.length > 0
+      ? st.transitions.map(normalizeTransition)
+      : [{ predicate: "always", key: null, value: null, next: "REPLAN" }];
+    // The harness requires the `always` transition to be last.
+    const alwaysTs = rawTransitions.filter((t) => t.predicate === "always");
+    const nonAlways = rawTransitions.filter((t) => t.predicate !== "always");
+    st.transitions = nonAlways.length > 0 ? [...nonAlways, ...alwaysTs] : rawTransitions;
     st.recovery = st.recovery && typeof st.recovery === "object" ? {
       no_progress_before_replan: Number.isInteger(st.recovery.no_progress_before_replan) ? st.recovery.no_progress_before_replan : 3,
       max_action_failures: Number.isInteger(st.recovery.max_action_failures) ? st.recovery.max_action_failures : 2,

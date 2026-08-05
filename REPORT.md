@@ -2229,3 +2229,29 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 | Unity WebGL | △ 部分 | ✓ |
 | 策略执行 | tiles 可跑 | tiles + kingshot + whiteout 均可 |
 | 批量稳定性 | 单游戏 | 需每游戏重启 Edge |
+
+
+### 38.26 Windows 批量完整汇总（mimo-v2.5 via opencodego, 10 游戏）
+
+**最终批量结果（Windows Edge D3D11 真 GPU 渲染，每游戏前重启 Edge）**：
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| tiles-survive-5ec610abcdff | Unity | OPERATOR_INTERRUPTED | 20 | 9 | 5 | 14 |
+| kingshot-c378f843e877 | Cocos | OPERATOR_INTERRUPTED | 22 | 6 | 4 | 14 |
+| kingshot-94766e5d61dc | Cocos | BUDGET_EXHAUSTED | 240 | 7 | 4 | 12 |
+| whiteout-survival-87790941fd83 | Cocos | OPERATOR_INTERRUPTED | 16 | 5 | 4 | 9 |
+| whiteout-survival-86420cdd2bbb | Cocos | RUNTIME_FAULT | 16 | 7 | 2 | 10 |
+| **whiteout-survival-12ababda99c7** | Cocos | **OPERATOR_INTERRUPTED** | **22** | **10** | **5** | **17** |
+| whiteout-survival-9caf6c585e72 | Cocos | RUNTIME_FAULT | 6 | 0 | 0 | 0 |
+| kingshot-ce59e2a9a7a3 | Cocos | RUNTIME_FAULT | 2 | 0 | 0 | 0 |
+| kingshot-fcbc9ff7346d | Cocos | RUNTIME_FAULT | 2 | 0 | 0 | 0 |
+| kingshot-29345f023e9e | Cocos | BLOCKED_UNSAFE | 0 | 0 | 0 | 0 |
+
+**结论**：
+- 6/10 游戏产生真实 gameplay（10 个游戏中有 5 个 Cocos 游戏成功执行策略）。
+- 最佳 whiteout-12ababda99c7：22 步 / 10 gameplay / 5 plans / 17 actions。
+- RUNTIME_FAULT/BLOCKED 游戏主要卡在首屏渲染或 harness 保护前缀（游戏本身控制方案问题，与 LLM 策略无关）。
+- **架构结论**：Windows Edge（D3D11 真 GPU）是 Cocos/Unity WebGL2 游戏的标准批量渲染环境；WSL 软渲染只适合轻量游戏。策略规范化器（4 轮迭代）让 mimo-v2.5 的大策略稳定通过 harness 严格契约（planner_rejected=0）。
+
+**normalizer round-4**：requires_target option 在无 objective 状态时替换为安全 option；`always` transition 强制排到最后（harness 要求）。

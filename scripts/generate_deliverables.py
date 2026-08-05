@@ -1355,6 +1355,8 @@ def _add_windows_batch_slide(prs) -> None:
             ["kingshot-c378f843e877", "Cocos", "OPERATOR_INTERRUPTED", "22", "6", "4", "14"],
             ["kingshot-94766e5d61dc", "Cocos", "BUDGET_EXHAUSTED", "240", "7", "4", "12"],
             ["whiteout-survival-87790941fd83", "Cocos", "OPERATOR_INTERRUPTED", "16", "5", "4", "9"],
+            ["whiteout-survival-86420cdd2bbb", "Cocos", "RUNTIME_FAULT", "16", "7", "2", "10"],
+            ["whiteout-survival-12ababda99c7", "Cocos", "OPERATOR_INTERRUPTED", "22", "10", "5", "17"],
             ["kingshot-ce59e2a9a7a3", "Cocos", "RUNTIME_FAULT", "2", "0", "0", "0"],
             ["kingshot-29345f023e9e", "Cocos", "BLOCKED_UNSAFE", "0", "0", "0", "0"],
         ])
@@ -1362,7 +1364,7 @@ def _add_windows_batch_slide(prs) -> None:
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.55), Inches(12.3), Inches(0.55))
     _set_fill(note, _C_LIGHT)
     _set_text_style(note.text_frame.paragraphs[0],
-        "4/6 正常执行（含 3 个 Cocos 游戏）；策略规范化器让 mimo-v2.5 的 7-26KB 策略通过 harness 严格契约（planner_rejected=0）。",
+        "6/10 游戏产生真实 gameplay（含 5 个 Cocos）；最佳 whiteout-12ababda99c7：10 gameplay / 17 actions。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）。",
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 if __name__ == "__main__":
