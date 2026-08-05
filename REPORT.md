@@ -2436,3 +2436,27 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **模型结论**：mimo-v2.5（opencodego）是唯一在 30KB harness 大负载下稳定产出策略的模型；deepseek/kimi 均超时空输出（详见 §38.30/38.32）。
 
 **总价值**：打通了「Windows Edge 真 GPU 渲染 + mimo-v2.5 策略 + normalizer 契约校验」的完整批量管线，48 游戏统一标准下获得可复现的 gameplay 基线，为后续 L1 VLM 介入、规则在线更新、QLoRA 微调模型替换提供对照基准。
+
+
+### 38.37 VLM /observe 适配器：L1 画面理解层打通
+
+**背景**：用户三层架构中 L1（本地/云端 VLM 画面理解）此前未接入 harness。harness 的 VlmObserverClient 使用自定义 `/observe` 协议（`agent_harness.perception_request.v1`：base64 图片 + 任务 prompt，响应需 `request_id + raw_text` 且 raw_text 必须通过 guarded JSON 解析）。
+
+**实现**（`src/inference/vlm_observe_adapter.py`）：
+- FastAPI 服务监听 8765（harness 默认 VLM 端口），实现 `/health` + `/observe`。
+- 后端可配置：`VLM_BACKEND=kimi`（默认，kimi-k2.6 视觉）/ `qwen` / `opencodego`（mimo）。
+- **kimi-k2.6 是首个验证可用的云端视觉后端**：OpenAI image_url 格式 + base64 直接可用（qwen token-plan 无 VL 模型；opencodego mimo 拒 base64）。
+- 关键修复：kimi-k2.6 只允许 temperature=1（适配器对 kimi 不传 temperature）；kimi 输出常带前置 prose → 适配器内置 `_extract_json`（markdown 剥离 + 平衡花括号扫描）提取纯 JSON。
+- 延迟 ~8-17s/次（kimi-k2.6 视觉 + reasoning）。
+
+**端到端验证（kingshot-c378f843e877，mimo-v2.5 规划 + kimi-k2.6 观察）**：
+| 配置 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|
+| 基线（无 VLM） | OPERATOR_INTERRUPTED | 22 | 6 | 4 | 14 |
+| VLM run1（无提取） | BUDGET_EXHAUSTED | 240 | 2 | 2 | 3 |
+| **VLM run2（JSON 提取）** | OPERATOR_INTERRUPTED | 17 | **9** | 4 | 10 |
+
+- VLM run2 的 2 个观察 accepted（completion_evidence / failure_observation），2 个 guard_rejected（kimi 前置文本过长时提取失败）。
+- 初步显示 VLM 画面理解参与后 gameplay 提升（9 vs 6），样本少需继续验证。
+
+**意义**：L1 层基础设施就绪——可切换 kimi（云端）、mimo（opencodego）、本地 Qwen3.5-4B（QLoRA 微调后），为「本地 VLM 画面理解 → 云端长程规划」的三层协同提供通路。
