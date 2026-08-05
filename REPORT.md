@@ -2271,3 +2271,20 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - BLOCKED_UNSAFE 游戏为首屏即触发 harness 保护前缀（游戏自身控制/加载方案问题，与 LLM 策略无关）。
 - round-4 adapter（requires_target 无 objective 替换 + always transition 排序）运行稳定，未出现 contract 拒绝。
 - 注意：`taskkill` 重启 Edge 时偶发 9222 端口 TIME_WAIT 冲突（`bind() returned an error`），个别游戏可能因 Edge 未就绪而失败；可在 bat 中把启动等待从 8s 提到 12s 缓解。
+
+
+### 38.28 batch6：Edge 12s 等待 + round-4 adapter，3/4 成功
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-2653755ff3a0 | Cocos | OPERATOR_INTERRUPTED | 18 | **13** ⭐ | 5 | 14 |
+| kingshot-0042aa74feb8 | Cocos | OPERATOR_INTERRUPTED | 20 | 10 | 6 | 15 |
+| whiteout-survival-cc237de42cb3 | Cocos | OPERATOR_INTERRUPTED | 19 | 7 | 5 | 14 |
+| whiteout-survival-914d4312686f | Cocos | BLOCKED_UNSAFE | 0 | 0 | 0 | 0 |
+
+- kingshot-2653755ff3a0 打破 gameplay 纪录（13，此前最高 10）。
+- **累计 18 游戏：11 个产生真实 gameplay（10 个 Cocos），成功率 61%**。
+- Edge 启动等待 8s→12s 后，batch6 成功率 3/4（此前 batch5 为 2/4），端口 TIME_WAIT 冲突显著减少。
+- 全部成功游戏的 plans 在 4-6、actions 在 9-17，mimo-v2.5 策略稳定执行。
+
+**累计成功游戏**（gameplay 排序）：kingshot-2653755ff3a0(13) > kingshot-9423402859e9(10) = whiteout-12ababda99c7(10) = kingshot-0042aa74feb8(10) > tiles-survive(9) > whiteout-b64a7594f0c2(8) > whiteout-86420cdd2bbb(7) = whiteout-cc237de42cb3(7) > kingshot-94766e5d61dc(7) > kingshot-c378f843e877(6) > whiteout-87790941fd83(5)
