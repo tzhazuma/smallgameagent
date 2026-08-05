@@ -2385,3 +2385,22 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **累计成功 gameplay 排行**：830518bfdad4(19) > 33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) = c47908da8b11(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) = 80b82b11529c(7) > f8c53b366225(6) = 97799fcc5eef(6) = c378f843e877(6) > 19047d91c9de(5) = 87790941fd83(5)
 
 **趋势**：批次成功率 2/4 → 3/4 → 4/4（batch8→9→10），Edge 12s 等待 + normalizer 稳定后，mimo-v2.5 策略执行质量持续提升。
+
+
+### 38.34 batch11：3/4 成功，累计 38 游戏
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-14271ce32d49 | Cocos | OPERATOR_INTERRUPTED | 21 | **12** | 4 | 17 |
+| kingshot-e16d5e5e7cce | Cocos | OPERATOR_INTERRUPTED | 14 | 8 | 6 | 13 |
+| whiteout-survival-fa4439bf53cb | Cocos | OPERATOR_INTERRUPTED | 20 | 7 | 5 | 14 |
+| whiteout-survival-dfb8cf49c761 | Cocos | OPERATOR_INTERRUPTED | 17 | 0 | 6 | 12 |
+
+- **累计 38 游戏：25 个产生真实 gameplay，成功率 66%**（持续上升）。
+- 已完成 50 游戏清单中的 38 个 + tiles 基线；剩余 12 个。
+
+**总体统计（38 游戏，mimo-v2.5 via opencodego + Windows Edge D3D11）**：
+- 有 gameplay 25 个（全部 Cocos/Unity，其中 24 个 Cocos）
+- 平均 gameplay ≈ 8.6，平均 actions ≈ 12.3
+- 最佳：kingshot-830518bfdad4（19 gameplay / 21 actions）
+- 失败 13 个：BLOCKED_UNSAFE（首屏保护前缀）为主 + 少量 RUNTIME_FAULT（渲染/早期异常）
