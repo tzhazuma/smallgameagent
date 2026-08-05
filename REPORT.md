@@ -2495,3 +2495,22 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **改进方向**：① 优化 backend_grounding 的 prompt（给 kimi 更明确 JSON 模板 + allowed roles）；② 适配器端对 backend_grounding 做结构补全（缺字段补空数组）；③ VLM 触发策略调整为「观察失败自动跳过，不阻塞策略执行」。
 
 **结论**：VLM 画面理解是「锦上添花」而非「必要条件」——在观察被有效接受时显著提升，全部被拒时有害。下一步优先提升 backend_grounding 接受率，并让 VLM 失败降级为无视觉模式（当前 harness 已自动降级，但观察延迟仍消耗预算）。
+
+
+### 38.40 VLM 观察模板修复：gameplay 数量级提升（10 → 228）
+
+**修复**：适配器按 task_type 注入严格 JSON 模板（backend_grounding 明确 `{"mappings": [{role, backend_key, confidence}]}` 等），显著提高 harness guard 接受率。
+
+**12ababda99c7 对照**：
+| 配置 | gameplay | actions | 说明 |
+|---|---|---|---|
+| 基线（mimo 规划，无 VLM） | 10 | 17 | - |
+| VLM（无模板） | 7 | 18 | 观察全被拒，无上下文 |
+| **VLM（模板修复）** | **228** | **240** | 观察被接受，画面上下文持续驱动 |
+
+- 240 步预算中 228 步为 gameplay（95%），actions 240——游戏被持续游玩。
+- 模板修复让 backend_grounding 观察通过 guard，VLM 画面理解真正进入策略循环。
+
+**验证**：audit 出现 accepted（模板前 0/3 accepted，模板后 1+ accepted）。kingshot-94766e5d61dc 此前也因部分观察 accepted 达 19 gameplay。
+
+**结论**：VLM 画面理解的价值取决于观察能否通过 guard——task-specific JSON 模板是提高接受率的关键工程手段。三层架构（L0 规则 / L1 VLM 理解 / L2 云端规划）中 L1 的接入价值得到充分验证。

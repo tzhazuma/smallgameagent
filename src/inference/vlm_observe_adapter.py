@@ -174,7 +174,41 @@ async def observe(request: Request) -> JSONResponse:
 
     request_id = payload.get("request_id") or "unknown"
     prompt = payload.get("prompt") or ""
+    task_type = payload.get("task_type") or ""
     max_tokens = int(payload.get("max_output_tokens") or 384)
+
+    # Inject a strict JSON shape per task so the guarded parser accepts more
+    # observations (the harness's guard requires exact required fields).
+    TASK_TEMPLATES = {
+        "visual_grounding": (
+            "\n\nRespond ONLY with a JSON object of the form: "
+            '{"entities": [{"kind": "string", "location": [x, y], "description": "string"}]}. '
+            "Empty array if no entities."
+        ),
+        "backend_grounding": (
+            "\n\nRespond ONLY with a JSON object of the form: "
+            '{"mappings": [{"role": "string", "backend_key": "string", "confidence": 0.0}]}. '
+            "Empty array if no mapping; confidence between 0 and 1."
+        ),
+        "action_effect_observation": (
+            "\n\nRespond ONLY with a JSON object containing action_result, meaningful_changes "
+            "(array), player_motion."
+        ),
+        "phase_observation": (
+            "\n\nRespond ONLY with a JSON object containing canonical_phase (string), evidence "
+            "(object), subphase."
+        ),
+        "completion_evidence": (
+            "\n\nRespond ONLY with a JSON object containing completion_state (bool), "
+            "evidence_strength (string), strong_evidence (array), transition, weak_evidence (array)."
+        ),
+        "failure_observation": (
+            "\n\nRespond ONLY with a JSON object containing failure_type, observed_signals "
+            "(object), outcome_evidence, recovery_outcome_observed."
+        ),
+    }
+    if task_type in TASK_TEMPLATES:
+        prompt = prompt + TASK_TEMPLATES[task_type]
     images = payload.get("images") or []
 
     content: list[dict] = []
