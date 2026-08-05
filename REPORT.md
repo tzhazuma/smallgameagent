@@ -2122,3 +2122,36 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 2. **更智能的 adaptive 策略**：在 fallback 中加入 completion 检测（发现通关画面→VERIFY_COMPLETION）和资源经济（攒够再升级）逻辑。
 3. **模型分层**：Codex 做 schema 合规的长程规划，我们的模型（mimo-v2.5 多模态）做视觉观察与子任务，规则/fallback 做执行兜底。
 4. **批量跑 25+25 游戏**：把选中的 50 个游戏接入 harness，统一标准批量实验。
+
+
+### 38.21 opencodego API 恢复 + mimo 路由修复 + 渲染根因定位
+
+**opencodego API 恢复可用**（之前 403 Cloudflare 拦截已解除）：
+- 端点 `https://opencode.ai/zen/go/v1`（.env: OPENCODEGO_BASE_URL），模型名**不带** `opencode-go/` 前缀。
+- 实测 `deepseek-v4-flash` 与 `mimo-v2.5` 均正常返回（此前 403 是暂时性拦截）。
+- 可用模型（/models）：deepseek-v4-flash/pro、mimo-v2.5/pro、mimo-v2-omni、kimi-k2.7-code、kimi-k2.6、qwen3.8-max/3.7-max/3.7-plus、glm-5.2、minimax-m3 等。
+
+**qwen/kimi 订阅验证**：
+- kimi（api.kimi.com/coding/v1）：`kimi-k2.7-code` 正常 ✅
+- qwen（token-plan.cn-beijing.maas.aliyuncs.com）：`qwen3.7-plus` 正常 ✅（qwen3.5-plus 不存在，404；可用 qwen3.8-max/3.7-max/3.7-plus/3.6-flash）
+
+**mimo-v2.5 直连 xiaomi 的 abort 问题**：直接调用 `api.xiaomimimo.com` 时，reasoning 模型把 token 预算占满后 content 被截断（`finish_reason: abort`，content 只剩 ````json` 围栏），导致 adapter `raw_len=0 → PARSE_FAIL`。修复：
+- `planner-http-adapter.mjs`：mimo 默认路由改为 **opencodego**（`MIMO_ROUTE=xiaomi` 可强制 xiaomi），max_tokens 2048→8192（`PLANNER_MAX_TOKENS` 可调）。
+- 修复后 mimo-v2.5 每次产生 7-26KB 完整 StrategySpec JSON（raw_len>0，无 PARSE_FAIL）。
+
+**批量实验（opencodego/mimo-v2.5，5 whiteout + 5 kingshot）**：全部 `RUNTIME_FAULT`/`BLOCKED_UNSAFE`。审计显示 `perception: VISUAL_UNAVAILABLE` + `hard_failures: [runtime_fault, protected_prefix_regression]`，且 `planner_share=89%`（LLM 正常参与，strategy_plans=0 因页面不可见无法执行）。
+
+**根因定位：Cocos WebGL2 渲染失败**：
+- 游戏引擎 Cocos 3.8.5 报 `Error 16405: This device does not support WebGL2`，截图纯黑/纯白（5KB，32×32 采样仅 3 色）。
+- WSL 内 headless/xvfb 的软渲染（SwiftShader）无法编译 Cocos shader；`--enable-unsafe-swiftshader --use-angle=swiftshader --in-process-gpu` 可激活 **Vulkan→D3D12 直通（Windows Intel 核显，ANGLE/Dozen）**，但缺 WebGL2 扩展，Cocos 仍 16405。
+- Windows Edge headless（真 GPU）CDP 可用（`--remote-debugging-port=9222`，localhost 互通），但 `page.goto` 全部 `ERR_ABORTED`（Edge headless=new 的导航问题，Windows 侧 curl.exe 走代理可正常访问游戏 URL）。
+
+**结论**：这批 Cocos 游戏需要**完整 GPU 的 Linux 渲染环境**（5090 NVIDIA 或 Windows 原生有头浏览器）。WSL 本地渲染受限。
+
+### 38.22 QLoRA 全量训练 OOM 修复 + 1-epoch 重启
+
+- 全量训练首启在 GPU3 OOM（batch=2 多图样本超显存），且 monitor 把崩溃误标 COMPLETE（`set -e` + 管道吞错）。
+- 修复：`CUDA_VISIBLE_DEVICES=1`（GPU1 空闲，其余被 renym 的 GR00T 训练和 llama-server 占用）+ `batch-size 1` + `grad-accum 16` + `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`。
+- **HF 下载失败**：新 shell 无 hf-mirror 环境变量 → `[Errno 101] Network is unreachable`。改用**本地缓存路径**加载模型（`/home/tangzh/.cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e8...`，8.8GB 完整）+ `HF_HUB_OFFLINE=1`。
+- **epochs 3→1**（3 epochs × 2658 步 × 48s ≈ 36h → 1 epoch × 886 步 ≈ 11.8h）。训练参数：14,169 训练样本 + 900 验证，LoRA r=16/α=32，lr 2e-4，trainable 3.1M (0.069%)。
+- 当前进度：**40/886 步**（~4.5%），GPU1 19GB / 28-44%，每步 ~48s。
