@@ -2586,3 +2586,18 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **工程结论（落地）**：① 按游戏/阶段自适应启用 VLM（卡住或 probe 信息不足时触发）；② 观察失败快速降级（不阻塞策略）；③ 本地低延迟 VLM（QLoRA 微调后，~100ms 级）替代云端 kimi 可消除延迟惩罚——这正是三层架构 L1 本地化的价值。
 
 **补充**：batch3 新增 2653755ff3a0(6)/f9a4fa1b6227(2)/c47908da8b11(4)/97799fcc5eef(6)，均反映 VLM 对文本驱动游戏的有限增益。
+
+
+### 38.44 VLM 自适应调用策略（L1 智能开关，src/agent/vlm_policy.py）
+
+**动机**：14 游戏 VLM 对照（§38.43）显示 VLM 画面理解收益不均——大幅提升（12ab/8779/94766）与下降（文本驱动游戏）并存。核心矛盾是 kimi-k2.6 的 8-17s 延迟与观察接受率。
+
+**实现**（`src/agent/vlm_policy.py`）：
+- **跳过**：最近 progress_window(6) 步中 ≥ min_progress_steps(3) 步有 gameplay 进展 → 文本 probe 足够，不调 VLM。
+- **触发**：① 连续 stall ≥ 4 步；② probe 信息充分度 < 0.5。
+- **任务选择**：先请求高接受率任务（completion_evidence / failure_observation / phase_observation / temporal_change_observation），持续卡住才升级到 visual_grounding / backend_grounding（低接受率、高信息量）。
+- **成本控制**：max_calls_per_run(6) + cooldown(8 步)。
+
+**测试验证**：进展良好→跳过 ✅；卡住 4 步→触发+高接受任务 ✅；probe 信息不足→触发 ✅；cap/cooldown/escalation ✅。
+
+**意义**：这是三层架构中 L1 层的智能开关——VLM 只在「画面信息能帮助决策」的时刻（卡住/信息不足）被调用，避免文本驱动游戏被 VLM 延迟拖累。配合本地 QLoRA 微调 VLM（低延迟），可实现「卡住时本地 VLM 看画面 → 产出上下文给云端 → 云端更新策略/规则」的完整闭环。
