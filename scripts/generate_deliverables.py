@@ -1378,7 +1378,7 @@ def _add_windows_batch_slide(prs) -> None:
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.55), Inches(12.3), Inches(0.55))
     _set_fill(note, _C_LIGHT)
     _set_text_style(note.text_frame.paragraphs[0],
-        "38 游戏累计 25 个产生真实 gameplay（24 个 Cocos）；最佳 kingshot-830518bfdad4：19 gameplay / 21 actions；成功率 66%。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）。",
+        "50 游戏清单全部跑完（48 run）：30 个有 gameplay（62.5%），平均 8.4gp/13.4a；最佳 kingshot-830518bfdad4：19gp/21a。mimo-v2.5 大策略经 normalizer 通过 harness 严格契约（planner_rejected=0）。",
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 if __name__ == "__main__":
