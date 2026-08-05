@@ -2155,3 +2155,25 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **HF 下载失败**：新 shell 无 hf-mirror 环境变量 → `[Errno 101] Network is unreachable`。改用**本地缓存路径**加载模型（`/home/tangzh/.cache/huggingface/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e8...`，8.8GB 完整）+ `HF_HUB_OFFLINE=1`。
 - **epochs 3→1**（3 epochs × 2658 步 × 48s ≈ 36h → 1 epoch × 886 步 ≈ 11.8h）。训练参数：14,169 训练样本 + 900 验证，LoRA r=16/α=32，lr 2e-4，trainable 3.1M (0.069%)。
 - 当前进度：**40/886 步**（~4.5%），GPU1 19GB / 28-44%，每步 ~48s。
+
+
+### 38.23 策略规范化器：让 mimo-v2.5 的 7-26KB 策略通过 harness 严格契约
+
+**问题**：harness 的 `strategy-contract.mjs` 对 StrategySpec 有严格微契约校验（route_policy 只允许 approach_target 使用、expected_effect 必须在 option 的 observable_effects 白名单内、target_binding 必须匹配 option.requires_target、evidence_refs 必须存在于 brief 等）。mimo-v2.5/deepseek-v4-flash 生成的大策略（7-26KB）虽 JSON 合法，但违反这些规则 → `planner_rejected` → 连续失败升级 RUNTIME_FAULT。
+
+**修复（planner-http-adapter.mjs）**：实现 `normalizeStrategy(parsed, brief)`：
+- 非法 option → 替换为 allowed_options 中的安全 option（优先 observe_settle，否则第一个 target-free option）
+- route_policy: 非 approach_target → "none"；approach_target → direct/geometry_gates
+- target_binding: requires_target → objective（selector 非 none 时），否则 none
+- expected_effect: 过滤为 observable_effects 白名单内（至少保留一个 true）
+- max_local_iterations clamp 1-20、repeat 非法 → once、parameters.target_id = null
+- transitions: next 必须 ∈ states/REPLAN/VERIFY_COMPLETION/STOP
+- evidence_refs: 过滤为仅存在于 brief.evidence[].packet_id 或 brief.memory_refs
+- 同时增强 SYSTEM_PROMPT：注入 9 条契约规则（option 白名单、effects 白名单、route_policy、target_binding 等）
+
+**效果（tiles-survive，mimo-v2.5 via opencodego）**：
+- RUNTIME_FAULT（策略被拒）→ **OPERATOR_INTERRUPTED**（正常终止，planner_budget_exhausted_at_strategy_boundary）
+- plans: 0 → **6**；local_actions: 0 → **13**；state_transitions: 4；**planner_rejected: 0**
+- 剩余 replan 原因为游戏特有：joystick 校准（§38.3 已知）与 option_catalog 拒绝
+
+**渲染限制确认**：kingshot/whiteout（Cocos 3.8.5 WebGL2）在 WSL 全部软渲染失败（Error 16405 "device does not support WebGL2"；swiftshader/D3D12/Vulkan 直通均缺扩展）。Windows Edge headless CDP 可用但 goto ERR_ABORTED。tiles-survive（轻量引擎）渲染正常可实验。Cocos 游戏需 5090（NVIDIA 完整 WebGL2）或 Windows 原生浏览器。
