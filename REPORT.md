@@ -2404,3 +2404,15 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 平均 gameplay ≈ 8.6，平均 actions ≈ 12.3
 - 最佳：kingshot-830518bfdad4（19 gameplay / 21 actions）
 - 失败 13 个：BLOCKED_UNSAFE（首屏保护前缀）为主 + 少量 RUNTIME_FAULT（渲染/早期异常）
+
+
+### 38.35 batch12：累计 42 游戏
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-0c1911759bcb | Cocos | OPERATOR_INTERRUPTED | 16 | **9** | 4 | 14 |
+| kingshot-1b5889c90e2e | Cocos | BUDGET_EXHAUSTED | 240 | 5 | 4 | 7 |
+| whiteout-survival-55820f0547af | Cocos | OPERATOR_INTERRUPTED | 17 | 0 | 5 | 10 |
+| whiteout-survival-1212f3bbb016 | Cocos | RUNTIME_FAULT | 6 | 0 | 0 | 0 |
+
+- **累计 42 游戏：27 个产生真实 gameplay，成功率 64%**。剩余 8 个游戏待测。
