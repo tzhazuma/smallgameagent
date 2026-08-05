@@ -2514,3 +2514,23 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **验证**：audit 出现 accepted（模板前 0/3 accepted，模板后 1+ accepted）。kingshot-94766e5d61dc 此前也因部分观察 accepted 达 19 gameplay。
 
 **结论**：VLM 画面理解的价值取决于观察能否通过 guard——task-specific JSON 模板是提高接受率的关键工程手段。三层架构（L0 规则 / L1 VLM 理解 / L2 云端规划）中 L1 的接入价值得到充分验证。
+
+
+### 38.41 VLM 模板修复后对照汇总（9 游戏）
+
+| 游戏 | 基线 gameplay | VLM gameplay | 变化 |
+|---|---|---|---|
+| whiteout-12ababda99c7 | 10 | **228** | +2180% |
+| whiteout-87790941fd83 | 5 | **18** | +260% |
+| kingshot-94766e5d61dc | 7 | **19** | +171% |
+| kingshot-6dd565baa02d | 8 | **11** | +38% |
+| kingshot-c378f843e877 | 6 | **9** | +50% |
+| whiteout-cc237de42cb3 | 7 | 7 | 持平 |
+| kingshot-0042aa74feb8 | 10 | 5 | -50% |
+| kingshot-33efef78d709 | 14 | 5 | -64% |
+| kingshot-9423402859e9 | 10 | 0 | -100% |
+
+**统计**：5/9 提升（其中 3 个大幅提升 >171%），1 持平，3 下降。
+- 提升的游戏：VLM 观察有效接受（画面理解帮助策略决策）。
+- 下降的游戏（0042aa/33efef/942340）：VLM 观察延迟消耗预算 + 观察质量不足，策略反而被拖累；或游戏画面本身简单无需 VLM。
+- **工程结论**：VLM 层收益不均，需要①按游戏自适应启用 VLM（画面复杂/卡住时触发）；②观察失败快速降级（不阻塞策略）；③本地低延迟 VLM（QLoRA 微调后）替换 kimi（8-17s/次）减少延迟开销。
