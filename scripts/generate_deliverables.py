@@ -553,8 +553,7 @@ def _add_code_file_update_slide(prs) -> None:
     insight = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(5.95), Inches(12.1), Inches(0.55))
     _set_fill(insight, _C_LIGHT)
     _set_text_style(insight.text_frame.paragraphs[0],
-        "意义：云端模型不仅能改内存参数，还能持久化地调整规则引擎的「旋钮」，且 qwen/kimi/xiaomi/opencodego 四家都能正确生成可应用的 JSON patch。",
-        "实测：low_composite / stall_streak 阈值触发 ✅，param 应用 ✅，code_file 未授权进 pending（安全机制）✅",
+        "意义：云端模型不仅能改内存参数，还能持久化调整规则「旋钮」，qwen/kimi/xiaomi/opencodego 四家都能生成可应用 JSON patch。实测：low_composite/stall_streak 阈值触发 ✅，param 应用 ✅，code_file 未授权进 pending（安全机制）✅",
         Pt(12), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 
