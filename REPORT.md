@@ -2534,3 +2534,27 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 提升的游戏：VLM 观察有效接受（画面理解帮助策略决策）。
 - 下降的游戏（0042aa/33efef/942340）：VLM 观察延迟消耗预算 + 观察质量不足，策略反而被拖累；或游戏画面本身简单无需 VLM。
 - **工程结论**：VLM 层收益不均，需要①按游戏自适应启用 VLM（画面复杂/卡住时触发）；②观察失败快速降级（不阻塞策略）；③本地低延迟 VLM（QLoRA 微调后）替换 kimi（8-17s/次）减少延迟开销。
+
+
+### 38.42 规则在线更新机制验证（用户核心诉求之一）
+
+**回答用户问题**：规则更新不是"一次性生成"，`src/agent/rule_update.py` 已实现完整的在线更新机制（与三层架构的 L2 层配套）：
+
+1. **触发（阈值驱动）**：`RuleUpdateTrigger` 支持
+   - `low_composite_avg`：滚动窗口平均 composite < 阈值（默认 0.15）→ 触发
+   - `stall_streak`：卡住 ≥ 阈值（默认 5 步）→ 触发
+   - `conflict_streak`：L0/L2 冲突 ≥ 3 → 触发
+   - `relative_drop`：相对峰值下降 % → 触发
+   - `world_model_stale`：世界模型事件陈旧 → 触发
+   - 保护：cooldown（默认 8 步）、max_updates_per_run（默认 3）
+2. **结构化输出**：L2 输出 `RuleUpdateRequest`（update_type: param/memory_entry/phase_contract/code_file/none + payload + confidence）
+3. **应用**：`RuleUpdateApplier` 应用到内存参数 / StrategyMemory / runtime_rules.json；**code_file 更新被 allowlist + 置信度 0.9 + patch 大小三重限制**，未授权时进 pending 待人工审核
+4. **回滚**：每次应用前快照，watchdog 可回滚
+
+**实测验证**（本轮）：
+- 连续 3 步低 composite → `TRIGGER low_composite_avg_0.110` ✅
+- 卡住 3 步 → `TRIGGER stall_streak_3` ✅
+- `apply(update_type="param", payload={trigger_composite_threshold: 0.12})` → 应用成功（阈值更新）✅
+- code_file 更新无 allowlist → 拒绝并进入 pending（安全机制生效）✅
+
+**与 harness/VLM 的结合点**：当前 harness 批量使用同学的框架（策略循环 + VLM 观察），我们的 rule_update 是独立 agent 的在线规则层。下一步可将 harness 的「VLM 观察发现新机制 / strategy 卡住」事件桥接到 rule_update 触发器，实现「VLM 画面理解 → 规则在线更新 → 云端策略参考新规则」的完整闭环。
