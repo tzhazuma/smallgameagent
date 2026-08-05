@@ -35,8 +35,11 @@ function providerForModel(model) {
     };
   }
   if (m.includes("mimo")) {
-    // Prefer xiaomi (more reliable for mimo-v2.5); fall back to opencodego.
-    if (env("XIAOMI_API_KEY")) {
+    // Route mimo through opencodego by default: xiaomi's direct endpoint
+    // truncates reasoning-heavy responses (finish_reason=abort), while the
+    // opencodego proxy serves mimo-v2.5 reliably. Use xiaomi only when
+    // explicitly requested via XIAOMI_API_KEY + MIMO_ROUTE=xiaomi.
+    if (env("MIMO_ROUTE") === "xiaomi" && env("XIAOMI_API_KEY")) {
       return {
         baseUrl: env("XIAOMI_BASE_URL") || "https://api.xiaomimimo.com/v1",
         apiKey: env("XIAOMI_API_KEY"),
@@ -46,7 +49,7 @@ function providerForModel(model) {
     return {
       baseUrl: env("OPENCODEGO_BASE_URL") || "https://opencode.ai/zen/go/v1",
       apiKey: env("OPENCODEGO_API_KEY"),
-      model,
+      model: m.includes("pro") ? "mimo-v2.5-pro" : "mimo-v2.5",
     };
   }
   if (m.includes("deepseek")) {
@@ -232,7 +235,18 @@ EXAMPLE of a valid StrategySpec structure (use the injected base object above; a
 
 {"schema_version":"agent_harness.strategy_spec.v1","kind":"StrategySpec","base":{"game_id":"USE_INJECTED","run_id":"USE_INJECTED","state_version":1,"scene_epoch":0,"policy_set_id":"USE_INJECTED"},"strategy_id":"discover-example","summary":"Discover game mechanics by probing the control space.","entry_state":"discover","states":[{"state_id":"discover","description":"Probe and observe the scene.","objective":{"selector":"current_guide","sticky":false},"actions":[{"action_id":"a_discover","option":"probe_joystick","target_binding":"none","parameters":{"dx":0.5,"dy":0.5,"duration_ms":150},"route_policy":"none","repeat":"until_transition","max_local_iterations":5,"expected_effect":{"player_position_changes":true}}],"transitions":[{"predicate":"completion_suspected","key":null,"value":null,"next":"VERIFY_COMPLETION"},{"predicate":"failure_active","key":null,"value":null,"next":"STOP"},{"predicate":"no_progress_at_least","key":null,"value":4,"next":"REPLAN"},{"predicate":"always","key":null,"value":null,"next":"discover"}],"recovery":{"no_progress_before_replan":3,"max_action_failures":2,"settle_before_retry":true}}],"global_replan_triggers":["repeated_no_progress","guide_changed_from_entry","completion_suspected","failure_active"],"invariants":[{"predicate":"failure_active","key":null,"value":null,"on_violation":"STOP"}],"evidence_refs":["evidence:smoke:1"],"confidence":0.5}`;
 
-const SYSTEM_PROMPT = `You are a game agent planner. You receive a planning brief and must output ONLY valid JSON matching the provided output schema. Never output markdown fences, explanations, or text outside the JSON object. If you cannot produce a valid plan, output a minimal valid object with a 'fallback' field describing the safe default action.`;
+const SYSTEM_PROMPT = `You are a game agent planner. You receive a planning brief and must output ONLY valid JSON matching the provided output schema. Never output markdown fences, explanations, or text outside the JSON object. If you cannot produce a valid plan, output a minimal valid object with a 'fallback' field describing the safe default action.
+
+CONTRACT RULES YOU MUST RESPECT:
+1. Every action.option must be one of the names listed in the brief's allowed_options. Do not invent options.
+2. expected_effect may set true ONLY effects listed in that option's observable_effects (see allowed_options). At least one true effect is required.
+3. Only option approach_target may set a route_policy (direct or geometry_gates). All other options MUST use route_policy=none.
+4. If the chosen option has requires_target=true, set target_binding=objective and ensure the state objective selector is not none. Otherwise set target_binding=none.
+5. parameters.target_id must always be null.
+6. repeat is either once or until_transition. max_local_iterations is an integer between 1 and 20.
+7. objective.selector is one of current_guide, target_id, target_role, none. sticky is a boolean.
+8. Transitions: predicate always / completion_suspected / failure_active / no_progress_at_least / guide_changed_from_entry use key=null, value=null (except no_progress_at_least uses an integer value). next is a state_id, REPLAN, VERIFY_COMPLETION, or STOP.
+9. Keep the strategy compact: prefer a few states with until_transition loops over many micro-states.`;
 
 // ---------------------------------------------------------------------------
 // Fallback strategy / intent construction — used when the model output does
@@ -464,6 +478,133 @@ function buildFallbackIntent(brief) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Strategy normalizer — rewrites a model-produced StrategySpec into a form the
+// harness's strict planner contract accepts. The harness rejects strategies
+// whose actions misuse route_policy, bind targets wrongly, or predict effects
+// outside the option's observable_effects allow-list (see
+// src/planning/strategy-contract.mjs). Reasoning models (mimo-v2.5,
+// deepseek-v4-flash) frequently produce large valid-JSON strategies that
+// violate those micro-contract rules, so we patch them here instead of
+// discarding the whole plan.
+// ---------------------------------------------------------------------------
+function normalizeStrategy(parsed, brief) {
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.states) || parsed.states.length === 0) {
+    return buildFallbackStrategy(brief || {});
+  }
+  const options = new Map((brief?.allowed_options || []).map((o) => [o.name, o]));
+  const stateIds = new Set(parsed.states.map((s) => s.state_id));
+  // Fallback option must be one the harness actually allow-listed in this
+  // context. Prefer observe_settle, then any target-free option.
+  const safeOption = () => {
+    const names = [...options.keys()];
+    if (names.includes("observe_settle")) return "observe_settle";
+    const free = names.find((n) => options.get(n).requires_target !== true);
+    return free || names[0] || "observe_settle";
+  };
+  const safeEffect = (optionName, fallback) => {
+    const desc = options.get(optionName);
+    const observable = desc?.observable_effects || [];
+    if (observable.includes(fallback)) return { [fallback]: true };
+    if (observable.length > 0) return { [observable[0]]: true };
+    return { any_relevant_progress: true };
+  };
+  const states = parsed.states.map((state) => {
+    const st = { ...state };
+    st.objective = (() => {
+      const obj = st.objective && typeof st.objective === "object" ? { ...st.objective } : { selector: "current_guide", sticky: false };
+      if (!["current_guide", "target_id", "target_role", "none"].includes(obj.selector)) obj.selector = "current_guide";
+      obj.sticky = obj.sticky !== false;
+      return obj;
+    })();
+    const objSelector = st.objective.selector;
+    const fbOption = safeOption();
+    st.actions = Array.isArray(st.actions) && st.actions.length > 0 ? st.actions : [{
+      action_id: "a_default", option: fbOption, target_binding: "none",
+      parameters: {}, route_policy: "none", repeat: "once", max_local_iterations: 3,
+      expected_effect: safeEffect(fbOption, "state_settles"),
+    }];
+    st.actions = st.actions.map((action) => {
+      const a = { ...action, parameters: { ...(action.parameters || {}) } };
+      const desc = options.get(a.option);
+      if (!desc) {
+        // Non-allow-listed option: replace with a safe allow-listed action.
+        a.option = fbOption;
+        a.parameters = {};
+        a.target_binding = "none";
+        a.route_policy = "none";
+        a.repeat = "once";
+        a.max_local_iterations = 3;
+        a.expected_effect = safeEffect(fbOption, "state_settles");
+        return a;
+      }
+      if (desc.requires_target === true) {
+        a.target_binding = objSelector === "none" ? "none" : "objective";
+      } else {
+        a.target_binding = "none";
+      }
+      a.route_policy = a.option === "approach_target" ? (["direct", "geometry_gates"].includes(a.route_policy) ? a.route_policy : "direct") : "none";
+      a.repeat = ["once", "until_transition"].includes(a.repeat) ? a.repeat : "once";
+      const it = Number(a.max_local_iterations);
+      a.max_local_iterations = Number.isInteger(it) && it >= 1 && it <= 20 ? it : 5;
+      a.parameters.target_id = null;
+      // Keep only true effects inside the option's observable allow-list.
+      if (a.expected_effect && typeof a.expected_effect === "object") {
+        const cleaned = {};
+        for (const [k, v] of Object.entries(a.expected_effect)) {
+          if (v === true && (desc.observable_effects || []).includes(k)) cleaned[k] = true;
+        }
+        if (Object.keys(cleaned).length === 0) {
+          a.expected_effect = safeEffect(a.option, "any_relevant_progress");
+        } else {
+          a.expected_effect = cleaned;
+        }
+      } else {
+        a.expected_effect = safeEffect(a.option, "any_relevant_progress");
+      }
+      return a;
+    });
+    st.transitions = Array.isArray(st.transitions) && st.transitions.length > 0 ? st.transitions.map((t) => {
+      const next = ["REPLAN", "VERIFY_COMPLETION", "STOP"].includes(t?.next) || stateIds.has(t?.next) ? t.next : "REPLAN";
+      return {
+        predicate: typeof t?.predicate === "string" ? t.predicate : "always",
+        key: t?.key ?? null, value: t?.value ?? null, next,
+      };
+    }) : [{ predicate: "always", key: null, value: null, next: "REPLAN" }];
+    st.recovery = st.recovery && typeof st.recovery === "object" ? {
+      no_progress_before_replan: Number.isInteger(st.recovery.no_progress_before_replan) ? st.recovery.no_progress_before_replan : 3,
+      max_action_failures: Number.isInteger(st.recovery.max_action_failures) ? st.recovery.max_action_failures : 2,
+      settle_before_retry: st.recovery.settle_before_retry !== false,
+    } : { no_progress_before_replan: 3, max_action_failures: 2, settle_before_retry: true };
+    return st;
+  });
+  const entryState = typeof parsed.entry_state === "string" && states.some((s) => s.state_id === parsed.entry_state)
+    ? parsed.entry_state : states[0].state_id;
+  return {
+    schema_version: "agent_harness.strategy_spec.v1",
+    kind: "StrategySpec",
+    base: {
+      game_id: parsed.base?.game_id || brief?.base?.game_id || "UNKNOWN",
+      run_id: parsed.base?.run_id || brief?.base?.run_id || "run",
+      state_version: parsed.base?.state_version ?? brief?.base?.state_version ?? 1,
+      scene_epoch: parsed.base?.scene_epoch ?? brief?.base?.scene_epoch ?? 0,
+      policy_set_id: parsed.base?.policy_set_id || brief?.base?.policy_set_id || "candidate:default",
+    },
+    strategy_id: typeof parsed.strategy_id === "string" ? parsed.strategy_id.slice(0, 64) : "normalized-strategy",
+    summary: typeof parsed.summary === "string" ? parsed.summary : "Normalized model strategy.",
+    entry_state: entryState,
+    states,
+    global_replan_triggers: Array.isArray(parsed.global_replan_triggers) ? parsed.global_replan_triggers.slice(0, 12) : ["repeated_no_progress", "completion_suspected", "failure_active"],
+    invariants: Array.isArray(parsed.invariants) ? parsed.invariants : [{ predicate: "failure_active", key: null, value: null, on_violation: "STOP" }],
+    // The harness rejects references that are absent from the brief's
+    // evidence packet ids or memory_refs — filter to the known set.
+    evidence_refs: Array.isArray(parsed.evidence_refs)
+      ? parsed.evidence_refs.filter((ref) => (brief?.evidence || []).some((e) => e.packet_id === ref) || (brief?.memory_refs || []).includes(ref)).slice(0, 8)
+      : [],
+    confidence: typeof parsed.confidence === "number" ? Math.min(Math.max(parsed.confidence, 0), 1) : 0.5,
+  };
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -501,7 +642,7 @@ const server = createServer(async (req, res) => {
     if (!fallbackFirst) {
       const messages = buildMessages(request);
       const t0 = Date.now();
-      text = await callChatCompletions(provider, messages, 2048, request.output_schema);
+      text = await callChatCompletions(provider, messages, Number(process.env.PLANNER_MAX_TOKENS || 8192), request.output_schema);
       latencyMs = Date.now() - t0;
     }
     console.log(`[planner-http-adapter] ${request.model} ${request.output_schema?.title || "?"} ${latencyMs}ms raw_len=${text.length} fallback_first=${fallbackFirst}`);
@@ -527,7 +668,7 @@ const server = createServer(async (req, res) => {
         && parsed.schema_version === "agent_harness.strategy_spec.v1"
         && typeof parsed.strategy_id === "string"
         && Array.isArray(parsed.states) && parsed.states.length > 0;
-      result[field] = looksValid ? parsed : buildFallbackStrategy(request.brief || {});
+      result[field] = looksValid ? normalizeStrategy(parsed, request.brief || {}) : buildFallbackStrategy(request.brief || {});
     } else {
       const looksValid = parsed && typeof parsed === "object"
         && parsed.schema_version === "agent_harness.intent.v1"
