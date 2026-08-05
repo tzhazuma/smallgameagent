@@ -1344,10 +1344,10 @@ def _add_vlm_layer_slide(prs) -> None:
     ], _C_ACCENT)
 
     _card(slide, 6.95, 1.45, 6.0, 2.3, "VLM 参与前后对比", [
-        "9 游戏对照：5 提升 / 1 持平 / 3 下降",
+        "14 游戏对照：5 提升 / 2 持平 / 6 下降",
         "大幅提升：12ab 10→228、8779 5→18、94766 7→19（+171%+）",
-        "关键：task-specific JSON 模板提高 guard 接受率 → VLM 上下文进入策略",
-        "下一步：按游戏自适应启用 VLM + 观察失败快速降级",
+        "规律：画面信息关键的策略大幅提升；文本驱动游戏 VLM 延迟拖累",
+        "落地：按游戏自适应启用 VLM + 观察失败快速降级 + 本地低延迟 VLM",
     ], _C_SUCCESS)
 
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(3.95), Inches(12.3), Inches(0.6))
