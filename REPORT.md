@@ -2312,3 +2312,19 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 |---|---|---|---|---|
 | mimo-v2.5 (opencodego) | 20-50s | 7-26KB ✅ | OPERATOR_INTERRUPTED | 6 |
 | deepseek-v4-flash (opencodego) | 85-90s | 空 ❌ | BLOCKED_UNSAFE | 0 |
+
+
+### 38.30 deepseek-v4-flash 深度诊断 + adapter json_schema 修复
+
+**根因定位**：opencodego 的 deepseek-v4-flash **拒绝 `response_format: json_schema`（strict）→ HTTP 400**；改用 json_object 直连正常（content 有值）。但**真实 harness 负载（30KB+ brief + 8192 max_tokens）下 80-90s 后 content 仍为空**（上游 abort/超时），无法产出策略。
+
+**修复**：adapter 的 response_format 选择改为——仅 qwen 用 json_schema strict，其余非 kimi 模型（mimo/deepseek）用 `json_object`（`PLANNER_ADAPTER_TIMEOUT_MS` 仍 300s）。
+
+**重测结果（kingshot-c378f843e877，json_object 修复后）**：仍 BLOCKED_UNSAFE | 10 步 | 0 gameplay（deepseek 输出空 → fallback 策略，且页面渲染状态异常）。
+
+**结论**：
+- **mimo-v2.5（opencodego）是 harness 策略生成的唯一可靠主力**：20-50s 响应、7-26KB 策略、normalizer 校验通过。
+- deepseek-v4-flash 适合轻量调用（短 prompt），不适用于 30KB+ 的 harness 规划负载。
+- kimi-k2.7-code 之前验证可产出合规 StrategySpec（§38.7），可用于少样本对照。
+
+**更新批量主力配置**：`run_batch.bat` 默认 `PLAYABLE_PLANNER_MODEL=mimo-v2.5`（已如此）。

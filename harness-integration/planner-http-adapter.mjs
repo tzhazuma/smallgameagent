@@ -86,9 +86,12 @@ async function callChatCompletions(provider, messages, maxTokens = 2048, outputS
   if (provider.model.toLowerCase().includes("kimi")) {
     delete body.temperature;
   }
-  // Prefer json_schema response_format when a schema is provided (qwen/xiaomi
-  // support it). Fall back to json_object, then no response_format.
-  if (outputSchema && !provider.model.toLowerCase().includes("kimi")) {
+  // Prefer json_schema response_format when a schema is provided, but only for
+  // models known to support it (qwen). opencodego's deepseek-v4-flash rejects
+  // json_schema strict with a 400 and then returns empty content on the retry;
+  // xiaomi's mimo truncates; so use json_object for everything else.
+  const modelName = String(provider.model || "").toLowerCase();
+  if (outputSchema && modelName.includes("qwen")) {
     body.response_format = {
       type: "json_schema",
       json_schema: {
@@ -97,7 +100,7 @@ async function callChatCompletions(provider, messages, maxTokens = 2048, outputS
         schema: outputSchema,
       },
     };
-  } else if (!provider.model.toLowerCase().includes("kimi")) {
+  } else if (!modelName.includes("kimi")) {
     body.response_format = { type: "json_object" };
   }
   const controller = new AbortController();
