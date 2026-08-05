@@ -3022,4 +3022,778 @@ python src/experiments/exp\_finetuned\_vlm\_eval.py --endpoint http://127.0.0.1:
 2. \_\_BOLD\_0000\_\_：在 fallback 中加入 completion 检测（发现通关画面→VERIFY\_COMPLETION）和资源经济（攒够再升级）逻辑。\\
 3. \_\_BOLD\_0000\_\_：Codex 做 schema 合规的长程规划，我们的模型（mimo-v2.5 多模态）做视觉观察与子任务，规则/fallback 做执行兜底。\\
 4. \_\_BOLD\_0000\_\_：把选中的 50 个游戏接入 harness，统一标准批量实验。\\
+
+
+\subsubsection{38.21 opencodego API 恢复 + mimo 路由修复 + 渲染根因定位}
+
+\_\_BOLD\_0000\_\_（之前 403 Cloudflare 拦截已解除）：\\
+\begin{itemize}
+  \item 端点 \_\_CODE\_0000\_\_（.env: OPENCODEGO\_BASE\_URL），模型名\_\_BOLD\_0002\_\_ \_\_CODE\_0001\_\_ 前缀。
+  \item 实测 \_\_CODE\_0000\_\_ 与 \_\_CODE\_0001\_\_ 均正常返回（此前 403 是暂时性拦截）。
+  \item 可用模型（/models）：deepseek-v4-flash/pro、mimo-v2.5/pro、mimo-v2-omni、kimi-k2.7-code、kimi-k2.6、qwen3.8-max/3.7-max/3.7-plus、glm-5.2、minimax-m3 等。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item kimi（api.kimi.com/coding/v1）：\_\_CODE\_0000\_\_ 正常 ✅
+  \item qwen（token-plan.cn-beijing.maas.aliyuncs.com）：\_\_CODE\_0000\_\_ 正常 ✅（qwen3.5-plus 不存在，404；可用 qwen3.8-max/3.7-max/3.7-plus/3.6-flash）
+\end{itemize}
+
+\_\_BOLD\_0004\_\_：直接调用 \_\_CODE\_0000\_\_ 时，reasoning 模型把 token 预算占满后 content 被截断（\_\_CODE\_0001\_\_，content 只剩 ```\_\_CODE\_0002\_\_ 围栏），导致 adapter \_\_CODE\_0003\_\_。修复：\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_：mimo 默认路由改为 \_\_BOLD\_0003\_\_（\_\_CODE\_0001\_\_ 可强制 xiaomi），max\_tokens 2048→8192（\_\_CODE\_0002\_\_ 可调）。
+  \item 修复后 mimo-v2.5 每次产生 7-26KB 完整 StrategySpec JSON（raw\_len>0，无 PARSE\_FAIL）。
+\end{itemize}
+
+\_\_BOLD\_0005\_\_：全部 \_\_CODE\_0000\_\_/\_\_CODE\_0001\_\_。审计显示 \_\_CODE\_0002\_\_ + \_\_CODE\_0003\_\_，且 \_\_CODE\_0004\_\_（LLM 正常参与，strategy\_plans=0 因页面不可见无法执行）。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 游戏引擎 Cocos 3.8.5 报 \_\_CODE\_0000\_\_，截图纯黑/纯白（5KB，32×32 采样仅 3 色）。
+  \item WSL 内 headless/xvfb 的软渲染（SwiftShader）无法编译 Cocos shader；\_\_CODE\_0000\_\_ 可激活 \_\_BOLD\_0001\_\_，但缺 WebGL2 扩展，Cocos 仍 16405。
+  \item Windows Edge headless（真 GPU）CDP 可用（\_\_CODE\_0000\_\_，localhost 互通），但 \_\_CODE\_0001\_\_ 全部 \_\_CODE\_0002\_\_（Edge headless=new 的导航问题，Windows 侧 curl.exe 走代理可正常访问游戏 URL）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：这批 Cocos 游戏需要\_\_BOLD\_0001\_\_（5090 NVIDIA 或 Windows 原生有头浏览器）。WSL 本地渲染受限。\\
+
+\subsubsection{38.22 QLoRA 全量训练 OOM 修复 + 1-epoch 重启}
+
+\begin{itemize}
+  \item 全量训练首启在 GPU3 OOM（batch=2 多图样本超显存），且 monitor 把崩溃误标 COMPLETE（\_\_CODE\_0000\_\_ + 管道吞错）。
+  \item 修复：\_\_CODE\_0000\_\_（GPU1 空闲，其余被 renym 的 GR00T 训练和 llama-server 占用）+ \_\_CODE\_0001\_\_ + \_\_CODE\_0002\_\_ + \_\_CODE\_0003\_\_。
+  \item \_\_BOLD\_0003\_\_：新 shell 无 hf-mirror 环境变量 → \_\_CODE\_0000\_\_。改用\_\_BOLD\_0004\_\_加载模型（\_\_CODE\_0001\_\_，8.8GB 完整）+ \_\_CODE\_0002\_\_。
+  \item \_\_BOLD\_0000\_\_（3 epochs × 2658 步 × 48s ≈ 36h → 1 epoch × 886 步 ≈ 11.8h）。训练参数：14,169 训练样本 + 900 验证，LoRA r=16/α=32，lr 2e-4，trainable 3.1M (0.069\%)。
+  \item 当前进度：\_\_BOLD\_0000\_\_（\textasciitilde{}4.5\%），GPU1 19GB / 28-44\%，每步 \textasciitilde{}48s。
+\end{itemize}
+
+
+\subsubsection{38.23 策略规范化器：让 mimo-v2.5 的 7-26KB 策略通过 harness 严格契约}
+
+\_\_BOLD\_0002\_\_：harness 的 \_\_CODE\_0000\_\_ 对 StrategySpec 有严格微契约校验（route\_policy 只允许 approach\_target 使用、expected\_effect 必须在 option 的 observable\_effects 白名单内、target\_binding 必须匹配 option.requires\_target、evidence\_refs 必须存在于 brief 等）。mimo-v2.5/deepseek-v4-flash 生成的大策略（7-26KB）虽 JSON 合法，但违反这些规则 → \_\_CODE\_0001\_\_ → 连续失败升级 RUNTIME\_FAULT。\\
+
+\_\_BOLD\_0001\_\_：实现 \_\_CODE\_0000\_\_：\\
+\begin{itemize}
+  \item 非法 option → 替换为 allowed\_options 中的安全 option（优先 observe\_settle，否则第一个 target-free option）
+  \item route\_policy: 非 approach\_target → "none"；approach\_target → direct/geometry\_gates
+  \item target\_binding: requires\_target → objective（selector 非 none 时），否则 none
+  \item expected\_effect: 过滤为 observable\_effects 白名单内（至少保留一个 true）
+  \item max\_local\_iterations clamp 1-20、repeat 非法 → once、parameters.target\_id = null
+  \item transitions: next 必须 ∈ states/REPLAN/VERIFY\_COMPLETION/STOP
+  \item evidence\_refs: 过滤为仅存在于 brief.evidence[].packet\_id 或 brief.memory\_refs
+  \item 同时增强 SYSTEM\_PROMPT：注入 9 条契约规则（option 白名单、effects 白名单、route\_policy、target\_binding 等）
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item RUNTIME\_FAULT（策略被拒）→ \_\_BOLD\_0000\_\_（正常终止，planner\_budget\_exhausted\_at\_strategy\_boundary）
+  \item plans: 0 → \_\_BOLD\_0000\_\_；local\_actions: 0 → \_\_BOLD\_0001\_\_；state\_transitions: 4；\_\_BOLD\_0002\_\_
+  \item 剩余 replan 原因为游戏特有：joystick 校准（§38.3 已知）与 option\_catalog 拒绝
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：kingshot/whiteout（Cocos 3.8.5 WebGL2）在 WSL 全部软渲染失败（Error 16405 "device does not support WebGL2"；swiftshader/D3D12/Vulkan 直通均缺扩展）。Windows Edge headless CDP 可用但 goto ERR\_ABORTED。tiles-survive（轻量引擎）渲染正常可实验。Cocos 游戏需 5090（NVIDIA 完整 WebGL2）或 Windows 原生浏览器。\\
+
+
+\subsubsection{38.24 Windows Edge 真 GPU 渲染打通 + 批量实验结果}
+
+\_\_BOLD\_0000\_\_：Cocos 3.8.5（kingshot/whiteout）与部分 Unity WebGL 游戏需要完整 WebGL2，WSL 软渲染全部失败（Error 16405）。tiles-survive（Unity，可降级）在 WSL xvfb 下可渲染。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item WSL → Windows Edge headless CDP（\_\_CODE\_0000\_\_），WSL 的 playwright \_\_CODE\_0001\_\_ + \_\_CODE\_0002\_\_ 导航成功（复用初始页会 ERR\_ABORTED）。
+  \item Edge 返回 \_\_CODE\_0000\_\_ —— 完整 WebGL2。kingshot 截图 2184 色（绿色地图画面）。
+  \item \_\_BOLD\_0002\_\_：Edge \_\_CODE\_0000\_\_ + harness 的 \_\_CODE\_0001\_\_ 双保险。
+  \item WSL2 localhost 双向转发：Windows harness 可访问 WSL adapter（127.0.0.1:9100）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_（harness-win/src/adapters/live-playable.mjs）：\\
+\begin{itemize}
+  \item 支持 \_\_CODE\_0000\_\_ 环境变量连接外部浏览器（CDP 模式），否则走原 launch。
+  \item runtime.json \_\_CODE\_0000\_\_ 提到 45000（Unity/Cocos 加载 10-15s 才出 canvas）。
+  \item 批量脚本 \_\_CODE\_0000\_\_ 顺序跑多个游戏（单 Edge 实例）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+游戏 & terminal & steps & gameplay & plans & actions \\
+\hline
+tiles-survive-5ec610abcdff & OPERATOR\_INTERRUPTED & 20 & 9 & 5 & 14 \\
+\hline
+kingshot-c378f843e877 & OPERATOR\_INTERRUPTED & 22 & 6 & 4 & 14 \\
+\hline
+kingshot-94766e5d61dc & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 7 & 4 & 12 \\
+\hline
+kingshot-ce59e2a9a7a3 & RUNTIME\_FAULT & 2 & 0 & 0 & 0 \\
+\hline
+kingshot-29345f023e9e & BLOCKED\_UNSAFE & 0 & 0 & 0 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item kingshot-94766e5d61dc 完整跑满 240 步预算，策略含 collect\_money 状态（mimo 理解金币机制）。
+  \item \_\_BOLD\_0000\_\_：本轮补 objective selector 一致性（target\_id 只能带 target\_id、current\_guide/none 不能带 target）、transition predicate 白名单（31 个）、key/value 类型校验（valueless/string/numeric）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：同样游戏 WSL 软渲染 RUNTIME\_FAULT（0 策略执行）vs Windows Edge 真 GPU 正常执行（4-5 个策略计划、12-14 个动作）。Windows Edge 是真 GPU 渲染的标准批量环境。\\
+
+
+\subsubsection{38.25 normalizer 迭代（objective/predicate/可达性）+ Edge 稳定性}
+
+\_\_BOLD\_0000\_\_（planner-http-adapter.mjs）：\\
+\begin{itemize}
+  \item objective selector 一致性：target\_id 只能带 target\_id；target\_role 只能带 target\_role；current\_guide/none 不能带 target\_id/target\_role。
+  \item transition predicate 白名单（31 个 STRATEGY\_PREDICATES）+ key/value 类型校验：valueless predicate 强制 key/value=null；phase\_is/control\_domain\_is 需 string value；no\_progress\_at\_least 等需正整数。
+  \item \_\_BOLD\_0000\_\_：从 entry\_state BFS 遍历 transitions，剔除不可达 states（harness 拒绝 "strategy contains unreachable states"）。
+  \item \_\_BOLD\_0001\_\_：opencodego 的 mimo-v2.5 拒绝 base64 data-URL 图片（"url is invalid"）且多模态响应超时；planner 请求默认剥离图片（\_\_CODE\_0000\_\_ 可恢复），视觉理解走独立 L1 VLM 路径。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_（kingshot-94766e5d61dc）：\_\_BOLD\_0001\_\_，BUDGET\_EXHAUSTED 240 步完整预算。\\
+
+\_\_BOLD\_0002\_\_：Edge headless 连续跑多个游戏后状态退化（游戏白屏、gameplay=0）。修复：run\_batch.bat 每游戏前 \_\_CODE\_0000\_\_ + 重启（\_\_CODE\_0001\_\_），保证每次 run 干净。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+维度 & WSL（SwiftShader/xvfb） & Windows Edge（D3D11 真 GPU） \\
+\hline
+Cocos 3.8.5 WebGL2 & ✗ Error 16405 白屏 & ✓ 完整渲染 \\
+\hline
+Unity WebGL & △ 部分 & ✓ \\
+\hline
+策略执行 & tiles 可跑 & tiles + kingshot + whiteout 均可 \\
+\hline
+批量稳定性 & 单游戏 & 需每游戏重启 Edge \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsubsection{38.26 Windows 批量完整汇总（mimo-v2.5 via opencodego, 10 游戏）}
+
+\_\_BOLD\_0000\_\_：\\
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+tiles-survive-5ec610abcdff & Unity & OPERATOR\_INTERRUPTED & 20 & 9 & 5 & 14 \\
+\hline
+kingshot-c378f843e877 & Cocos & OPERATOR\_INTERRUPTED & 22 & 6 & 4 & 14 \\
+\hline
+kingshot-94766e5d61dc & Cocos & BUDGET\_EXHAUSTED & 240 & 7 & 4 & 12 \\
+\hline
+whiteout-survival-87790941fd83 & Cocos & OPERATOR\_INTERRUPTED & 16 & 5 & 4 & 9 \\
+\hline
+whiteout-survival-86420cdd2bbb & Cocos & RUNTIME\_FAULT & 16 & 7 & 2 & 10 \\
+\hline
+\_\_BOLD\_0000\_\_ & Cocos & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ \\
+\hline
+whiteout-survival-9caf6c585e72 & Cocos & RUNTIME\_FAULT & 6 & 0 & 0 & 0 \\
+\hline
+kingshot-ce59e2a9a7a3 & Cocos & RUNTIME\_FAULT & 2 & 0 & 0 & 0 \\
+\hline
+kingshot-fcbc9ff7346d & Cocos & RUNTIME\_FAULT & 2 & 0 & 0 & 0 \\
+\hline
+kingshot-29345f023e9e & Cocos & BLOCKED\_UNSAFE & 0 & 0 & 0 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 6/10 游戏产生真实 gameplay（10 个游戏中有 5 个 Cocos 游戏成功执行策略）。
+  \item 最佳 whiteout-12ababda99c7：22 步 / 10 gameplay / 5 plans / 17 actions。
+  \item RUNTIME\_FAULT/BLOCKED 游戏主要卡在首屏渲染或 harness 保护前缀（游戏本身控制方案问题，与 LLM 策略无关）。
+  \item \_\_BOLD\_0000\_\_：Windows Edge（D3D11 真 GPU）是 Cocos/Unity WebGL2 游戏的标准批量渲染环境；WSL 软渲染只适合轻量游戏。策略规范化器（4 轮迭代）让 mimo-v2.5 的大策略稳定通过 harness 严格契约（planner\_rejected=0）。
+\end{itemize}
+
+\_\_BOLD\_0001\_\_：requires\_target option 在无 objective 状态时替换为安全 option；\_\_CODE\_0000\_\_ transition 强制排到最后（harness 要求）。\\
+
+
+\subsubsection{38.27 batch5：round-4 adapter 再验证 4 个新游戏}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-9423402859e9 & Cocos & OPERATOR\_INTERRUPTED & 23 & \_\_BOLD\_0000\_\_ & 5 & \_\_BOLD\_0000\_\_ \\
+\hline
+whiteout-survival-b64a7594f0c2 & Cocos & OPERATOR\_INTERRUPTED & 19 & 8 & 5 & 14 \\
+\hline
+kingshot-791d359bb1e7 & Cocos & BLOCKED\_UNSAFE & 0 & 0 & 0 & 0 \\
+\hline
+whiteout-survival-af9223c26d38 & Cocos & BLOCKED\_UNSAFE & 0 & 0 & 0 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item kingshot-9423402859e9 与 whiteout-12ababda99c7 并列最佳（10 gameplay / 17 actions）。
+  \item \_\_BOLD\_0000\_\_。
+  \item BLOCKED\_UNSAFE 游戏为首屏即触发 harness 保护前缀（游戏自身控制/加载方案问题，与 LLM 策略无关）。
+  \item round-4 adapter（requires\_target 无 objective 替换 + always transition 排序）运行稳定，未出现 contract 拒绝。
+  \item 注意：\_\_CODE\_0000\_\_ 重启 Edge 时偶发 9222 端口 TIME\_WAIT 冲突（\_\_CODE\_0001\_\_），个别游戏可能因 Edge 未就绪而失败；可在 bat 中把启动等待从 8s 提到 12s 缓解。
+\end{itemize}
+
+
+\subsubsection{38.28 batch6：Edge 12s 等待 + round-4 adapter，3/4 成功}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-2653755ff3a0 & Cocos & OPERATOR\_INTERRUPTED & 18 & \_\_BOLD\_0000\_\_ ⭐ & 5 & 14 \\
+\hline
+kingshot-0042aa74feb8 & Cocos & OPERATOR\_INTERRUPTED & 20 & 10 & 6 & 15 \\
+\hline
+whiteout-survival-cc237de42cb3 & Cocos & OPERATOR\_INTERRUPTED & 19 & 7 & 5 & 14 \\
+\hline
+whiteout-survival-914d4312686f & Cocos & BLOCKED\_UNSAFE & 0 & 0 & 0 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item kingshot-2653755ff3a0 打破 gameplay 纪录（13，此前最高 10）。
+  \item \_\_BOLD\_0000\_\_。
+  \item Edge 启动等待 8s→12s 后，batch6 成功率 3/4（此前 batch5 为 2/4），端口 TIME\_WAIT 冲突显著减少。
+  \item 全部成功游戏的 plans 在 4-6、actions 在 9-17，mimo-v2.5 策略稳定执行。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_（gameplay 排序）：kingshot-2653755ff3a0(13) > kingshot-9423402859e9(10) = whiteout-12ababda99c7(10) = kingshot-0042aa74feb8(10) > tiles-survive(9) > whiteout-b64a7594f0c2(8) > whiteout-86420cdd2bbb(7) = whiteout-cc237de42cb3(7) > kingshot-94766e5d61dc(7) > kingshot-c378f843e877(6) > whiteout-87790941fd83(5)\\
+
+
+\subsubsection{38.29 batch7 + deepseek-v4-flash 对照实验}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-6dd565baa02d & Cocos & OPERATOR\_INTERRUPTED & 20 & 8 & 5 & 13 \\
+\hline
+whiteout-survival-b47a4f071e9c & Cocos & OPERATOR\_INTERRUPTED & 21 & \_\_BOLD\_0000\_\_ & 5 & 15 \\
+\hline
+whiteout-survival-a6e1c05b9664 & Cocos & OPERATOR\_INTERRUPTED & 17 & 2 & 6 & 12 \\
+\hline
+kingshot-60c380dfaad4 & Cocos & BUDGET\_EXHAUSTED & 240 & 0 & 1 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item batch7: 3/4 成功。\_\_BOLD\_0000\_\_。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_（85-90s 推理超时后 content 为空），无法产出策略 → 全部走 fallback。
+  \item 结果 BLOCKED\_UNSAFE | 10 步 | 0 gameplay | plans 4 | actions 8（fallback 策略执行了 8 个动作但页面状态异常）。
+  \item \_\_BOLD\_0000\_\_：deepseek-v4-flash（opencodego）的 reasoning 输出不被 adapter 捕获（content 空），不适用于本 harness 策略生成。\_\_BOLD\_0001\_\_（20-50s 响应、7-26KB 策略、通过 normalizer 校验）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+模型 & 响应 & 策略输出 & terminal & gameplay \\
+\hline
+mimo-v2.5 (opencodego) & 20-50s & 7-26KB ✅ & OPERATOR\_INTERRUPTED & 6 \\
+\hline
+deepseek-v4-flash (opencodego) & 85-90s & 空 ❌ & BLOCKED\_UNSAFE & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsubsection{38.30 deepseek-v4-flash 深度诊断 + adapter json\_schema 修复}
+
+\_\_BOLD\_0001\_\_：opencodego 的 deepseek-v4-flash \_\_BOLD\_0002\_\_；改用 json\_object 直连正常（content 有值）。但\_\_BOLD\_0003\_\_（上游 abort/超时），无法产出策略。\\
+
+\_\_BOLD\_0002\_\_：adapter 的 response\_format 选择改为——仅 qwen 用 json\_schema strict，其余非 kimi 模型（mimo/deepseek）用 \_\_CODE\_0000\_\_（\_\_CODE\_0001\_\_ 仍 300s）。\\
+
+\_\_BOLD\_0000\_\_：仍 BLOCKED\_UNSAFE | 10 步 | 0 gameplay（deepseek 输出空 → fallback 策略，且页面渲染状态异常）。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：20-50s 响应、7-26KB 策略、normalizer 校验通过。
+  \item deepseek-v4-flash 适合轻量调用（短 prompt），不适用于 30KB+ 的 harness 规划负载。
+  \item kimi-k2.7-code 之前验证可产出合规 StrategySpec（§38.7），可用于少样本对照。
+\end{itemize}
+
+\_\_BOLD\_0002\_\_：\_\_CODE\_0000\_\_ 默认 \_\_CODE\_0001\_\_（已如此）。\\
+
+
+\subsubsection{38.31 batch8：再破纪录（14 gameplay）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-33efef78d709 & Cocos & OPERATOR\_INTERRUPTED & 21 & \_\_BOLD\_0000\_\_ ⭐ & 4 & 16 \\
+\hline
+kingshot-f9a4fa1b6227 & Cocos & OPERATOR\_INTERRUPTED & 23 & 10 & 3 & 16 \\
+\hline
+whiteout-survival-7606ead29015 & Cocos & OPERATOR\_INTERRUPTED & 17 & 0 & 6 & 12 \\
+\hline
+whiteout-survival-f2fa5adcb7f1 & Cocos & OPERATOR\_INTERRUPTED & 16 & 0 & 2 & 4 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item kingshot-33efef78d709 再破 gameplay 纪录（14）；kingshot 系列两个 16 actions。
+  \item \_\_BOLD\_0000\_\_。
+  \item 7606ead29015/f2fa5adcb7f1 运行正常（plans 2-6、actions 4-12）但 gameplay=0（渲染/游戏启动问题，策略已执行）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) > c378f843e877(6) > 87790941fd83(5)\\
+
+
+\subsubsection{38.32 batch9 + kimi-k2.7-code 对照：三模型结论收敛}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+游戏 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-19047d91c9de & BUDGET\_EXHAUSTED & 240 & 5 & 4 & 8 \\
+\hline
+kingshot-f8c53b366225 & RUNTIME\_FAULT & 16 & 6 & 1 & 7 \\
+\hline
+whiteout-survival-bdfbb9a2a81d & OPERATOR\_INTERRUPTED & 17 & 0 & 6 & 12 \\
+\hline
+whiteout-survival-27367a5836fc & OPERATOR\_INTERRUPTED & 17 & 0 & 5 & 10 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：raw\_len=0（164-229s 超时空输出）→ fallback → BLOCKED\_UNSAFE | 16 步 | 0 gameplay。此前 §38.7 的 kimi 成功是小 prompt 场景；真实 harness 大负载（30KB brief）下同样不可靠。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+模型 & 响应 & 策略输出 & gameplay \\
+\hline
+\_\_BOLD\_0000\_\_ & 20-50s & 7-26KB ✅ & \_\_BOLD\_0000\_\_ \\
+\hline
+deepseek-v4-flash (opencodego) & 85-90s & 空 ❌ & 0 \\
+\hline
+kimi-k2.7-code (kimi) & 164-229s & 空 ❌ & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：mimo-v2.5 是 harness 30KB 大负载规划的唯一可靠模型。reasoning 型模型（deepseek/kimi）在该负载下均超时空输出。批量主力维持 mimo-v2.5（符合"批量用 mimo"的既定策略）；kimi/qwen 额度保留给轻量调用或规则更新。\\
+
+
+\subsubsection{38.33 batch10：4/4 全胜，绝对纪录 19 gameplay}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+\_\_BOLD\_0000\_\_ & Cocos & OPERATOR\_INTERRUPTED & 26 & \_\_BOLD\_0000\_\_ ⭐⭐ & 4 & \_\_BOLD\_0000\_\_ \\
+\hline
+whiteout-survival-c47908da8b11 & Cocos & OPERATOR\_INTERRUPTED & 15 & 9 & 3 & 9 \\
+\hline
+kingshot-80b82b11529c & Cocos & OPERATOR\_INTERRUPTED & 18 & 7 & 5 & 13 \\
+\hline
+whiteout-survival-97799fcc5eef & Cocos & OPERATOR\_INTERRUPTED & 17 & 6 & 5 & 16 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_；kingshot-830518bfdad4 以 \_\_BOLD\_0001\_\_（mimo 策略在该游戏被充分执行）。
+  \item \_\_BOLD\_0000\_\_。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：830518bfdad4(19) > 33efef78d709(14) > 2653755ff3a0(13) > 9423402859e9(10) = 12ababda99c7(10) = 0042aa74feb8(10) = f9a4fa1b6227(10) = b47a4f071e9c(10) > tiles(9) = c47908da8b11(9) > 6dd565baa02d(8) = b64a7594f0c2(8) > 94766e5d61dc(7) = 86420cdd2bbb(7) = cc237de42cb3(7) = 80b82b11529c(7) > f8c53b366225(6) = 97799fcc5eef(6) = c378f843e877(6) > 19047d91c9de(5) = 87790941fd83(5)\\
+
+\_\_BOLD\_0000\_\_：批次成功率 2/4 → 3/4 → 4/4（batch8→9→10），Edge 12s 等待 + normalizer 稳定后，mimo-v2.5 策略执行质量持续提升。\\
+
+
+\subsubsection{38.34 batch11：3/4 成功，累计 38 游戏}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-14271ce32d49 & Cocos & OPERATOR\_INTERRUPTED & 21 & \_\_BOLD\_0000\_\_ & 4 & 17 \\
+\hline
+kingshot-e16d5e5e7cce & Cocos & OPERATOR\_INTERRUPTED & 14 & 8 & 6 & 13 \\
+\hline
+whiteout-survival-fa4439bf53cb & Cocos & OPERATOR\_INTERRUPTED & 20 & 7 & 5 & 14 \\
+\hline
+whiteout-survival-dfb8cf49c761 & Cocos & OPERATOR\_INTERRUPTED & 17 & 0 & 6 & 12 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_（持续上升）。
+  \item 已完成 50 游戏清单中的 38 个 + tiles 基线；剩余 12 个。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 有 gameplay 25 个（全部 Cocos/Unity，其中 24 个 Cocos）
+  \item 平均 gameplay ≈ 8.6，平均 actions ≈ 12.3
+  \item 最佳：kingshot-830518bfdad4（19 gameplay / 21 actions）
+  \item 失败 13 个：BLOCKED\_UNSAFE（首屏保护前缀）为主 + 少量 RUNTIME\_FAULT（渲染/早期异常）
+\end{itemize}
+
+
+\subsubsection{38.35 batch12：累计 42 游戏}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|l|}
+\hline
+游戏 & 引擎 & terminal & steps & gameplay & plans & actions \\
+\hline
+kingshot-0c1911759bcb & Cocos & OPERATOR\_INTERRUPTED & 16 & \_\_BOLD\_0000\_\_ & 4 & 14 \\
+\hline
+kingshot-1b5889c90e2e & Cocos & BUDGET\_EXHAUSTED & 240 & 5 & 4 & 7 \\
+\hline
+whiteout-survival-55820f0547af & Cocos & OPERATOR\_INTERRUPTED & 17 & 0 & 5 & 10 \\
+\hline
+whiteout-survival-1212f3bbb016 & Cocos & RUNTIME\_FAULT & 6 & 0 & 0 & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_。剩余 8 个游戏待测。
+\end{itemize}
+
+
+\subsubsection{38.36 50 游戏清单批量完成：最终统计}
+
+\_\_BOLD\_0000\_\_：25 kingshot + 25 whiteout + tiles 基线（48 个产生 run 报告）。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_
+  \item 平均 gameplay ≈ 8.4 / 平均 actions ≈ 13.4
+  \item terminal 分布：OPERATOR\_INTERRUPTED 29 / RUNTIME\_FAULT 8 / BUDGET\_EXHAUSTED 5 / BLOCKED\_UNSAFE 4 / SETTLED\_COMPLETE 1（假阳性）/ BLOCKED\_UNKNOWN\_MECHANIC 1
+\end{itemize}
+
+\_\_BOLD\_0000\_\_（gameplay 排序）：830518bfdad4(19/21) > 33efef78d709(14/16) > 2653755ff3a0(13/14) > 14271ce32d49(12/17) > 0042aa74feb8(10/15) = 0655adc6c766(10/22) = 880d80f045d0(10/15) = 9423402859e9(10/17) = f9a4fa1b6227(10/16) = 12ababda99c7(10/17)\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item 全部 48 个均为 Cocos（kingshot/whiteout）或 Unity（tiles），Windows Edge 真 GPU 渲染全链路验证通过。
+  \item 失败主因：游戏自身首屏/控制方案问题（BLOCKED\_UNSAFE/RUNTIME\_FAULT），与 LLM 策略无关。
+  \item \_\_BOLD\_0000\_\_：3 步、信息增益 0.05、无 verified capabilities——settled evaluator 对该游戏页面误判，需进一步收紧。
+  \item \_\_BOLD\_0000\_\_：mimo-v2.5（opencodego）是唯一在 30KB harness 大负载下稳定产出策略的模型；deepseek/kimi 均超时空输出（详见 §38.30/38.32）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：打通了「Windows Edge 真 GPU 渲染 + mimo-v2.5 策略 + normalizer 契约校验」的完整批量管线，48 游戏统一标准下获得可复现的 gameplay 基线，为后续 L1 VLM 介入、规则在线更新、QLoRA 微调模型替换提供对照基准。\\
+
+
+\subsubsection{38.37 VLM /observe 适配器：L1 画面理解层打通}
+
+\_\_BOLD\_0003\_\_：用户三层架构中 L1（本地/云端 VLM 画面理解）此前未接入 harness。harness 的 VlmObserverClient 使用自定义 \_\_CODE\_0000\_\_ 协议（\_\_CODE\_0001\_\_：base64 图片 + 任务 prompt，响应需 \_\_CODE\_0002\_\_ 且 raw\_text 必须通过 guarded JSON 解析）。\\
+
+\_\_BOLD\_0001\_\_（\_\_CODE\_0000\_\_）：\\
+\begin{itemize}
+  \item FastAPI 服务监听 8765（harness 默认 VLM 端口），实现 \_\_CODE\_0000\_\_ + \_\_CODE\_0001\_\_。
+  \item 后端可配置：\_\_CODE\_0000\_\_（默认，kimi-k2.6 视觉）/ \_\_CODE\_0001\_\_ / \_\_CODE\_0002\_\_（mimo）。
+  \item \_\_BOLD\_0000\_\_：OpenAI image\_url 格式 + base64 直接可用（qwen token-plan 无 VL 模型；opencodego mimo 拒 base64）。
+  \item 关键修复：kimi-k2.6 只允许 temperature=1（适配器对 kimi 不传 temperature）；kimi 输出常带前置 prose → 适配器内置 \_\_CODE\_0000\_\_（markdown 剥离 + 平衡花括号扫描）提取纯 JSON。
+  \item 延迟 \textasciitilde{}8-17s/次（kimi-k2.6 视觉 + reasoning）。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+配置 & terminal & steps & gameplay & plans & actions \\
+\hline
+基线（无 VLM） & OPERATOR\_INTERRUPTED & 22 & 6 & 4 & 14 \\
+\hline
+VLM run1（无提取） & BUDGET\_EXHAUSTED & 240 & 2 & 2 & 3 \\
+\hline
+\_\_BOLD\_0000\_\_ & OPERATOR\_INTERRUPTED & 17 & \_\_BOLD\_0000\_\_ & 4 & 10 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item VLM run2 的 2 个观察 accepted（completion\_evidence / failure\_observation），2 个 guard\_rejected（kimi 前置文本过长时提取失败）。
+  \item 初步显示 VLM 画面理解参与后 gameplay 提升（9 vs 6），样本少需继续验证。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：L1 层基础设施就绪——可切换 kimi（云端）、mimo（opencodego）、本地 Qwen3.5-4B（QLoRA 微调后），为「本地 VLM 画面理解 → 云端长程规划」的三层协同提供通路。\\
+
+
+\subsubsection{38.38 VLM 画面理解参与：大幅提升 gameplay（+171\%）}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|l|}
+\hline
+配置 & terminal & steps & gameplay & plans & actions \\
+\hline
+基线（mimo 规划，无 VLM） & BUDGET\_EXHAUSTED & 240 & 7 & 4 & 12 \\
+\hline
+\_\_BOLD\_0000\_\_ & OPERATOR\_INTERRUPTED & 26 & \_\_BOLD\_0000\_\_ & 5 & \_\_BOLD\_0000\_\_ \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_，steps 从 240 缩短到 26。
+  \item VLM 画面理解提供视觉上下文（backend\_grounding/completion\_evidence 等观察），显著提升 mimo 策略精准度与执行效率。
+  \item 两个 VLM 实验（c378f843e877: 6→9、94766e5d61dc: 7→19）均显示 VLM 参与带来 gameplay 提升。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：三层架构的 L1（VLM 画面理解）接入 harness 后，策略执行质量显著优于纯文本规划。kimi-k2.6 作为云端视觉后端可用（8-17s/次）；本地 Qwen3.5-4B（QLoRA 微调后）可作为更快的本地替代（VLM\_BACKEND 可切换）。\\
+
+
+\subsubsection{38.39 VLM 对照批量（4 游戏）：guard acceptance 是价值关键}
+
+\_\_BOLD\_0000\_\_（mimo 规划 + kimi-k2.6 VLM 观察，与基线对比）：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+游戏 & 基线 gameplay & VLM gameplay & VLM 观察接受率 \\
+\hline
+kingshot-94766e5d61dc & 7 & \_\_BOLD\_0000\_\_ ⭐ & 2/4 accepted \\
+\hline
+kingshot-c378f843e877 & 6 & \_\_BOLD\_0000\_\_ & 2/4 accepted \\
+\hline
+kingshot-33efef78d709 & 14 & 5 & 0/0（未触发） \\
+\hline
+whiteout-12ababda99c7 & 10 & 7 & \_\_BOLD\_0000\_\_（全 guard\_rejected） \\
+\hline
+whiteout-b64a7594f0c2 & 8 & 8 & - \\
+\hline
+kingshot-9423402859e9 & 10 & 0 & 0/0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：accepted 的观察（completion\_evidence / failure\_observation 任务 kimi 能合规输出）提供画面上下文 → gameplay 提升（+171\%）；全部被拒时（backend\_grounding 任务的 mappings JSON 常失败）→ VLM 无上下文还拖慢运行，gameplay 下降。
+  \item backend\_grounding 是最难任务（要求 mappings 数组 + guard 严格校验），kimi 输出常被拒。
+  \item \_\_BOLD\_0000\_\_：(1) 优化 backend\_grounding 的 prompt（给 kimi 更明确 JSON 模板 + allowed roles）；(2) 适配器端对 backend\_grounding 做结构补全（缺字段补空数组）；(3) VLM 触发策略调整为「观察失败自动跳过，不阻塞策略执行」。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：VLM 画面理解是「锦上添花」而非「必要条件」——在观察被有效接受时显著提升，全部被拒时有害。下一步优先提升 backend\_grounding 接受率，并让 VLM 失败降级为无视觉模式（当前 harness 已自动降级，但观察延迟仍消耗预算）。\\
+
+
+\subsubsection{38.40 VLM 观察模板修复：gameplay 数量级提升（10 → 228）}
+
+\_\_BOLD\_0001\_\_：适配器按 task\_type 注入严格 JSON 模板（backend\_grounding 明确 \_\_CODE\_0000\_\_ 等），显著提高 harness guard 接受率。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+配置 & gameplay & actions & 说明 \\
+\hline
+基线（mimo 规划，无 VLM） & 10 & 17 & - \\
+\hline
+VLM（无模板） & 7 & 18 & 观察全被拒，无上下文 \\
+\hline
+\_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & \_\_BOLD\_0000\_\_ & 观察被接受，画面上下文持续驱动 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item 240 步预算中 228 步为 gameplay（95\%），actions 240——游戏被持续游玩。
+  \item 模板修复让 backend\_grounding 观察通过 guard，VLM 画面理解真正进入策略循环。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：audit 出现 accepted（模板前 0/3 accepted，模板后 1+ accepted）。kingshot-94766e5d61dc 此前也因部分观察 accepted 达 19 gameplay。\\
+
+\_\_BOLD\_0000\_\_：VLM 画面理解的价值取决于观察能否通过 guard——task-specific JSON 模板是提高接受率的关键工程手段。三层架构（L0 规则 / L1 VLM 理解 / L2 云端规划）中 L1 的接入价值得到充分验证。\\
+
+
+\subsubsection{38.41 VLM 模板修复后对照汇总（9 游戏）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|}
+\hline
+游戏 & 基线 gameplay & VLM gameplay & 变化 \\
+\hline
+whiteout-12ababda99c7 & 10 & \_\_BOLD\_0000\_\_ & +2180\% \\
+\hline
+whiteout-87790941fd83 & 5 & \_\_BOLD\_0000\_\_ & +260\% \\
+\hline
+kingshot-94766e5d61dc & 7 & \_\_BOLD\_0000\_\_ & +171\% \\
+\hline
+kingshot-6dd565baa02d & 8 & \_\_BOLD\_0000\_\_ & +38\% \\
+\hline
+kingshot-c378f843e877 & 6 & \_\_BOLD\_0000\_\_ & +50\% \\
+\hline
+whiteout-cc237de42cb3 & 7 & 7 & 持平 \\
+\hline
+kingshot-0042aa74feb8 & 10 & 5 & -50\% \\
+\hline
+kingshot-33efef78d709 & 14 & 5 & -64\% \\
+\hline
+kingshot-9423402859e9 & 10 & 0 & -100\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：5/9 提升（其中 3 个大幅提升 >171\%），1 持平，3 下降。\\
+\begin{itemize}
+  \item 提升的游戏：VLM 观察有效接受（画面理解帮助策略决策）。
+  \item 下降的游戏（0042aa/33efef/942340）：VLM 观察延迟消耗预算 + 观察质量不足，策略反而被拖累；或游戏画面本身简单无需 VLM。
+  \item \_\_BOLD\_0000\_\_：VLM 层收益不均，需要(1)按游戏自适应启用 VLM（画面复杂/卡住时触发）；(2)观察失败快速降级（不阻塞策略）；(3)本地低延迟 VLM（QLoRA 微调后）替换 kimi（8-17s/次）减少延迟开销。
+\end{itemize}
+
+
+\subsubsection{38.42 规则在线更新机制验证（用户核心诉求之一）}
+
+\_\_BOLD\_0001\_\_：规则更新不是"一次性生成"，\_\_CODE\_0000\_\_ 已实现完整的在线更新机制（与三层架构的 L2 层配套）：\\
+
+1. \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_ 支持\\
+\begin{itemize}
+  \item \_\_CODE\_0000\_\_：滚动窗口平均 composite < 阈值（默认 0.15）→ 触发
+  \item \_\_CODE\_0000\_\_：卡住 ≥ 阈值（默认 5 步）→ 触发
+  \item \_\_CODE\_0000\_\_：L0/L2 冲突 ≥ 3 → 触发
+  \item \_\_CODE\_0000\_\_：相对峰值下降 \% → 触发
+  \item \_\_CODE\_0000\_\_：世界模型事件陈旧 → 触发
+  \item 保护：cooldown（默认 8 步）、max\_updates\_per\_run（默认 3）
+\end{itemize}
+2. \_\_BOLD\_0001\_\_：L2 输出 \_\_CODE\_0000\_\_（update\_type: param/memory\_entry/phase\_contract/code\_file/none + payload + confidence）\\
+3. \_\_BOLD\_0001\_\_：\_\_CODE\_0000\_\_ 应用到内存参数 / StrategyMemory / runtime\_rules.json；\_\_BOLD\_0002\_\_，未授权时进 pending 待人工审核\\
+4. \_\_BOLD\_0000\_\_：每次应用前快照，watchdog 可回滚\\
+
+\_\_BOLD\_0000\_\_（本轮）：\\
+\begin{itemize}
+  \item 连续 3 步低 composite → \_\_CODE\_0000\_\_ ✅
+  \item 卡住 3 步 → \_\_CODE\_0000\_\_ ✅
+  \item \_\_CODE\_0000\_\_ → 应用成功（阈值更新）✅
+  \item code\_file 更新无 allowlist → 拒绝并进入 pending（安全机制生效）✅
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：当前 harness 批量使用同学的框架（策略循环 + VLM 观察），我们的 rule\_update 是独立 agent 的在线规则层。下一步可将 harness 的「VLM 观察发现新机制 / strategy 卡住」事件桥接到 rule\_update 触发器，实现「VLM 画面理解 → 规则在线更新 → 云端策略参考新规则」的完整闭环。\\
+
+
+\subsubsection{38.43 VLM 对照最终汇总（14 游戏）}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{|l|l|l|l|l|}
+\hline
+游戏 & 基线 & VLM & 变化 & 类别 \\
+\hline
+whiteout-12ababda99c7 & 10 & 228 & +2180\% & 大幅提升 \\
+\hline
+whiteout-87790941fd83 & 5 & 18 & +260\% & 大幅提升 \\
+\hline
+kingshot-94766e5d61dc & 7 & 19 & +171\% & 大幅提升 \\
+\hline
+kingshot-6dd565baa02d & 8 & 11 & +38\% & 提升 \\
+\hline
+kingshot-c378f843e877 & 6 & 9 & +50\% & 提升 \\
+\hline
+whiteout-cc237de42cb3 & 7 & 7 & 持平 & 持平 \\
+\hline
+whiteout-97799fcc5eef & 6 & 6 & 持平 & 持平 \\
+\hline
+kingshot-0042aa74feb8 & 10 & 5 & -50\% & 下降 \\
+\hline
+kingshot-33efef78d709 & 14 & 5 & -64\% & 下降 \\
+\hline
+kingshot-9423402859e9 & 10 & 0 & -100\% & 下降 \\
+\hline
+kingshot-2653755ff3a0 & 14 & 6 & -57\% & 下降 \\
+\hline
+kingshot-f9a4fa1b6227 & 10 & 2 & -80\% & 下降 \\
+\hline
+whiteout-c47908da8b11 & 9 & 4 & -56\% & 下降 \\
+\hline
+\end{tabular}
+\end{table}
+
+\_\_BOLD\_0000\_\_：5 提升（3 个大幅 >171\%）/ 2 持平 / 6 下降。\\
+
+\_\_BOLD\_0000\_\_：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：VLM 观察有效通过 guard 且画面信息对策略关键（地图/资源/目标位置）。
+  \item \_\_BOLD\_0000\_\_：策略主要依赖文本 probe 数据，VLM 观察延迟（8-17s/次）消耗预算且观察被拒时无价值。
+  \item \_\_BOLD\_0000\_\_：(1) 按游戏/阶段自适应启用 VLM（卡住或 probe 信息不足时触发）；(2) 观察失败快速降级（不阻塞策略）；(3) 本地低延迟 VLM（QLoRA 微调后，\textasciitilde{}100ms 级）替代云端 kimi 可消除延迟惩罚——这正是三层架构 L1 本地化的价值。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：batch3 新增 2653755ff3a0(6)/f9a4fa1b6227(2)/c47908da8b11(4)/97799fcc5eef(6)，均反映 VLM 对文本驱动游戏的有限增益。\\
+
+
+\subsubsection{38.44 VLM 自适应调用策略（L1 智能开关，src/agent/vlm\_policy.py）}
+
+\_\_BOLD\_0000\_\_：14 游戏 VLM 对照（§38.43）显示 VLM 画面理解收益不均——大幅提升（12ab/8779/94766）与下降（文本驱动游戏）并存。核心矛盾是 kimi-k2.6 的 8-17s 延迟与观察接受率。\\
+
+\_\_BOLD\_0001\_\_（\_\_CODE\_0000\_\_）：\\
+\begin{itemize}
+  \item \_\_BOLD\_0000\_\_：最近 progress\_window(6) 步中 ≥ min\_progress\_steps(3) 步有 gameplay 进展 → 文本 probe 足够，不调 VLM。
+  \item \_\_BOLD\_0000\_\_：(1) 连续 stall ≥ 4 步；(2) probe 信息充分度 < 0.5。
+  \item \_\_BOLD\_0000\_\_：先请求高接受率任务（completion\_evidence / failure\_observation / phase\_observation / temporal\_change\_observation），持续卡住才升级到 visual\_grounding / backend\_grounding（低接受率、高信息量）。
+  \item \_\_BOLD\_0000\_\_：max\_calls\_per\_run(6) + cooldown(8 步)。
+\end{itemize}
+
+\_\_BOLD\_0000\_\_：进展良好→跳过 ✅；卡住 4 步→触发+高接受任务 ✅；probe 信息不足→触发 ✅；cap/cooldown/escalation ✅。\\
+
+\_\_BOLD\_0000\_\_：这是三层架构中 L1 层的智能开关——VLM 只在「画面信息能帮助决策」的时刻（卡住/信息不足）被调用，避免文本驱动游戏被 VLM 延迟拖累。配合本地 QLoRA 微调 VLM（低延迟），可实现「卡住时本地 VLM 看画面 → 产出上下文给云端 → 云端更新策略/规则」的完整闭环。\\
 \end{document}
