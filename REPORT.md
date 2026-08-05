@@ -2416,3 +2416,23 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 | whiteout-survival-1212f3bbb016 | Cocos | RUNTIME_FAULT | 6 | 0 | 0 | 0 |
 
 - **累计 42 游戏：27 个产生真实 gameplay，成功率 64%**。剩余 8 个游戏待测。
+
+
+### 38.36 50 游戏清单批量完成：最终统计
+
+**覆盖**：25 kingshot + 25 whiteout + tiles 基线（48 个产生 run 报告）。
+
+**最终统计（mimo-v2.5 via opencodego + Windows Edge D3D11 真 GPU）**：
+- **30/48 有真实 gameplay（成功率 62.5%）**
+- 平均 gameplay ≈ 8.4 / 平均 actions ≈ 13.4
+- terminal 分布：OPERATOR_INTERRUPTED 29 / RUNTIME_FAULT 8 / BUDGET_EXHAUSTED 5 / BLOCKED_UNSAFE 4 / SETTLED_COMPLETE 1（假阳性）/ BLOCKED_UNKNOWN_MECHANIC 1
+
+**Top 10**（gameplay 排序）：830518bfdad4(19/21) > 33efef78d709(14/16) > 2653755ff3a0(13/14) > 14271ce32d49(12/17) > 0042aa74feb8(10/15) = 0655adc6c766(10/22) = 880d80f045d0(10/15) = 9423402859e9(10/17) = f9a4fa1b6227(10/16) = 12ababda99c7(10/17)
+
+**要点**：
+- 全部 48 个均为 Cocos（kingshot/whiteout）或 Unity（tiles），Windows Edge 真 GPU 渲染全链路验证通过。
+- 失败主因：游戏自身首屏/控制方案问题（BLOCKED_UNSAFE/RUNTIME_FAULT），与 LLM 策略无关。
+- **唯一 SETTLED_COMPLETE（0cee208d789c）为假阳性**：3 步、信息增益 0.05、无 verified capabilities——settled evaluator 对该游戏页面误判，需进一步收紧。
+- **模型结论**：mimo-v2.5（opencodego）是唯一在 30KB harness 大负载下稳定产出策略的模型；deepseek/kimi 均超时空输出（详见 §38.30/38.32）。
+
+**总价值**：打通了「Windows Edge 真 GPU 渲染 + mimo-v2.5 策略 + normalizer 契约校验」的完整批量管线，48 游戏统一标准下获得可复现的 gameplay 基线，为后续 L1 VLM 介入、规则在线更新、QLoRA 微调模型替换提供对照基准。
