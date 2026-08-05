@@ -2601,3 +2601,27 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **测试验证**：进展良好→跳过 ✅；卡住 4 步→触发+高接受任务 ✅；probe 信息不足→触发 ✅；cap/cooldown/escalation ✅。
 
 **意义**：这是三层架构中 L1 层的智能开关——VLM 只在「画面信息能帮助决策」的时刻（卡住/信息不足）被调用，避免文本驱动游戏被 VLM 延迟拖累。配合本地 QLoRA 微调 VLM（低延迟），可实现「卡住时本地 VLM 看画面 → 产出上下文给云端 → 云端更新策略/规则」的完整闭环。
+
+
+### 38.45 QLoRA 训练完成 + 微调 VLM 部署验证（5090 恢复）
+
+**训练完成**（服务器恢复后确认）：
+- 886/886 步（1 epoch，11h27m），train_loss **1.988** / eval_loss **1.513**（收敛良好）
+- adapter 32MB（lora_alpha=32，base Qwen3.5-4B 4bit），已拉回本地 checkpoints/
+- 训练期间服务器 SSH 断连 22h，训练进程（nohup）未受影响继续完成 ✅
+
+**微调 VLM 部署**（5090 GPU1，8100 端口）：
+- `src/inference/server.py` 加载 4bit Qwen3.5-4B + QLoRA adapter，GPU1 9.8GB，warmup 完成
+- **部署过程修复的 bug**：
+  1. server.py 缺 `if __name__ == "__main__"` 调用（从未能启动）→ 补上
+  2. transformers 5.14 对 Qwen3.5-4B 坚持检查 flash-attn（即使 --no-flash-attn）→ 预加载 config 强制 `attn_implementation="sdpa"`
+  3. 8000/8001 端口被占用 → 8100
+  4. 长生成循环退化（贪心采样）→ /describe 加 repetition_penalty=1.1 + no_repeat_ngram=4
+  5. 新增 `/describe` 端点（自定义 prompt 画面理解，L1 评估用）
+
+**画面理解验证**（真实游戏帧，kingshot）：
+- 微调 VLM 正确识别实体（车辆 driver figure、墙状障碍物、岩石地形、交互点）
+- 9-12s/次（4bit GPU），输出带 reasoning 文本（与 kimi 类似，需 JSON 提取）
+- 对比基线（§23/§26 未微调 Qwen3.5-4B）：微调后画面理解更结构化、聚焦游戏实体
+
+**意义**：三层架构 L1 本地化路径打通——微调 VLM 可在 5090 本地运行（无云端延迟/成本），配合 vlm_observe_adapter 的 local 后端可替代 kimi 作为低延迟画面理解层。

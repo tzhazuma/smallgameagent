@@ -362,18 +362,30 @@ class GameAgentInference:
         """Load Qwen3.5-4B with Qwen3_5ForConditionalGeneration, fallback to
         AutoModelForMultimodalLM."""
         try:
-            from transformers import Qwen3_5ForConditionalGeneration
+            from transformers import AutoConfig, Qwen3_5ForConditionalGeneration
 
             logger.info("Loading Qwen3.5-4B via Qwen3_5ForConditionalGeneration")
-            return Qwen3_5ForConditionalGeneration.from_pretrained(model_id, **kwargs)
+            # Some Qwen3.5-4B configs pin attn_implementation to flash_attention_2,
+            # which makes transformers probe for the flash-attn package even when
+            # sdpa is requested via kwargs/env. Force it on the config object.
+            cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            if hasattr(cfg, "attn_implementation"):
+                cfg.attn_implementation = kwargs.get("attn_implementation", "sdpa")
+                cfg._attn_implementation = kwargs.get("attn_implementation", "sdpa")
+            load_kwargs = {**kwargs, "config": cfg}
+            return Qwen3_5ForConditionalGeneration.from_pretrained(model_id, **load_kwargs)
         except (ValueError, ImportError, OSError):
             logger.warning(
                 "Qwen3_5ForConditionalGeneration unavailable; falling back to "
                 "AutoModelForMultimodalLM",
             )
-            from transformers import AutoModelForMultimodalLM
+            from transformers import AutoConfig, AutoModelForMultimodalLM
 
-            return AutoModelForMultimodalLM.from_pretrained(model_id, **kwargs)
+            cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            if hasattr(cfg, "attn_implementation"):
+                cfg.attn_implementation = kwargs.get("attn_implementation", "sdpa")
+                cfg._attn_implementation = kwargs.get("attn_implementation", "sdpa")
+            return AutoModelForMultimodalLM.from_pretrained(model_id, config=cfg, **kwargs)
 
     
     @staticmethod
@@ -738,6 +750,74 @@ async def predict_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# POST /describe (free-form visual understanding, used by the L1 layer eval)
+# ---------------------------------------------------------------------------
+
+
+class DescribeResponse(BaseModel):
+    text: str = Field(default="", description="Model-generated text")
+    model_name: str = Field(default="")
+    latency_ms: float = Field(default=0.0)
+
+
+@app.post("/describe", response_model=DescribeResponse)
+async def describe_endpoint(
+    image: UploadFile = File(..., description="PNG/JPEG screenshot"),
+    prompt: str = Form(..., description="Free-form visual understanding prompt"),
+    max_tokens: int = Form(256),
+) -> DescribeResponse:
+    """Run the VLM with a custom prompt + single image, return the raw text.
+
+    Unlike ``/predict`` (which forces the action-prediction template), this
+    endpoint lets callers drive the L1 scene-understanding evaluation with any
+    prompt (visual grounding / phase observation / free description).
+    """
+    from PIL import Image
+
+    engine = _engine()
+    if image.content_type not in (None, "image/png", "image/jpeg", "image/webp"):
+        raise HTTPException(status_code=415, detail="Unsupported media type")
+    try:
+        image_bytes = await image.read()
+        pil_image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {exc}") from exc
+
+    import torch
+
+    if not engine._loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    t0 = time.perf_counter()
+    messages = [
+        {"role": "system", "content": "You are a game-frame observer. Respond with JSON when asked."},
+        {"role": "user", "content": [
+            {"type": "image", "image": pil_image},
+            {"type": "text", "text": prompt},
+        ]},
+    ]
+    prompt_text = engine._processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    inputs = engine._processor(text=prompt_text, images=[pil_image], return_tensors="pt").to(engine._model.device)
+    gen_kwargs = {
+        "max_new_tokens": max_tokens,
+        "temperature": engine._temperature if engine._temperature > 0 else None,
+        "do_sample": engine._temperature > 0,
+        "pad_token_id": engine._processor.tokenizer.pad_token_id,
+        "eos_token_id": engine._processor.tokenizer.eos_token_id,
+    }
+    if engine._cache_config is not None:
+        gen_kwargs["cache_implementation"] = "quantized"
+        gen_kwargs["cache_config"] = engine._cache_config
+    gen_kwargs["repetition_penalty"] = 1.1
+    gen_kwargs["no_repeat_ngram_size"] = 4
+    with torch.inference_mode():
+        outputs = engine._model.generate(**inputs, **gen_kwargs)
+    input_len = inputs["input_ids"].shape[1]
+    raw_output = engine._processor.decode(outputs[0][input_len:], skip_special_tokens=True)
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+    return DescribeResponse(text=raw_output, model_name=engine._short_name, latency_ms=round(latency_ms, 1))
+
+
+# ---------------------------------------------------------------------------
 # POST /predict/stream (SSE streaming)
 # ---------------------------------------------------------------------------
 
@@ -1048,3 +1128,7 @@ def _new_module_patch(lora_config, adapter_name, target, **kwargs):
 
 _peft_lora_model.LoraModel._create_new_module = staticmethod(_new_module_patch)
 
+
+
+if __name__ == "__main__":
+    main()
