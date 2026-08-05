@@ -111,3 +111,16 @@ xvfb-run -a -s "-screen 0 1280x1024x24" env ... npm run run:autonomous \
 从 https://fps-all-htmls.pages.dev/all-htmls/ 的 `_manifest.json`（4261 个游戏）中筛选：
 - 逐个下载 HTML，正则检查「指引箭头（jianTou/Arrow/Guide/Finger/Hand/targeting）+ 通关画面（ENDCARD/ShowEndCard/victory/WinPanel/COMPLETED/endScreen/GameOver）+ 广告图标（mraid/download/install/adIcon/GetAd/showAd/appStore）」
 - 按综合得分取前 25。清单见 `harness-integration/selected_games_whiteout_kingshot.txt`（格式 `游戏 / id#链接`，id 与 URL 路径一致）。
+
+## Windows Edge 真 GPU 批量运行（2026-08-05 新增）
+
+**背景**：Cocos 3.8.5（kingshot/whiteout）要求完整 WebGL2，WSL 软渲染（SwiftShader/D3D12/Vulkan 直通）全部失败（Error 16405 白屏）。Windows Edge headless + D3D11 真 GPU 可完整渲染。
+
+**方案**：
+1. Windows 启动 Edge headless + CDP：`msedge.exe --headless=new --mute-audio --remote-debugging-port=9222 --user-data-dir=... about:blank`（`--mute-audio` 关游戏声音）。
+2. Windows 侧部署 harness 副本（`C:\Users\tzh03\harness-win`），改 `src/adapters/live-playable.mjs` 支持 `PLAYABLE_BROWSER_CDP=http://127.0.0.1:9222` 连接外部浏览器（CDP 模式用默认 context + newPage；否则走原 launch）。
+3. `runtime.json` 的 `startup_timeout_ms` 提到 45000（Unity/Cocos 加载 10-15s 才出 canvas）。
+4. WSL2 localhost 双向转发：Windows harness 访问 WSL adapter（127.0.0.1:9100）。
+5. 每游戏前重启 Edge（`taskkill /F /IM msedge.exe` + 重新启动），避免多 run 状态退化（白屏）。
+
+**验证**：10 游戏批量（mimo-v2.5 via opencodego），6/10 产生真实 gameplay（含 5 个 Cocos），最佳 whiteout-12ababda99c7：22 步/10 gameplay/17 actions。详见 REPORT.md §38.24-38.26。
