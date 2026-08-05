@@ -1347,7 +1347,8 @@ def _add_vlm_layer_slide(prs) -> None:
         "14 游戏对照：5 提升 / 2 持平 / 6 下降",
         "大幅提升：12ab 10→228、8779 5→18、94766 7→19（+171%+）",
         "规律：画面信息关键的策略大幅提升；文本驱动游戏 VLM 延迟拖累",
-        "落地：按游戏自适应启用 VLM + 观察失败快速降级 + 本地低延迟 VLM",
+        "落地：VlmCallPolicy 自适应开关（进展跳 VLM/卡住触发/任务分级）+ 本地低延迟 VLM",
+        "规则在线更新：RuleUpdateTrigger 阈值触发 + param/code_file 应用 + 安全回滚",
     ], _C_SUCCESS)
 
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(3.95), Inches(12.3), Inches(0.6))
