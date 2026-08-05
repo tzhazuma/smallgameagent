@@ -515,6 +515,11 @@ function normalizeStrategy(parsed, brief) {
       const obj = st.objective && typeof st.objective === "object" ? { ...st.objective } : { selector: "current_guide", sticky: false };
       if (!["current_guide", "target_id", "target_role", "none"].includes(obj.selector)) obj.selector = "current_guide";
       obj.sticky = obj.sticky !== false;
+      // Selector/value consistency: target_id may carry only target_id,
+      // target_role only target_role, and current_guide/none carry neither.
+      if (obj.selector === "target_id") { delete obj.target_role; obj.target_id = typeof obj.target_id === "string" && obj.target_id ? obj.target_id : null; }
+      else if (obj.selector === "target_role") { delete obj.target_id; obj.target_role = typeof obj.target_role === "string" && obj.target_role ? obj.target_role : null; }
+      else { delete obj.target_id; delete obj.target_role; }
       return obj;
     })();
     const objSelector = st.objective.selector;
@@ -564,13 +569,43 @@ function normalizeStrategy(parsed, brief) {
       }
       return a;
     });
-    st.transitions = Array.isArray(st.transitions) && st.transitions.length > 0 ? st.transitions.map((t) => {
+    const STRATEGY_PREDICATES = new Set([
+      "completion_suspected", "failure_active", "phase_is", "phase_changed_from_entry",
+      "control_domain_is", "control_domain_changed_from_entry", "guide_changed_from_entry",
+      "guide_absent", "guide_present", "control_map_verified", "target_id_active",
+      "objective_target_inactive", "objective_reached", "objective_reentry_recommended",
+      "waypoint_reached", "target_relevant_progress", "interaction_reentry_completed",
+      "current_guide_requirement_satisfied", "active_resource_requirement_satisfied",
+      "objective_resource_deficit_at_least", "resource_capacity_saturated",
+      "resource_source_positive", "resource_counter_at_least", "resource_counter_at_most",
+      "resource_counter_increased_from_entry", "resource_counter_decreased_from_entry",
+      "partial_resource_ready_after_no_progress", "no_progress_at_least",
+      "cross_state_target_no_progress_at_least", "local_iterations_at_least", "always",
+    ]);
+    const VALUELESS = new Set([
+      "completion_suspected", "failure_active", "phase_changed_from_entry",
+      "control_domain_changed_from_entry", "guide_changed_from_entry", "guide_absent",
+      "guide_present", "control_map_verified", "objective_target_inactive",
+      "objective_reached", "waypoint_reached", "target_relevant_progress",
+      "interaction_reentry_completed", "current_guide_requirement_satisfied", "always",
+    ]);
+    const STRING_VALUE = new Set(["phase_is", "control_domain_is"]);
+    const NUMERIC_VALUE = new Set([
+      "objective_reentry_recommended", "no_progress_at_least",
+      "cross_state_target_no_progress_at_least", "local_iterations_at_least",
+    ]);
+    const normalizeTransition = (t) => {
+      let pred = typeof t?.predicate === "string" ? t.predicate : "always";
+      let key = t?.key ?? null;
+      let value = t?.value ?? null;
+      if (!STRATEGY_PREDICATES.has(pred)) pred = "always";
+      if (VALUELESS.has(pred)) { key = null; value = null; }
+      else if (STRING_VALUE.has(pred)) { key = null; value = typeof value === "string" && value ? value : "DISCOVER"; }
+      else if (NUMERIC_VALUE.has(pred)) { key = null; value = Number.isInteger(value) && value > 0 ? value : 1; }
       const next = ["REPLAN", "VERIFY_COMPLETION", "STOP"].includes(t?.next) || stateIds.has(t?.next) ? t.next : "REPLAN";
-      return {
-        predicate: typeof t?.predicate === "string" ? t.predicate : "always",
-        key: t?.key ?? null, value: t?.value ?? null, next,
-      };
-    }) : [{ predicate: "always", key: null, value: null, next: "REPLAN" }];
+      return { predicate: pred, key, value, next };
+    };
+    st.transitions = Array.isArray(st.transitions) && st.transitions.length > 0 ? st.transitions.map(normalizeTransition) : [{ predicate: "always", key: null, value: null, next: "REPLAN" }];
     st.recovery = st.recovery && typeof st.recovery === "object" ? {
       no_progress_before_replan: Number.isInteger(st.recovery.no_progress_before_replan) ? st.recovery.no_progress_before_replan : 3,
       max_action_failures: Number.isInteger(st.recovery.max_action_failures) ? st.recovery.max_action_failures : 2,

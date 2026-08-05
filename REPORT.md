@@ -2177,3 +2177,34 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 剩余 replan 原因为游戏特有：joystick 校准（§38.3 已知）与 option_catalog 拒绝
 
 **渲染限制确认**：kingshot/whiteout（Cocos 3.8.5 WebGL2）在 WSL 全部软渲染失败（Error 16405 "device does not support WebGL2"；swiftshader/D3D12/Vulkan 直通均缺扩展）。Windows Edge headless CDP 可用但 goto ERR_ABORTED。tiles-survive（轻量引擎）渲染正常可实验。Cocos 游戏需 5090（NVIDIA 完整 WebGL2）或 Windows 原生浏览器。
+
+
+### 38.24 Windows Edge 真 GPU 渲染打通 + 批量实验结果
+
+**问题**：Cocos 3.8.5（kingshot/whiteout）与部分 Unity WebGL 游戏需要完整 WebGL2，WSL 软渲染全部失败（Error 16405）。tiles-survive（Unity，可降级）在 WSL xvfb 下可渲染。
+
+**突破：Windows Edge（D3D11 真 GPU）渲染成功**：
+- WSL → Windows Edge headless CDP（`--remote-debugging-port=9222 --mute-audio --headless=new`），WSL 的 playwright `connectOverCDP` + `newPage()` 导航成功（复用初始页会 ERR_ABORTED）。
+- Edge 返回 `ANGLE (Intel Direct3D11 vs_5_0 ps_5_0, D3D11)` —— 完整 WebGL2。kingshot 截图 2184 色（绿色地图画面）。
+- **声音关闭**：Edge `--mute-audio` + harness 的 `mute()` 双保险。
+- WSL2 localhost 双向转发：Windows harness 可访问 WSL adapter（127.0.0.1:9100）。
+
+**Windows 侧 harness 改动**（harness-win/src/adapters/live-playable.mjs）：
+- 支持 `PLAYABLE_BROWSER_CDP` 环境变量连接外部浏览器（CDP 模式），否则走原 launch。
+- runtime.json `startup_timeout_ms` 提到 45000（Unity/Cocos 加载 10-15s 才出 canvas）。
+- 批量脚本 `run_batch.bat` 顺序跑多个游戏（单 Edge 实例）。
+
+**Windows 批量结果（mimo-v2.5 via opencodego）**：
+
+| 游戏 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|
+| tiles-survive-5ec610abcdff | OPERATOR_INTERRUPTED | 20 | 9 | 5 | 14 |
+| kingshot-c378f843e877 | OPERATOR_INTERRUPTED | 22 | 6 | 4 | 14 |
+| kingshot-94766e5d61dc | **BUDGET_EXHAUSTED** | **240** | 7 | 4 | 12 |
+| kingshot-ce59e2a9a7a3 | RUNTIME_FAULT | 2 | 0 | 0 | 0 |
+| kingshot-29345f023e9e | BLOCKED_UNSAFE | 0 | 0 | 0 | 0 |
+
+- kingshot-94766e5d61dc 完整跑满 240 步预算，策略含 collect_money 状态（mimo 理解金币机制）。
+- **normalizer 迭代**：本轮补 objective selector 一致性（target_id 只能带 target_id、current_guide/none 不能带 target）、transition predicate 白名单（31 个）、key/value 类型校验（valueless/string/numeric）。
+
+**对比**：同样游戏 WSL 软渲染 RUNTIME_FAULT（0 策略执行）vs Windows Edge 真 GPU 正常执行（4-5 个策略计划、12-14 个动作）。Windows Edge 是真 GPU 渲染的标准批量环境。
