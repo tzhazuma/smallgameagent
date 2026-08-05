@@ -2255,3 +2255,19 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **架构结论**：Windows Edge（D3D11 真 GPU）是 Cocos/Unity WebGL2 游戏的标准批量渲染环境；WSL 软渲染只适合轻量游戏。策略规范化器（4 轮迭代）让 mimo-v2.5 的大策略稳定通过 harness 严格契约（planner_rejected=0）。
 
 **normalizer round-4**：requires_target option 在无 objective 状态时替换为安全 option；`always` transition 强制排到最后（harness 要求）。
+
+
+### 38.27 batch5：round-4 adapter 再验证 4 个新游戏
+
+| 游戏 | 引擎 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|---|
+| kingshot-9423402859e9 | Cocos | OPERATOR_INTERRUPTED | 23 | **10** | 5 | **17** |
+| whiteout-survival-b64a7594f0c2 | Cocos | OPERATOR_INTERRUPTED | 19 | 8 | 5 | 14 |
+| kingshot-791d359bb1e7 | Cocos | BLOCKED_UNSAFE | 0 | 0 | 0 | 0 |
+| whiteout-survival-af9223c26d38 | Cocos | BLOCKED_UNSAFE | 0 | 0 | 0 | 0 |
+
+- kingshot-9423402859e9 与 whiteout-12ababda99c7 并列最佳（10 gameplay / 17 actions）。
+- **累计 14 游戏：8 个产生真实 gameplay（7 个 Cocos），成功率 57%**。
+- BLOCKED_UNSAFE 游戏为首屏即触发 harness 保护前缀（游戏自身控制/加载方案问题，与 LLM 策略无关）。
+- round-4 adapter（requires_target 无 objective 替换 + always transition 排序）运行稳定，未出现 contract 拒绝。
+- 注意：`taskkill` 重启 Edge 时偶发 9222 端口 TIME_WAIT 冲突（`bind() returned an error`），个别游戏可能因 Edge 未就绪而失败；可在 bat 中把启动等待从 8s 提到 12s 缓解。
