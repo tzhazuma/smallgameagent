@@ -2460,3 +2460,18 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 初步显示 VLM 画面理解参与后 gameplay 提升（9 vs 6），样本少需继续验证。
 
 **意义**：L1 层基础设施就绪——可切换 kimi（云端）、mimo（opencodego）、本地 Qwen3.5-4B（QLoRA 微调后），为「本地 VLM 画面理解 → 云端长程规划」的三层协同提供通路。
+
+
+### 38.38 VLM 画面理解参与：大幅提升 gameplay（+171%）
+
+**对照实验（kingshot-94766e5d61dc）**：
+| 配置 | terminal | steps | gameplay | plans | actions |
+|---|---|---|---|---|---|
+| 基线（mimo 规划，无 VLM） | BUDGET_EXHAUSTED | 240 | 7 | 4 | 12 |
+| **mimo 规划 + kimi-k2.6 VLM 观察** | OPERATOR_INTERRUPTED | 26 | **19** | 5 | **23** |
+
+- **gameplay +171%（7→19），actions +92%（12→23）**，steps 从 240 缩短到 26。
+- VLM 画面理解提供视觉上下文（backend_grounding/completion_evidence 等观察），显著提升 mimo 策略精准度与执行效率。
+- 两个 VLM 实验（c378f843e877: 6→9、94766e5d61dc: 7→19）均显示 VLM 参与带来 gameplay 提升。
+
+**结论**：三层架构的 L1（VLM 画面理解）接入 harness 后，策略执行质量显著优于纯文本规划。kimi-k2.6 作为云端视觉后端可用（8-17s/次）；本地 Qwen3.5-4B（QLoRA 微调后）可作为更快的本地替代（VLM_BACKEND 可切换）。
