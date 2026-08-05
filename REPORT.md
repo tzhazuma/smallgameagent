@@ -2558,3 +2558,31 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - code_file 更新无 allowlist → 拒绝并进入 pending（安全机制生效）✅
 
 **与 harness/VLM 的结合点**：当前 harness 批量使用同学的框架（策略循环 + VLM 观察），我们的 rule_update 是独立 agent 的在线规则层。下一步可将 harness 的「VLM 观察发现新机制 / strategy 卡住」事件桥接到 rule_update 触发器，实现「VLM 画面理解 → 规则在线更新 → 云端策略参考新规则」的完整闭环。
+
+
+### 38.43 VLM 对照最终汇总（14 游戏）
+
+| 游戏 | 基线 | VLM | 变化 | 类别 |
+|---|---|---|---|---|
+| whiteout-12ababda99c7 | 10 | 228 | +2180% | 大幅提升 |
+| whiteout-87790941fd83 | 5 | 18 | +260% | 大幅提升 |
+| kingshot-94766e5d61dc | 7 | 19 | +171% | 大幅提升 |
+| kingshot-6dd565baa02d | 8 | 11 | +38% | 提升 |
+| kingshot-c378f843e877 | 6 | 9 | +50% | 提升 |
+| whiteout-cc237de42cb3 | 7 | 7 | 持平 | 持平 |
+| whiteout-97799fcc5eef | 6 | 6 | 持平 | 持平 |
+| kingshot-0042aa74feb8 | 10 | 5 | -50% | 下降 |
+| kingshot-33efef78d709 | 14 | 5 | -64% | 下降 |
+| kingshot-9423402859e9 | 10 | 0 | -100% | 下降 |
+| kingshot-2653755ff3a0 | 14 | 6 | -57% | 下降 |
+| kingshot-f9a4fa1b6227 | 10 | 2 | -80% | 下降 |
+| whiteout-c47908da8b11 | 9 | 4 | -56% | 下降 |
+
+**统计**：5 提升（3 个大幅 >171%）/ 2 持平 / 6 下降。
+
+**规律**：
+- **大幅提升的游戏（12ab/8779/94766）**：VLM 观察有效通过 guard 且画面信息对策略关键（地图/资源/目标位置）。
+- **下降的游戏**：策略主要依赖文本 probe 数据，VLM 观察延迟（8-17s/次）消耗预算且观察被拒时无价值。
+- **工程结论（落地）**：① 按游戏/阶段自适应启用 VLM（卡住或 probe 信息不足时触发）；② 观察失败快速降级（不阻塞策略）；③ 本地低延迟 VLM（QLoRA 微调后，~100ms 级）替代云端 kimi 可消除延迟惩罚——这正是三层架构 L1 本地化的价值。
+
+**补充**：batch3 新增 2653755ff3a0(6)/f9a4fa1b6227(2)/c47908da8b11(4)/97799fcc5eef(6)，均反映 VLM 对文本驱动游戏的有限增益。
