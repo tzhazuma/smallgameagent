@@ -2475,3 +2475,23 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 两个 VLM 实验（c378f843e877: 6→9、94766e5d61dc: 7→19）均显示 VLM 参与带来 gameplay 提升。
 
 **结论**：三层架构的 L1（VLM 画面理解）接入 harness 后，策略执行质量显著优于纯文本规划。kimi-k2.6 作为云端视觉后端可用（8-17s/次）；本地 Qwen3.5-4B（QLoRA 微调后）可作为更快的本地替代（VLM_BACKEND 可切换）。
+
+
+### 38.39 VLM 对照批量（4 游戏）：guard acceptance 是价值关键
+
+**结果**（mimo 规划 + kimi-k2.6 VLM 观察，与基线对比）：
+| 游戏 | 基线 gameplay | VLM gameplay | VLM 观察接受率 |
+|---|---|---|---|
+| kingshot-94766e5d61dc | 7 | **19** ⭐ | 2/4 accepted |
+| kingshot-c378f843e877 | 6 | **9** | 2/4 accepted |
+| kingshot-33efef78d709 | 14 | 5 | 0/0（未触发） |
+| whiteout-12ababda99c7 | 10 | 7 | **0/3 accepted**（全 guard_rejected） |
+| whiteout-b64a7594f0c2 | 8 | 8 | - |
+| kingshot-9423402859e9 | 10 | 0 | 0/0 |
+
+**关键洞察**：
+- **VLM 的价值取决于 guard acceptance**：accepted 的观察（completion_evidence / failure_observation 任务 kimi 能合规输出）提供画面上下文 → gameplay 提升（+171%）；全部被拒时（backend_grounding 任务的 mappings JSON 常失败）→ VLM 无上下文还拖慢运行，gameplay 下降。
+- backend_grounding 是最难任务（要求 mappings 数组 + guard 严格校验），kimi 输出常被拒。
+- **改进方向**：① 优化 backend_grounding 的 prompt（给 kimi 更明确 JSON 模板 + allowed roles）；② 适配器端对 backend_grounding 做结构补全（缺字段补空数组）；③ VLM 触发策略调整为「观察失败自动跳过，不阻塞策略执行」。
+
+**结论**：VLM 画面理解是「锦上添花」而非「必要条件」——在观察被有效接受时显著提升，全部被拒时有害。下一步优先提升 backend_grounding 接受率，并让 VLM 失败降级为无视觉模式（当前 harness 已自动降级，但观察延迟仍消耗预算）。
