@@ -1365,6 +1365,9 @@ def _add_windows_batch_slide(prs) -> None:
             ["kingshot-6dd565baa02d", "Cocos", "OPERATOR_INTERRUPTED", "20", "8", "5", "13"],
             ["kingshot-33efef78d709", "Cocos", "OPERATOR_INTERRUPTED", "21", "14", "4", "16"],
             ["kingshot-f9a4fa1b6227", "Cocos", "OPERATOR_INTERRUPTED", "23", "10", "3", "16"],
+            ["kingshot-830518bfdad4", "Cocos", "OPERATOR_INTERRUPTED", "26", "19", "4", "21"],
+            ["whiteout-survival-c47908da8b11", "Cocos", "OPERATOR_INTERRUPTED", "15", "9", "3", "9"],
+            ["kingshot-80b82b11529c", "Cocos", "OPERATOR_INTERRUPTED", "18", "7", "5", "13"],
             ["kingshot-ce59e2a9a7a3", "Cocos", "RUNTIME_FAULT", "2", "0", "0", "0"],
             ["kingshot-29345f023e9e", "Cocos", "BLOCKED_UNSAFE", "0", "0", "0", "0"],
         ])
@@ -1372,7 +1375,7 @@ def _add_windows_batch_slide(prs) -> None:
     note = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.65), Inches(6.55), Inches(12.3), Inches(0.55))
     _set_fill(note, _C_LIGHT)
     _set_text_style(note.text_frame.paragraphs[0],
-        "26 游戏累计 16 个产生真实 gameplay（15 个 Cocos）；最佳 kingshot-33efef78d709：14 gameplay / 16 actions。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）；deepseek-v4-flash 大负载空输出不可用。",
+        "34 游戏累计 22 个产生真实 gameplay（21 个 Cocos）；最佳 kingshot-830518bfdad4：19 gameplay / 21 actions；batch10 首次 4/4 全胜。策略规范化器让 mimo-v2.5 大策略通过 harness 严格契约（planner_rejected=0）。",
         Pt(13), color=_C_DARK, align=PP_ALIGN.CENTER)
 
 if __name__ == "__main__":
