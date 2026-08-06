@@ -2638,3 +2638,24 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **优缺点**：gah 强在确定性执行、治理、受约束 VLM、跨 run 学习、文档；弱在绑 Codex、无训练管线、复杂度高。我们强在多 provider、训练迭代、规则更新、实验充分；弱在确定性、治理、跨 run 记忆、浏览器依赖。
 
 **互补方向**：gah 的 FSM 闸门/证据缓冲 → 我们的 L0 规则层；我们的多 provider + 训练管线 → gah 替换 Codex；借鉴 governance/release 建立批量验证与分发。
+
+
+### 38.47 gah 框架详细实现方法分析
+
+完整报告见 `docs/gah-implementation-details.md`（三路源码深读：主循环/策略、执行/记忆、感知/治理）。核心实现方法：
+
+**1. 确定性守护 + LLM 编排**：VLM 只观察不决策、Codex 只修复不控制、确定性 Option 监督器唯一执行入口。
+
+**2. 四大门控**：新鲜度门（preflightInputIntent 移动签名比对，防 stale_intent）、预算门（多层：编排节拍/游戏步 240+60/引导/规划器/实验拒绝）、完成门（三次确认采样）、风险门（IntentGate 15+ 规则）。
+
+**3. 策略状态机**：StrategySpec 1-16 状态 + 30+ 谓词 + 10 类全局 replan 触发器；交互租约抑制 no_progress 误判；StrategyMachineRuntime 独立于 LLM 解释执行。
+
+**4. 确定性执行**：9 个 Option（含 risk/observable_effects/compile）+ 监督器无 AI 端口 + 12 失败码分类 + 恢复阶梯（目标指纹保护）。
+
+**5. 记忆**：事件溯源 DSG（实体/关系/事件流重放）、经验卡（匹配打分检索 + shadow 约束）、因果决策图（repeated_no_effect 边标记）、策略晋升（fresh_start_passes≥3）。
+
+**6. 感知认知**：/observe 协议 + 7 任务提示契约 + 证据缓冲（信息增益 TASK_GAIN×confidence）+ 自适应预算（shadow）+ 认知调度器（VLM 优先级 failure>completion>grounding，planner min_gain 2.5）。
+
+**7. 评估治理**：渐进审计（6 硬失败 → STOP/REVISE/PASS）、settled 通关（5 必要条件 + 反作弊）、多游戏验证（canary/frozen/regression 分组 + 6 变体）。
+
+**对我们可借鉴 9 条**：新鲜度门、IntentGate 规则、失败恢复阶梯、证据缓冲+信息增益、认知调度优先级、经验卡+策略晋升、多游戏分层验证、VLM 只观察、settled 反作弊。
