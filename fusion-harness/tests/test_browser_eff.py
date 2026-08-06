@@ -22,7 +22,7 @@ def test_throttler_reuse_unchanged_scene() -> None:
     t = ProbeThrottler()
     t.decide(1, "observation", "sig-a")
     t.update_signature("sig-a")
-    d = t.decide(3, "observation", "sig-a")
+    d = t.decide(10, "observation", "sig-a")  # past gap window, scene unchanged
     assert d["mode"] == "suppress" and d["why"] == "unchanged_scene"
 
 
