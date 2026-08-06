@@ -2680,3 +2680,13 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **洞察**：gah 确定性引擎在探针良好的 Unity 游戏碾压（持续游玩到通关）；我们框架在 Cocos 游戏探针适配更成熟。融合方向 = 我们的 Cocos 探针 + gah 的确定性/记忆/治理。
 
 **样例画面**：whiteout-survival/1f1c7b6176fe 已用 Windows Edge 真 GPU 渲染输出（3261 色雪地场景），见 fusion-harness/results/。
+
+
+### 38.49 浏览器效率优化（Phase 4）
+
+`fusion-harness/fusion/browser_eff.py`：
+1. **探针节流**（adaptive evidence budget 思想）：required 原因（run_boundary/terminal/stage_boundary/visual_model_input）必采；可选截图受 count(48)/bytes(12MB)/gap(3步)/场景不变(reuse) 四重抑制。
+2. **截图压缩**：JPEG quality=70 + 750px 上限。真实游戏截图 **2.67MB PNG → 62KB JPEG（-97.7%）**——大幅降低探针/VLM 传输与内存。
+3. **并行工具**：measure_parallel_load 线程池并行（4 worker 0.2s）。
+
+5 个新单测（throttler 4 场景 + 压缩 + 并行）全通过，累计 fusion 单测 11 个。
