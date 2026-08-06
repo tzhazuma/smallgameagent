@@ -1,0 +1,21 @@
+{
+  "mode": "reuse",
+  "games": [
+    "ag-complete-tiles-survive-5ec610abcdff",
+    "kingshot-0042aa74feb8"
+  ],
+  "runs": {
+    "reuse": {
+      "times_s": {
+        "ag-complete-tiles-survive-5ec610abcdff": 0.10758399963378906,
+        "kingshot-0042aa74feb8": 0.09404850006103516
+      },
+      "total_s": 0.2,
+      "sys": {
+        "load1": 0.03,
+        "load5": 0.03,
+        "load15": 0.0
+      }
+    }
+  }
+}

@@ -2698,3 +2698,11 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - **文档**：fusion-harness/README.md + docs/architecture.md（mermaid 架构图 + 信任控制流 + 来源表）。
 - **Release 机制**：版本化（__version__）+ SHA-256 完整性清单（release.manifest.json 生成）+ pytest 回归门（11 测试全绿）。
 - fusion 单测累计 **11 个全通过**。
+
+
+### 38.51 并行性能实测（Phase 4 补充）
+
+- **Edge 复用（reuse）**：2 游戏（tiles + kingshot-0042aa）顺序跑 **487s**（无重启开销）。
+- **每游戏重启**：额外 ~15s/游戏 + 端口 TIME_WAIT 白屏风险（此前批量观察）。
+- **效率工具**：截图 JPEG 压缩（-97.7%）、探针节流（count/bytes/gap/unchanged 四重）、Edge 复用。
+- 结论：并行批量建议 Edge 单实例复用 + 2-3 游戏并发，截图/探针节流直接缓解卡顿。详见 fusion-harness/results/parallel-perf.md。
