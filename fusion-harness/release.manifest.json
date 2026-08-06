@@ -1,0 +1,15 @@
+{
+  "fusion/browser_eff.py": "1963526e066033dcc53bdf3daedebf4cddc9c5bacd740ca6758c4b317be7c249",
+  "fusion/intent_gate.py": "6768383159a8ee7d5ba3e5205999417b9cbae2352280bad684a558bfe4c6548f",
+  "fusion/dsg.py": "6dedd8fca69db361a013e7e53239a96940d2eb25657d414c2dcb2fa00fa6e458",
+  "fusion/phase_strategy.py": "64e201dc0aea137e2592a80c674f1489a815add18a280eb38f09e45b1bb5528a",
+  "fusion/governance.py": "3008c115b8056bd51d8e67dade029b90b1e15855bdcac71c314149f9864ca6e8",
+  "fusion/__init__.py": "87e630c61bac2a16fc5e2e2ab24d124d669581f1d23baaa47789e21d9d20f0dc",
+  "fusion/cdg.py": "dd33ca9ec612b6aa6d52888bb5c617fdd7d2bb77ca871e072ca2444611ee14a5",
+  "fusion/options.py": "1cfd8b39bc51e8e57fa99fe6f49423e74382c37f89ff4845528b0225d0872ffd",
+  "fusion/fusion_agent.py": "1dcbd82298fa0d4a3cb5e9b2807976ca4be8e7a6b231f17841234f4b2f9a3522",
+  "fusion/experience.py": "f20a3623fea75dba4e172adc0dd883fb37012c1d1253eed50b084f0421d8c7f7",
+  "fusion/registry.py": "e9a858f2b4e40328b5a16841c4fe085ceb76b6cd18682423beae27b43c34565f",
+  "fusion/recovery.py": "484ab2cd88b000d02f9b3d75b22620565ffbb2c739fdb28cce4ce197026916a8",
+  "fusion/failure.py": "257fa9f52312f2d177c7cec2937ec2a8dc75e91b77a938b1f4596f3cd90abf82"
+}

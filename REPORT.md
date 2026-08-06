@@ -2690,3 +2690,11 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 3. **并行工具**：measure_parallel_load 线程池并行（4 worker 0.2s）。
 
 5 个新单测（throttler 4 场景 + 压缩 + 并行）全通过，累计 fusion 单测 11 个。
+
+
+### 38.50 浏览器效率优化 + 文档/release 对齐（Phase 4-5 完成）
+
+- **效率优化**（browser_eff.py）：探针节流（count/bytes/gap/unchanged 四重抑制）+ 截图 JPEG 压缩（真实截图 **-97.7%**）+ 线程并行工具。5 单测。
+- **文档**：fusion-harness/README.md + docs/architecture.md（mermaid 架构图 + 信任控制流 + 来源表）。
+- **Release 机制**：版本化（__version__）+ SHA-256 完整性清单（release.manifest.json 生成）+ pytest 回归门（11 测试全绿）。
+- fusion 单测累计 **11 个全通过**。
