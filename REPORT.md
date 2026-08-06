@@ -2625,3 +2625,16 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 - 对比基线（§23/§26 未微调 Qwen3.5-4B）：微调后画面理解更结构化、聚焦游戏实体
 
 **意义**：三层架构 L1 本地化路径打通——微调 VLM 可在 5090 本地运行（无云端延迟/成本），配合 vlm_observe_adapter 的 local 后端可替代 kimi 作为低延迟画面理解层。
+
+
+### 38.46 与 fps-research/game-agent-harness 的对比
+
+完整对比见 `docs/harness-comparison.md`。要点：
+
+**gah（Node.js, 87K LOC, 18 模块）**：确定性 harness 优先（探针→DSG→连续 FSM→Option 闸门→VLM 观察→证据缓冲→Codex 修复），含 governance/release/regression/monitoring 治理模块，内置 Qwen3.5-9B LoRA adapter（冻结+校验），跨 run 策略晋升。
+
+**我们（Python, 25K LOC, 三层架构）**：L0 规则在线更新 / L1 VLM（/observe 适配器 + 自适应开关 + QLoRA 微调）/ L2 云端多 provider（mimo/kimi/qwen），50 游戏批量基线 + 完整训练管线。
+
+**优缺点**：gah 强在确定性执行、治理、受约束 VLM、跨 run 学习、文档；弱在绑 Codex、无训练管线、复杂度高。我们强在多 provider、训练迭代、规则更新、实验充分；弱在确定性、治理、跨 run 记忆、浏览器依赖。
+
+**互补方向**：gah 的 FSM 闸门/证据缓冲 → 我们的 L0 规则层；我们的多 provider + 训练管线 → gah 替换 Codex；借鉴 governance/release 建立批量验证与分发。
