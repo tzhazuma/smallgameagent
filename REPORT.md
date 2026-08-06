@@ -2659,3 +2659,24 @@ python src/experiments/exp_finetuned_vlm_eval.py --endpoint http://127.0.0.1:800
 **7. 评估治理**：渐进审计（6 硬失败 → STOP/REVISE/PASS）、settled 通关（5 必要条件 + 反作弊）、多游戏验证（canary/frozen/regression 分组 + 6 变体）。
 
 **对我们可借鉴 9 条**：新鲜度门、IntentGate 规则、失败恢复阶梯、证据缓冲+信息增益、认知调度优先级、经验卡+策略晋升、多游戏分层验证、VLM 只观察、settled 反作弊。
+
+
+### 38.48 三方融合框架（fusion-harness，branch fusion-v1）
+
+**架构**：Python 主框架融合双方优势——
+- 保留我们：L2 多 provider（mimo/kimi/qwen）+ L1 可微调 VLM（5090 /describe）+ 自适应开关 + 规则热更新
+- 融合 gah：确定性执行（9 Option + IntentGate 15 规则 + 12 失败码 + 恢复阶梯）+ 阶段锁定 + DSG/经验卡/CDG/策略晋升 + 多游戏验证
+- 11 个 Python 模块（fusion/），6 单测通过，已推送 branch fusion-v1
+
+**gah 公平化**：`PLAYABLE_PLANNER_PROVIDER=harness_http` + 我们的 adapter（mimo 代替 Codex），Windows Edge CDP 渲染，其余不动。
+
+**三方对比（Phase 3，同 mimo 模型）**：
+| 游戏 | A 我们 | B gah-mimo |
+|---|---|---|
+| tiles-survive（Unity） | 9 gp（OP_INT） | **156 gp（SETTLED_COMPLETE 通关）** |
+| kingshot-94766（Cocos） | 7 gp | 3 gp |
+| whiteout-12ab（Cocos） | 10 gp | 3 gp |
+
+**洞察**：gah 确定性引擎在探针良好的 Unity 游戏碾压（持续游玩到通关）；我们框架在 Cocos 游戏探针适配更成熟。融合方向 = 我们的 Cocos 探针 + gah 的确定性/记忆/治理。
+
+**样例画面**：whiteout-survival/1f1c7b6176fe 已用 Windows Edge 真 GPU 渲染输出（3261 色雪地场景），见 fusion-harness/results/。
