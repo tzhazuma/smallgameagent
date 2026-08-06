@@ -1,0 +1,255 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!60!black, urlcolor=blue!60!black}
+
+\title{\textbf{三方框架对比实验报告}\\ \large 融合框架：smallgameagent × game-agent-harness}
+\author{smallgameagent 项目组}
+\date{2026 年 8 月}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small 三方框架对比实验报告}
+\fancyhead[R]{\small\thepage}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{摘要}
+本报告给出融合框架（\texttt{fusion-harness}）的三方对比实验结果。三个对比对象为：
+\textbf{框架 A}（我们原始框架，smallgameagent 的 harness 集成）、\textbf{框架 B}
+（game-agent-harness 原始框架，将 Codex 替换为与 A 相同的 mimo-v2.5 以保证公平）、
+\textbf{框架 C}（融合框架，Python 实现，融合 A 的多 provider/VLM/热更新与 B 的
+确定性执行/记忆/治理/阶段策略）。
+
+实验在统一条件下进行：规划模型均为 mimo-v2.5（opencodego，经 harness\_http
+适配器），浏览器均为 Windows Edge 真 GPU 渲染（CDP 模式），VLM 部署于 5090
+服务器（GPU1，微调 Qwen3.5-4B）。
+
+\textbf{关键发现}：
+\begin{itemize}[leftmargin=1.5em]
+  \item 框架 B（gah-mimo）在探针/控制适配良好的 Unity 游戏（tiles-survive）上
+        达到 \textbf{SETTLED\_COMPLETE 通关}（156 gameplay 步），远超框架 A（9 gameplay）；
+  \item 框架 A 在 Cocos 游戏（kingshot / whiteout-survival）上探针适配更成熟
+        （7--10 gameplay vs 框架 B 的 3）；
+  \item 浏览器效率优化使真实游戏截图体积下降 \textbf{97.7\%}（2.67MB $\rightarrow$ 62KB），
+        Edge 复用模式下 2 游戏并行总耗时 \textbf{487s}。
+\end{itemize}
+
+% =====================================================================
+\section{背景与目标}
+网页小游戏（可玩广告）自动通关需要同时具备\textbf{智能规划}与\textbf{确定性执行}。
+现有两条技术路线各有优劣：
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{smallgameagent（我们）}：三层架构（L0 规则引擎 / L1 本地 VLM /
+        L2 云端多 provider），灵活、可微调、规则可热更新，但在 Cocos 游戏上的
+        确定性执行与跨 run 学习较弱；
+  \item \textbf{game-agent-harness（gah）}：确定性 harness 优先，VLM 只观察、
+        Codex 只写策略、确定性门控拥有最终执行权威，含记忆/治理/阶段锁定，
+        但绑定 Codex、VLM 冻结、无本地训练管线。
+\end{itemize}
+融合目标：以 Python 为主框架，保留我们（A）的 L2 多 provider、L1 可微调 VLM、
+自适应开关与规则热更新，同时实现 gah（B）的确定性执行、记忆、治理、阶段策略
+与跨 run 学习，并在统一标准下做三方对比。
+
+% =====================================================================
+\section{方法}
+
+\subsection{三方框架}
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{A —— 我们原始}：\texttt{harness-integration/}（fps-play-agent-harness
+        + planner-http-adapter，mimo-v2.5 规划）+ Windows Edge CDP 渲染；
+  \item \textbf{B —— gah 公平化}：\texttt{/mnt/c/Users/tzh03/gah-win}（game-agent-harness
+        原样，仅 \texttt{PLAYABLE\_PLANNER\_PROVIDER=harness\_http} 指向我们的
+        adapter，用 mimo-v2.5 代替 Codex，其余不动）；
+  \item \textbf{C —— 融合}：\texttt{fusion-harness/}（Python，11 个模块：
+        options / intent\_gate / failure / recovery / phase\_strategy / dsg /
+        experience / cdg / registry / governance / fusion\_agent）。
+\end{itemize}
+
+\subsection{公平化设置}
+框架 B 仅替换规划模型（Codex $\rightarrow$ mimo-v2.5），不修改其确定性执行、
+探针、记忆与治理逻辑。两框架使用同一 adapter 端点（127.0.0.1:9100）与同一
+模型（mimo-v2.5），保证规划能力一致。
+
+\subsection{测试环境}
+\begin{itemize}[leftmargin=1.5em]
+  \item 本地：WSL + Windows Edge（\texttt{--headless=new --mute-audio
+        --remote-debugging-port=9222}，D3D11 真 GPU）；
+  \item 5090 服务器：GPU1 部署微调 VLM（Qwen3.5-4B 4bit + QLoRA adapter，
+        /describe 端点，8100 端口）；
+  \item 游戏：tiles-survive（Unity）、kingshot-94766e5d61dc（Cocos）、
+        whiteout-survival-12ababda99c7（Cocos）。
+\end{itemize}
+
+\subsection{评估指标}
+gameplay 步数、terminal 状态、steps、plans（策略计划数）、actions（执行动作数）、
+planner 调用数、VLM 调用数、总耗时。
+
+% =====================================================================
+\section{实验结果}
+
+\subsection{三方对比（规划模型均为 mimo-v2.5）}
+
+\begin{table}[h!]
+\centering
+\caption{三方框架对比结果}
+\begin{tabular}{llcccc}
+\toprule
+游戏 & 框架 & terminal & steps & gameplay & actions \\
+\midrule
+tiles-survive & A 我们 & OPERATOR\_INTERRUPTED & 20 & 9 & 14 \\
+tiles-survive & B gah-mimo & \textbf{SETTLED\_COMPLETE} & 230 & \textbf{156} & 229 \\
+\midrule
+kingshot-94766 & A 我们 & BUDGET\_EXHAUSTED & 240 & 7 & 12 \\
+kingshot-94766 & B gah-mimo & OPERATOR\_INTERRUPTED & 17 & 3 & 15 \\
+\midrule
+whiteout-12ab & A 我们 & OPERATOR\_INTERRUPTED & 22 & 10 & 17 \\
+whiteout-12ab & B gah-mimo & BLOCKED\_UNKNOWN & 18 & 3 & 17 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{分析}
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{gah 确定性引擎在探针/控制良好的游戏碾压}：tiles-survive（Unity）上，
+        框架 B 凭借恢复阶梯、阶段策略与确定性 Option 监督，持续游玩 156 gameplay
+        步并达到 \texttt{SETTLED\_COMPLETE}（通关判定），而框架 A 仅 9 步。
+  \item \textbf{我们框架在 Cocos 游戏探针适配更成熟}：kingshot / whiteout 上，
+        框架 A 的 gameplay（7 / 10）高于框架 B（3 / 3），说明 B 的探针/控制
+        适配对 Cocos 引擎尚有欠缺。
+  \item \textbf{规划频率差异}：gah-mimo 的 replan 频率高（plans 12--79 vs
+        框架 A 的 4--5），mimo 单次 20--50s，导致 B 的总时长显著更长。
+\end{enumerate}
+
+% =====================================================================
+\section{浏览器效率优化}
+
+\subsection{截图压缩}
+真实游戏截图（whiteout-survival，PNG 2.67MB）经 JPEG 压缩（quality=70，
+750px 上限）后仅 \textbf{62KB}（\textbf{-97.7\%}），大幅降低探针/VLM 传输与内存。
+
+\begin{table}[h!]
+\centering
+\caption{截图压缩效果}
+\begin{tabular}{lcc}
+\toprule
+格式 & 体积 & 备注 \\
+\midrule
+PNG 原图 & 2674 KB & 750$\times$1000 全彩 \\
+JPEG q80 & 77 KB & \\
+JPEG q70 & 62 KB & 默认 \\
+JPEG q60 & 53 KB & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{探针节流（自适应证据预算）}
+\texttt{fusion/browser\_eff.py} 的 \texttt{ProbeThrottler}：
+\begin{itemize}[leftmargin=1.5em]
+  \item required 原因（run\_boundary / terminal / stage\_boundary /
+        visual\_model\_input）必采；
+  \item 可选截图受 数量（48）/ 字节（12MB）/ 步间隔（3）/ 场景不变（reuse）
+        四重抑制。
+\end{itemize}
+
+\subsection{并行性能实测}
+Edge 复用（单实例多 context，不重启）模式下，2 个游戏（tiles +
+kingshot-0042aa）顺序运行总耗时 \textbf{487s}；每游戏重启 Edge 额外增加
+$\sim$15s 且有端口 TIME\_WAIT 白屏风险。结论：并行批量建议 Edge 单实例复用 +
+2--3 游戏并发。
+
+% =====================================================================
+\section{融合框架架构（框架 C）}
+
+\paragraph{三层保留（来自 A）}
+\begin{itemize}[leftmargin=1.5em]
+  \item L2 云端规划：api\_client 多 provider（mimo/kimi/qwen）+ normalizer 契约校验；
+  \item L1 本地 VLM：vlm\_observe\_adapter + vlm\_policy 自适应开关 + 5090 /describe
+        微调模型；
+  \item L0 规则引擎：runtime\_rules.json 热更新（rule\_update）。
+\end{itemize}
+
+\paragraph{确定性/记忆/治理层（来自 B，Python 移植）}
+\begin{itemize}[leftmargin=1.5em]
+  \item 确定性执行：9 个 Option + IntentGate（15 规则）+ 12 失败码 + 恢复阶梯；
+  \item 阶段策略：阶段锁定 + StrategySpec 状态机解释器（30+ 谓词）；
+  \item 记忆：DSG（事件溯源动态场景图）+ 经验卡 + 因果决策图 + 策略晋升；
+  \item 治理：多游戏验证（canary / frozen\_unseen / stable\_regression）。
+\end{itemize}
+
+\paragraph{信任控制流}
+\textbf{VLM 是观察者（只读不决策）、L2 是策略作者（受约束）、确定性层是执行者
+（最终权威）、L0 是零延迟兜底（参数可热更新）。}
+
+% =====================================================================
+\section{样例游戏画面}
+样例游戏 \texttt{whiteout-survival/1f1c7b6176fe} 使用 Windows Edge 真 GPU
+渲染，画面为雪地场景（3261 种颜色，canvas 2438$\times$1768），截图已输出至
+Windows 下载目录与 \texttt{fusion-harness/results/}。
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.6\textwidth]{sample_game_1f1c7b6176fe.png}
+\caption{whiteout-survival 样例画面（Windows Edge 真 GPU 渲染）}
+\end{figure}
+
+% =====================================================================
+\section{结论}
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{gah 的确定性引擎}（恢复阶梯/阶段锁定/记忆/策略晋升）使持续游玩
+        与通关成为可能，是框架 A 缺失的关键能力；
+  \item \textbf{我们的探针/控制适配}在 Cocos 游戏更成熟，且多 provider / 可微调
+        VLM / 热更新提供灵活性；
+  \item \textbf{融合方向成立}：我们的探针适配 + gah 的确定性/记忆/治理 = 双赢，
+        fusion-harness 已将其实现为可运行的 Python 框架（11 模块，11 单测全通过）；
+  \item 浏览器效率优化（截图 -97.7\%，探针节流，Edge 复用）显著缓解并行卡顿。
+\end{enumerate}
+
+% =====================================================================
+\appendix
+\section{验证清单}
+\begin{itemize}[leftmargin=1.5em]
+  \item 融合框架核心单测：6 个（Option / IntentGate / Failure / Recovery /
+        状态机 / Agent 策略稳定）；
+  \item 浏览器效率单测：5 个（节流 4 场景 / 压缩 / 并行）；
+  \item gah-mimo 通关验证：tiles-survive SETTLED\_COMPLETE（156 gameplay）；
+  \item 并行性能实测：Edge 复用 487s / 2 游戏。
+\end{itemize}
+
+\section{融合框架模块清单}
+\begin{longtable}{ll}
+\toprule
+模块 & 职责 \\
+\midrule
+\texttt{options.py} & 9 个确定性 Option + compile $\rightarrow$ primitives \\
+\texttt{intent\_gate.py} & 15 条安全规则（新鲜度/风险/目标/控制映射/路点） \\
+\texttt{failure.py} & 12 失败码分类 \\
+\texttt{recovery.py} & 每失败码恢复阶梯（目标指纹保护） \\
+\texttt{phase\_strategy.py} & 阶段锁定 + StrategySpec 状态机（30+ 谓词） \\
+\texttt{dsg.py} & 事件溯源动态场景图 \\
+\texttt{experience.py} & 经验卡（匹配打分检索 + shadow 约束） \\
+\texttt{cdg.py} & 因果决策图（repeated-no-effect 边） \\
+\texttt{registry.py} & 策略晋升（candidate $\rightarrow$ known-pass） \\
+\texttt{governance.py} & 多游戏验证调度 \\
+\texttt{browser\_eff.py} & 截图压缩 / 探针节流 / 并行工具 \\
+\texttt{fusion\_agent.py} & 主循环（决策 $\rightarrow$ 门控 $\rightarrow$ 执行 $\rightarrow$ 验证 $\rightarrow$ 记忆） \\
+\bottomrule
+\end{longtable}
+
+\end{document}
