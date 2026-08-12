@@ -34,8 +34,9 @@
 | 6 | A_06.1 | kingshot 481c77501c7f | ANALYSIS_REQUIRED | — | — |
 | 7 | A_06.2 | kingshot 0042aa74feb8 | BUDGET_EXHAUSTED | 1× (ANALYSIS_REQUIRED) | explore audit 通过，59 FPS |
 | 8 | A_04.2 | kingshot 14271ce32d49 | ANALYSIS_REQUIRED | — | no_progress_boundary：角色无法通过围栏边界，58 FPS |
+| 9 | A_02.2 | whiteout 12ababda99c7 | BLOCKED_UNSAFE | — | 12 步玩家死亡 DEFEAT，硬安全终止 |
 
-**（待补全：A_02.2 / A_03.1 / A_03.2 / A_04.1 / A_10 运行中）**
+**（待补全：A_03.1 / A_03.2 / A_04.1 / A_10 运行中）**
 
 ## 4. 运行中任务（截至报告时刻）
 
