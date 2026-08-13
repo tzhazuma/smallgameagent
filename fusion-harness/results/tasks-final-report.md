@@ -82,7 +82,7 @@ kingshot 830518bfdad4 以 SETTLED_COMPLETE 完成，三次 clean replay + 三次
 |------|------|------|------|
 | A_11.1 | whiteout 9accaeba2a28 | running | — |
 | A_11.2 | whiteout 87790941fd83 | running | — |
-| A_11.3 | whiteout e9975db003e7 | running | — |
+| A_11.3 | whiteout e9975db003e7 | **BLOCKED_UNSAFE** | 10 步后 TRY AGAIN 界面，59 FPS |
 | A_11.4 | kingshot 94766e5d61dc | running | — |
 | A_11.5 | kingshot c378f843e877 | **BLOCKED_UNSAFE** | 9 动作后检测 retry 失败界面，gate STOP，SHA 2e83e20 |
 | A_11.6 | kingshot ce59e2a9a7a3 | running | — |
