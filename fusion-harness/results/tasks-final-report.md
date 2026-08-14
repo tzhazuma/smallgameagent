@@ -4,7 +4,7 @@
 **模式**: `no_vlm_codex_session`（确定性 harness + Codex 长程规划，无 VLM）
 **模型**: gpt-5.6-luna / effort=xhigh
 **平台**: http://34.24.205.23:4097/tasks
-**报告时间**: 2026-08-13（全部任务终态）
+**报告时间**: 2026-08-14（A_ 13 任务 + A_11 6 任务全部终态）
 
 ---
 
@@ -83,7 +83,7 @@ kingshot 830518bfdad4 以 SETTLED_COMPLETE 完成，三次 clean replay + 三次
 | A_11.1 | whiteout 9accaeba2a28 | **BUDGET_EXHAUSTED** | 240 steps 未通关未死亡，explore audit 通过 |
 | A_11.2 | whiteout 87790941fd83 | **ANALYSIS_REQUIRED** | 531 步 no_progress，卡 unlock_cashier 阶段 |
 | A_11.3 | whiteout e9975db003e7 | **BLOCKED_UNSAFE** | 10 步后 TRY AGAIN 界面，59 FPS |
-| A_11.4 | kingshot 94766e5d61dc | running | — |
+| A_11.4 | kingshot 94766e5d61dc | **BUDGET_EXHAUSTED** | 敌人 108/门 HP 0 但无 completion 信号，207 测试通过 |
 | A_11.5 | kingshot c378f843e877 | **BLOCKED_UNSAFE** | 9 动作后检测 retry 失败界面，gate STOP，SHA 2e83e20 |
 | A_11.6 | kingshot ce59e2a9a7a3 | **BLOCKED_UNSAFE** | 104 步 DEFEAT，88 macro/58 输入，403s |
 

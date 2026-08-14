@@ -18,3 +18,5 @@
 {"ts": "2026-08-14T05:38:03.330936", "is_day": false, "my_running": 2, "action": "night_full_ok"}
 {"ts": "2026-08-14T06:01:40.157342", "is_day": false, "my_running": 2, "action": "night_full_ok"}
 {"ts": "2026-08-14T07:12:59.930970", "is_day": false, "my_running": 2, "action": "night_full_ok"}
+{"ts": "2026-08-14T07:38:03.648032", "is_day": false, "my_running": 1, "action": "night_full_ok"}
+{"ts": "2026-08-14T08:07:52.735762", "is_day": true, "my_running": 0, "action": "day_ok"}
