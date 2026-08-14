@@ -99,3 +99,6 @@ logs/
 *.fls
 *.fdb_latexmk
 .qoder/
+
+# Platform task data (local archive only)
+fusion-harness/platform-data/
