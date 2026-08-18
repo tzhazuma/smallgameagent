@@ -21,6 +21,7 @@ PROMPT_TEMPLATE = """从 https://github.com/fps-research/game-agent-harness 的 
 开始前必须核验仓库根目录、HEAD、remote 和工作树；确认使用的是我这个分支下的最新的版本。游戏独立工作区必须建立在当前仓库的 games/{gid}/ 下，只把网页下载的html文件复制到 input/，不得继承旧游戏的配置、探针、记忆、策略或 runs。
 必须连接平台 managed Chromium 的 CDP，不得自行启动浏览器或回退到 Xvfb。严格通过框架探针、规划器和确定性动作审批链执行；不修改游戏文件，不绕过框架控制游戏，也不得把游戏名称、节点名称、资源名称、坐标或专用策略写入通用框架。
 首次通关后保存 source capsule 和稳定策略，并从干净初始状态独立复现。只有 fixed evaluator 为 SETTLED_COMPLETE、acceptance gate 通过且适用的 stage audit 通过后，才报告完成。
+时间限制：从任务开始运行起总时长不得超过 2 小时。若接近 2 小时仍未达成通关，必须停止新的探索，完成当前 run 的评估与产物保存（run-report、acceptance-gate、events 等），按框架明确终止条件收尾并汇报；不得无限期继续探索。
 最后汇报实际分支与完整 SHA、game ID、run ID、游戏结果、独立复现结果、浏览器/CDP 模式、最终停止的原因及主要输出的路径。"""
 
 
